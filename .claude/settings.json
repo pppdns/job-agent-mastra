@@ -28,7 +28,9 @@
       "Bash(git log *)",
       "Bash(git show *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(git push)",
+      "Bash(git push *)"
     ],
     "deny": [
       "Read(./.env)",
@@ -42,7 +44,13 @@
       "Edit(./**/.env)",
       "Edit(./**/.env.local)"
     ],
-    "ask": ["Bash(pnpm smoke:live *)", "Bash(git push *)"]
+    "ask": [
+      "Bash(pnpm smoke:live *)",
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
+      "Bash(git push * --force*)",
+      "Bash(git push * -f)"
+    ]
   },
   "hooks": {
     "SessionStart": [

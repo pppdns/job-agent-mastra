@@ -26,7 +26,7 @@ Simple, polished, functional: shadcn/ui (Radix Nova preset) defaults. Clear visu
 
 ## Key Conventions
 
-- **Commit frequently.** Commit after every small verified step (checks green), not at the end of a milestone. Imperative subject lines; never commit secrets or `.env*` files.
+- **Commit frequently, then push.** Commit after every small verified step (checks green), not at the end of a milestone, and `git push` right after each commit (force pushes still ask). Imperative subject lines; never commit secrets or `.env*` files.
 - **Plan:** work follows the milestones in [docs/PLAN.md](docs/PLAN.md); update its checkboxes as items land.
 - **Verify Mastra / AI SDK / Next APIs before writing code** — use the `mastra` skill (embedded docs in `node_modules/@mastra/*/dist/docs`) and official docs; training-data APIs are often outdated.
 - **Deterministic code owns safety:** approvals, authorization, budgets, URL validation, and DB writes are enforced in app code, never left to the model. Fetched web content is untrusted data.
