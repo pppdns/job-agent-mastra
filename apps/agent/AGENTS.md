@@ -10,5 +10,6 @@
 - Memory: `src/mastra/memory.ts` (`chatMemory`). One thread per chat; only that thread's history (compacted by Observational Memory, threshold `OM_MESSAGE_TOKENS`) and thread-scoped working memory are recalled, so chats can't see each other. Durable user facts live in the approved profile (app tables), never in Mastra memory. `mapUserToResourceId` pins all memory access to the authenticated user's resource; Mastra's built-in `/api/memory/threads*` routes then filter and 403 by resource. Custom routes must read `MASTRA_RESOURCE_ID_KEY` from the request context and check ownership themselves.
 - Storage: `LibSQLStore` at `resolveDatabaseUrl()` from `@copilot/db` (same file as app tables).
 - Only one `mastra dev` can run per project; `mastra build` is blocked while it runs. `mastra dev` loads `.env`, so the e2e config blanks provider keys to stay offline.
+- Usage accounting: [src/usage/AGENTS.md](src/usage/AGENTS.md). Any new model call outside an agent's steps must be metered (`meteredModel` or a hook), or the panel will undercount.
 - Provider calls retry via `withRetry` (`src/web/retry.ts`): only `RetryableError` (network, timeout, 429, 5xx), max 2.
 - Look up APIs in `node_modules/@mastra/*/dist/docs/` (see the `mastra` skill) before writing Mastra code.

@@ -30,6 +30,9 @@ Offline (mock/fixture) results and live results are kept separate. A live integr
 | 2026-11-03 | M7 | Live research hitting the tool-call budget (Flex) | ⚠️ Stopped cleanly at 12 calls but had recorded no claims; the reply said so and kept the old draft → researcher now sees remaining calls and records after each page (re-check above recorded early) |
 | 2026-11-03 | M7 | Observational Memory with Haiku 5.5 at `OM_MESSAGE_TOKENS=1000` (agent:api, 6 turns) | ✅ Observer output parsed (buffered, then activated); pending tokens fell after activation; the agent still recalled a codename from turn 1. The Observer had copied the approved profile → told not to (instruction change not re-run live) |
 | 2026-11-03 | M7 | Built-in browser pane (hidden) after reload | ⚠️ Chat stayed on its loading fallback; same page in foreground Chrome rendered fine (background-tab scheduling, not an app bug) |
+| 2026-11-03 | M8 | Research turn (Dwelly engineering) vs Studio trace `35d3d6…` | ✅ Researcher 9 steps 144,739/3,520 and observer 17,618/1,370 equal in panel and trace; copilot agent steps equal. ⚠️ Title generation (1,541/26) missing from the panel → metered, re-checked below. Panel: 4 searches, 6 extractions, est. $0.53 total |
+| 2026-11-03 | M8 | New-chat turn vs Studio trace `f088e7…` | ✅ All 7 model calls (5 copilot, observer, title) match one-to-one with equal input/output tokens; no extra or missing rows |
+| 2026-11-03 | M8 | Prompt caching | ⚠️ Every model call reports 0 cached input tokens: caching isn't enabled, so each step pays full input (6k–30k tokens) |
 | 2026-11-03 | M1 | Gateway free tier → Sonnet 5.5 | ❌ 403 `RestrictedModelsError` (resolved by funding the account). Client received only the sanitized summary; full error stayed in server log and trace |
 
 ## Offline checks (M1)
@@ -67,3 +70,8 @@ Offline (mock/fixture) results and live results are kept separate. A live integr
 
 - `pnpm check`: runs (active run, first final status wins, interrupted at startup), forced-low-threshold compaction (old raw message gone, observations present, approved profile and pending approval id still in the prompt), retries (bounded, only retryable errors, abort), research retry progress, history merge.
 - `pnpm e2e` (16 tests): adds reconnect after refresh mid-reply, Stop → `cancelled` with the reply cut short after reload, 409 for a second message while running. One flaky failure seen once under parallel load (profile flow timeout); two re-runs green, timeout raised to 60 s.
+
+## Offline checks (M8)
+
+- `pnpm check`: run totals (sums per row, groups by category), recorder (chunk sequence, buffering before the run id, metered search/extract incl. a failure, cost arithmetic incl. cache reads), prices, sanitizer (redaction, page text omitted, bounds), trace redaction (auth headers, cookies, API keys, `access_token` in JSON strings), metered model (generate + stream).
+- `pnpm e2e` (16 tests): research run then panel shows one search, one extraction, copilot and researcher model calls, the tool row, the estimate label, and chat totals.

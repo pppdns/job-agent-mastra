@@ -132,11 +132,12 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - [x] Bounded retries (2, exponential backoff) on network errors, timeouts, 429 and 5xx for Tavily/Firecrawl; research shows retries in its timeline.
 - [x] Verified: unit tests (runs, compaction at a forced-low threshold keeps profile + pending approval, retries), e2e (refresh mid-reply reconnects and history has one reply, Stop → cancelled and reply stays cut, second message → 409), live runs ([verification.md](verification.md)).
 
-### M8 — Technical panel & usage accounting
-- `runs` + `run_events` tables; per-run and per-session totals.
-- Panel: run id, Studio trace link, model/provider, tool calls grouped (LLM / search / extraction / browser) with status, duration, sanitized args/results, queries + URLs, tokens (input/output/cached/reasoning when exposed), estimated LLM cost vs external-service cost (static price table, labelled estimate), TTFT, total duration, retries, errors, approval and compaction events.
-- Sensitive-field redaction in traces; tool output size limits.
-- **Done when:** panel numbers match Studio traces for a sample run without double counting.
+### M8 — Technical panel & usage accounting ✅ (2026-11-03)
+- [x] `app_runs` (model, trace id, time to first text, duration) + `app_run_events` (one row per model call / provider call, plus tools, retries, compaction, errors); run and chat totals are sums. Overview: [apps/agent/src/usage/AGENTS.md](../apps/agent/src/usage/AGENTS.md).
+- [x] Panel ("Technical details" sheet per chat): run id, status, Studio trace link, model/provider/framework, LLM / search / extraction / browser / tools tables with status, duration, sanitized args/results, queries and URLs, tokens incl. cached and reasoning, estimated LLM vs external cost (labelled), retries, errors, compaction and approval events.
+- [x] Redaction: trace `SensitiveDataFilter` extended (cookies, `*_token`); event details sanitized and size-limited. Tool outputs were already bounded (listing 20k, page 12k chars).
+- [x] Verified: live turns match the Studio trace one-to-one per `model_step` (copilot, researcher, observer, title) with equal tokens; unit tests for totals, recorder, prices, sanitizer, redaction, metered model; e2e checks the panel after a research run.
+- Not done: DuckDB metrics store / Studio cost dashboard (not needed: the panel covers per-run and per-chat usage).
 
 ### M9 — Security pass, eval suite, docs
 - Prompt-injection fixtures (memory change, credential reveal, approval bypass); SSRF/redirect tests; confirm web content can never create an approved state.
