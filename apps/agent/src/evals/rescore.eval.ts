@@ -97,4 +97,35 @@ describe("rescorer (live)", () => {
       expect(fitPoints.every((p) => p.evidence === "inference")).toBe(true);
     }
   });
+
+  // Heuristic (keywords, not a judge): remote-first doesn't say where they can hire, so the
+  // remote rule may only be "met" conditionally, and Germany must be an open question.
+  it("states remote fit conditionally when hiring from Germany is unknown", async () => {
+    const lumen = result.results.find((r) => r.company === "Lumen Ledger");
+    const assessment =
+      lumen && (await getJobDetail(await getAppDb(), lumen.jobId))?.draft?.assessment;
+    expect(assessment, "no Lumen draft").toBeDefined();
+    if (!assessment) return;
+    expect(assessment.unknowns.some((u) => /german/i.test(`${u.question} ${u.whyItMatters}`))).toBe(
+      true,
+    );
+    const texts = [
+      assessment.headline ?? "",
+      ...allPoints(assessment)
+        .filter((p) => p.profileFactIds.length)
+        .map((p) => p.text),
+    ];
+    const unconditional = texts
+      .flatMap((t) => t.split(/(?<=[.;])\s+/))
+      .filter(
+        (sentence) => /\b(meets|satisf\w*|fits)\b/i.test(sentence) && /remote/i.test(sentence),
+      )
+      .filter(
+        (sentence) =>
+          !/\b(if|unless|provided|depend\w*|assuming|as long as|subject to|whether|conditional\w*)\b/i.test(
+            sentence,
+          ),
+      );
+    expect(unconditional).toEqual([]);
+  });
 });

@@ -141,22 +141,38 @@ async function rescoreOne(jobId: string, profile: Profile, deps: RescoreDeps) {
     .filter(Boolean)
     .join("\n\n");
 
-  const started = Date.now();
-  const generated = await rescorerAgent.generate(prompt, {
-    structuredOutput: { schema: assessmentSchema },
-    abortSignal: deps.signal,
-    tracingContext: deps.tracingContext,
-    onStepFinish: ({ usage }) => {
-      deps.recorder?.llm("rescorer", env.COPILOT_MODEL, usage ?? {}, Date.now() - started);
-    },
-  });
-  const assessment = generated.object as Assessment;
-  const draft = await saveDraft(deps.db, {
-    jobId,
-    assessment,
-    threadId: deps.threadId,
-    profileVersion: profile.version,
-  });
+  const generate = async (text: string) => {
+    const started = Date.now();
+    const generated = await rescorerAgent.generate(text, {
+      structuredOutput: { schema: assessmentSchema },
+      abortSignal: deps.signal,
+      tracingContext: deps.tracingContext,
+      onStepFinish: ({ usage }) => {
+        deps.recorder?.llm("rescorer", env.COPILOT_MODEL, usage ?? {}, Date.now() - started);
+      },
+    });
+    return generated.object as Assessment;
+  };
+  const save = (assessment: Assessment) =>
+    saveDraft(deps.db, {
+      jobId,
+      assessment,
+      threadId: deps.threadId,
+      profileVersion: profile.version,
+    });
+
+  let assessment = await generate(prompt);
+  let draft: Awaited<ReturnType<typeof save>>;
+  try {
+    draft = await save(assessment);
+  } catch (error) {
+    // One retry with the rule the draft broke (like the copilot's tool loop); then the job fails.
+    if (!(error instanceof AssessmentError) || deps.signal?.aborted) throw error;
+    assessment = await generate(
+      `${prompt}\n\nYour previous assessment was rejected: ${error.message}\nFix that and return the full assessment again.`,
+    );
+    draft = await save(assessment);
+  }
   const before = detail.draft?.assessment;
   return {
     ...identity,
