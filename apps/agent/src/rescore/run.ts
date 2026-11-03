@@ -58,13 +58,13 @@ export type RescoreDeps = {
 /**
  * Re-assesses saved jobs against the current approved profile: one fresh model call per job
  * (so context and cost stay per job), each saved as a new draft. Without `jobIds`, every job
- * whose latest draft predates the profile. Drafts already saved are kept if the run stops.
+ * whose latest draft predates the profile, except archived ones. Drafts already saved are kept if the run stops.
  */
 export async function runRescore(input: { jobIds?: string[] }, deps: RescoreDeps) {
   const runId = randomUUID();
   const profile = await currentProfile(deps.db);
   const jobs = (await listJobs(deps.db, input.jobIds)).filter(
-    (j) => j.draftVersion !== null && (input.jobIds || j.profileStale),
+    (j) => j.draftVersion !== null && (input.jobIds || (j.profileStale && j.archivedAt === null)),
   );
   const batch = jobs.slice(0, MAX_RESCORE_JOBS);
   const emit = (event: RescoreEvent) => deps.emit({ runId, ...event });

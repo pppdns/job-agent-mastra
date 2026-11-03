@@ -1,5 +1,5 @@
 import type { Assessment, EvidenceClass, ProfileFactKind, ResearchTopic } from "@copilot/shared";
-import { PROFILE_FACT_KINDS } from "@copilot/shared";
+import { JOB_STATUSES, PROFILE_FACT_KINDS } from "@copilot/shared";
 import { sql } from "drizzle-orm";
 import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -24,10 +24,18 @@ export const jobs = sqliteTable(
     title: text("title"),
     location: text("location"),
     dedupeKey: text("dedupe_key"),
+    /** The user's own pipeline status; changed only by the user (UI or an explicit chat ask). */
+    status: text("status", { enum: JOB_STATUSES }).notNull().default("new"),
+    statusChangedAt: integer("status_changed_at", { mode: "timestamp_ms" }),
+    /** Set when archived (closing statuses archive automatically); hidden from the active list. */
+    archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
     createdAt: createdAt(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   },
-  (t) => [index("app_jobs_dedupe_key_idx").on(t.dedupeKey)],
+  (t) => [
+    index("app_jobs_dedupe_key_idx").on(t.dedupeKey),
+    index("app_jobs_archived_status_idx").on(t.archivedAt, t.status),
+  ],
 );
 
 export const SOURCE_KINDS = ["linkedin", "ats", "web", "pasted"] as const;

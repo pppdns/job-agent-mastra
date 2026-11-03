@@ -11,6 +11,7 @@ import {
   migrateDb,
   proposeProfileChange,
   saveDraft,
+  setJobStatus,
   upsertJob,
 } from "@copilot/db";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -87,6 +88,18 @@ describe("runRescore", () => {
     expect(stale).toEqual([]);
     expect((await getJobDetail(db, fresh))?.draft?.version).toBe(1);
     expect(events.map((e) => e.kind)).toEqual(["start", "job", "job", "done"]);
+  });
+
+  it("skips archived jobs unless asked for by id", async () => {
+    const active = await savedJob("Platform Engineer");
+    const dismissed = await savedJob("SRE");
+    await setJobStatus(db, dismissed, "dismissed");
+    await approveProfileFact("Remote only");
+
+    const result = await runRescore({}, deps({ threadId: "chat-b" }));
+    expect(result.results.map((r) => r.jobId)).toEqual([active]);
+    const byId = await runRescore({ jobIds: [dismissed] }, deps({ threadId: "chat-b" }));
+    expect(byId.results.map((r) => r.jobId)).toEqual([dismissed]);
   });
 
   it("reports a job without a stored listing as failed and keeps going", async () => {

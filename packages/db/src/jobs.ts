@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { CLOSED_JOB_STATUSES, type JobStatus } from "@copilot/shared";
 import { desc, eq, sql } from "drizzle-orm";
 import type { Db } from "./index";
 import {
@@ -207,4 +208,41 @@ export async function searchJobIds(db: Db, text: string, limit = 5): Promise<str
     if (rows.length > 0) return rows.map((r) => r.job_id);
   }
   return [];
+}
+
+/**
+ * Sets the user's pipeline status. Closing statuses (rejected, dismissed) archive the job;
+ * moving back to an open status unarchives it. Setting the current status again is a no-op.
+ * Drafts, snapshots and approvals are untouched. Returns undefined for an unknown job.
+ */
+export function setJobStatus(db: Db, jobId: string, status: JobStatus): Promise<Job | undefined> {
+  return serializeWrites(db, async () => {
+    const job = await db.query.jobs.findFirst({ where: eq(jobs.id, jobId) });
+    if (!job || job.status === status) return job;
+    const now = new Date();
+    const [updated] = await db
+      .update(jobs)
+      .set({
+        status,
+        statusChangedAt: now,
+        archivedAt: CLOSED_JOB_STATUSES.includes(status) ? (job.archivedAt ?? now) : null,
+      })
+      .where(eq(jobs.id, jobId))
+      .returning();
+    return updated;
+  });
+}
+
+/** Archives or unarchives a job without changing its status. Undefined for an unknown job. */
+export function setJobArchived(db: Db, jobId: string, archived: boolean): Promise<Job | undefined> {
+  return serializeWrites(db, async () => {
+    const job = await db.query.jobs.findFirst({ where: eq(jobs.id, jobId) });
+    if (!job || (job.archivedAt !== null) === archived) return job;
+    const [updated] = await db
+      .update(jobs)
+      .set({ archivedAt: archived ? new Date() : null })
+      .where(eq(jobs.id, jobId))
+      .returning();
+    return updated;
+  });
 }

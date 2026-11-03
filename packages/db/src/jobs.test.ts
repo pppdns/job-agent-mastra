@@ -2,8 +2,17 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
+import { listJobs } from "./assessments";
 import { createDb, type Db, migrateDb } from "./index";
-import { addSource, dedupeKey, latestListingSource, MAX_SNAPSHOT_CHARS, upsertJob } from "./jobs";
+import {
+  addSource,
+  dedupeKey,
+  latestListingSource,
+  MAX_SNAPSHOT_CHARS,
+  setJobArchived,
+  setJobStatus,
+  upsertJob,
+} from "./jobs";
 
 let db: Db;
 
@@ -123,5 +132,57 @@ describe("dedupeKey", () => {
     expect(dedupeKey("Café Robotics, Inc.", "Senior  Engineer (Platform)")).toBe(
       dedupeKey("cafe robotics inc", "senior engineer platform"),
     );
+  });
+});
+
+describe("job status", () => {
+  it("defaults to new and stamps status changes", async () => {
+    const { job } = await upsertJob(db, northwind);
+    expect(job.status).toBe("new");
+    expect(job.statusChangedAt).toBeNull();
+    const applied = await setJobStatus(db, job.id, "applied");
+    expect(applied?.status).toBe("applied");
+    expect(applied?.statusChangedAt).toBeInstanceOf(Date);
+    expect(applied?.archivedAt).toBeNull();
+  });
+
+  it("archives closing statuses and unarchives when reopened", async () => {
+    const { job } = await upsertJob(db, northwind);
+    const dismissed = await setJobStatus(db, job.id, "dismissed");
+    expect(dismissed?.archivedAt).toBeInstanceOf(Date);
+    const rejected = await setJobStatus(db, job.id, "rejected");
+    expect(rejected?.archivedAt?.getTime()).toBe(dismissed?.archivedAt?.getTime());
+    const reopened = await setJobStatus(db, job.id, "shortlisted");
+    expect(reopened?.archivedAt).toBeNull();
+  });
+
+  it("is a no-op for the current status and undefined for unknown jobs", async () => {
+    const { job } = await upsertJob(db, northwind);
+    const first = await setJobStatus(db, job.id, "applied");
+    const again = await setJobStatus(db, job.id, "applied");
+    expect(again?.statusChangedAt?.getTime()).toBe(first?.statusChangedAt?.getTime());
+    expect(await setJobStatus(db, "missing", "applied")).toBeUndefined();
+    expect(await setJobArchived(db, "missing", true)).toBeUndefined();
+  });
+
+  it("archives manually without changing the status, and keeps re-upserts from resetting it", async () => {
+    const { job } = await upsertJob(db, northwind);
+    await setJobStatus(db, job.id, "applied");
+    const archived = await setJobArchived(db, job.id, true);
+    expect(archived?.status).toBe("applied");
+    expect(archived?.archivedAt).toBeInstanceOf(Date);
+    const { job: again } = await upsertJob(db, northwind);
+    expect(again.status).toBe("applied");
+    expect(again.archivedAt).toBeInstanceOf(Date);
+    expect((await setJobArchived(db, job.id, false))?.archivedAt).toBeNull();
+  });
+
+  it("lists status fields", async () => {
+    const { job } = await upsertJob(db, northwind);
+    await setJobStatus(db, job.id, "dismissed");
+    const [overview] = await listJobs(db);
+    expect(overview).toMatchObject({ id: job.id, status: "dismissed" });
+    expect(overview?.archivedAt).toBeInstanceOf(Date);
+    expect(overview?.createdAt).toBeInstanceOf(Date);
   });
 });

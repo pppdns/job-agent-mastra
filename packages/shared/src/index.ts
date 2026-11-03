@@ -8,4 +8,5 @@ export const COPILOT_AGENT_ID = "copilot";
 export const AGENT_SECRET_HEADER = "x-copilot-secret";
 
 export * from "./assessment";
+export * from "./job-status";
 export * from "./profile";
