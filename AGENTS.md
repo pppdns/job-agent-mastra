@@ -12,8 +12,8 @@ pnpm workspaces + Turborepo, TypeScript, Mastra (agent server + Studio), Next.js
 
 - `apps/agent` — Mastra server (agents, tools, memory, scorers in `src/mastra/`). See [apps/agent/AGENTS.md](apps/agent/AGENTS.md)
 - `apps/web` — Next.js UI; proxies to the agent server, runs approval actions. See [apps/web/AGENTS.md](apps/web/AGENTS.md)
-- `packages/shared` — constants, Zod schemas and types shared by both apps
-- `packages/db` — Drizzle schema, migrations, data-access functions
+- `packages/shared` — constants, Zod schemas and types shared by both apps (assessment shape in `src/assessment.ts`)
+- `packages/db` — Drizzle schema, migrations, data-access functions, approval state machine. See [packages/db/AGENTS.md](packages/db/AGENTS.md)
 - `scripts/` — `agent-api.sh` (authenticated `mastra api`), `setup-env.sh`
 - `fixtures/` — synthetic listings/pages for tests and evals (no third-party text)
 - `docs/` — plan, spikes, verification results

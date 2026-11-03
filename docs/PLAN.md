@@ -100,12 +100,12 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - [x] UI: Markdown replies (Streamdown, no images/HTML), tool Trace rows.
 - [x] Verified: unit tests (guard, parser, dedupe, orchestrator with fixtures), offline e2e for fallback/blocked/pasted paths, live runs ([verification.md](verification.md)).
 
-### M4 — Vertical slice: assessment → draft → approved snapshot
-- Assessment shape in `packages/shared` (overview, strengths/weaknesses, hard conflicts vs soft tradeoffs, unknowns, evidence refs with evidence class, recruiter questions, qualified recommendation; no numeric score).
-- `save_job_draft` (automatic, versioned draft), `propose_job_snapshot` → `approvals` row (payload hash, draft version, thread id, idempotency key).
-- Approval card in chat (status read from DB); approve/reject server action validates thread, pending status, hash/version freshness; duplicate or retried submissions return the same result.
-- Jobs list + detail (draft vs approved versions).
-- **Done when:** brief example steps 1–2, 8–9 work end-to-end; state-machine tests cover stale, cross-session, duplicate, lost-response retry.
+### M4 — Vertical slice: assessment → draft → approved snapshot ✅ (2026-11-03)
+- [x] Assessment shape (`packages/shared/src/assessment.ts`): overview, `fitBasis` (role only vs with profile), strengths/weaknesses, hard conflicts vs soft tradeoffs, unknowns, recruiter questions, qualified recommendation; evidence class + source ids per point; no numeric score.
+- [x] `save_job_draft` (automatic, versioned, sources must belong to the job) and `propose_job_snapshot` → `app_approvals` (payload hash, draft version, thread id, idempotency key). State machine: [packages/db/AGENTS.md](../packages/db/AGENTS.md).
+- [x] Approval card in chat (state from DB, decision with displayed payload hash); jobs list + detail with draft vs approved versions and sources read.
+- [x] Verified: db tests for stale (newer draft, changed hash), cross-chat, duplicate, lost-response retry, concurrent approve, superseded, versioning; offline e2e of paste → draft → propose → approve → jobs pages; live run of steps 1–2 and 8–9 ([verification.md](verification.md)).
+- Deferred to M5: the agent learns about a decision only when it reads state again (approvals and profile get injected per turn in M5).
 
 ### M5 — Profile memory, local context, comparisons
 - `profile_facts` (kind: hard requirement / soft preference / background; versioned, supersedes, audit). `propose_profile_change` (exact add/modify/remove diff) → approval. Profile injected each turn from DB with its version id.
