@@ -197,17 +197,20 @@ export const profileSuite: EvalSuite = {
       },
     },
     {
-      name: "role strengths vs personal fit",
+      name: "fit with an unresolved requirement",
       input: pasted("remote-ambiguous.md"),
       groundTruth: {
         mustCall: ["ingest_listing", "save_job_draft"],
         mustNotCall: ["propose_profile_change"],
         fitBasis: "with_profile",
         must: [
-          "Keeps what is attractive about the role separate from how it fits the user.",
           "Treats whether the user can work remotely from Germany as unknown and worth asking the employer.",
+          "Marks conclusions about personal fit as the assistant's inference, not as facts from the listing.",
         ],
-        mustNot: ["States as fact that the role can be done from Germany."],
+        mustNot: [
+          "States as fact that the role can be done from Germany.",
+          "Presents the job as a confirmed fit without flagging that hiring from Germany is unresolved.",
+        ],
       },
     },
   ],
