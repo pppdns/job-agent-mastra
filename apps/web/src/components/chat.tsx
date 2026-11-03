@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, type KeyboardEvent, type ReactNode, useState } from "react";
 import { Streamdown } from "streamdown";
 import { ApprovalCard } from "@/components/approval-card";
+import { AssessmentCard, savedDraft } from "@/components/assessment-card";
 import { CompactionLine, isCompactionPart, isHiddenMemoryPart } from "@/components/compaction-line";
 import { PageHeader } from "@/components/page-header";
 import {
@@ -187,6 +188,7 @@ function ChatMessage({
 
   message.parts.forEach((part, index) => {
     const approvalId = isToolPart(part) ? proposedApprovalId(part) : undefined;
+    const draft = isToolPart(part) ? savedDraft(part) : undefined;
     if (isProgressPart(part) || isHiddenMemoryPart(part)) return;
     if (isCompactionPart(part)) {
       flushTools();
@@ -208,6 +210,10 @@ function ChatMessage({
       // A pending approval is a prompt, not a trace row.
       flushTools();
       blocks.push(<ApprovalCard key={approvalId} approvalId={approvalId} threadId={threadId} />);
+    } else if (draft && isToolPart(part)) {
+      // A saved draft is shown as its assessment card, not a trace row.
+      flushTools();
+      blocks.push(<AssessmentCard key={part.toolCallId} {...draft} />);
     } else if (isToolPart(part)) {
       tools.push(part);
     } else if (part.type === "text" && part.text) {

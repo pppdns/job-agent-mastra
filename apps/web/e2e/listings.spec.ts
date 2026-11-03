@@ -42,7 +42,12 @@ test("pasted listing text is saved with the chat as provenance", async ({ page }
   const reply = visible(page, '[data-role="assistant"]');
   await expect(reply).toContainText("Read your pasted text (may be incomplete)");
   // The mock then saves a draft automatically, like the real agent is instructed to.
-  await expect(reply).toContainText("Saved draft v1");
+  const card = visible(page, '[aria-label="Assessment draft"]');
+  await expect(card).toContainText("Draft v1 · not approved");
+  await expect(card).toContainText("Mock headline: listing read, pay unknown");
+  await expect(card).toContainText("Investigate further");
+  await expect(card).toContainText("Fit not judged");
+  await expect(card.getByLabel("1 weaknesses")).toBeVisible();
 
   const db = createClient({ url: e2eDb });
   const { rows } = await db.execute({
@@ -57,4 +62,5 @@ test("pasted listing text is saved with the chat as provenance", async ({ page }
   // The trace row survives a reload (history comes back from Mastra memory).
   await page.reload();
   await expect(visible(page, '[data-role="assistant"]')).toContainText("Read your pasted text");
+  await expect(visible(page, '[aria-label="Assessment draft"]')).toContainText("Mock headline");
 });

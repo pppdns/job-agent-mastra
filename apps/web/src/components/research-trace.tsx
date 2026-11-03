@@ -1,3 +1,4 @@
+import { EVIDENCE_CLASSES, type EvidenceClass, type ResearchTopic } from "@copilot/shared";
 import {
   CircleAlertIcon,
   FileTextIcon,
@@ -6,6 +7,7 @@ import {
   SearchIcon,
   SparklesIcon,
 } from "lucide-react";
+import { EvidenceBadge } from "@/components/assessment-visuals";
 import { EvidenceList } from "@/components/evidence-list";
 import type { ToolPart } from "@/components/tool-trace";
 import { Button } from "@/components/ui/button";
@@ -114,9 +116,9 @@ type ResearchOutput = {
   reason?: string;
   claims?: {
     claimId: string;
-    topic: never;
+    topic: ResearchTopic;
     text: string;
-    evidence: never;
+    evidence: EvidenceClass;
     sourceIds: string[];
     quote?: string | null;
     publishedAt?: string | null;
@@ -147,8 +149,9 @@ export function ResearchResult({ part }: { part: ToolPart }) {
             {claims.length} findings
           </Button>
         </CollapsibleTrigger>
+        <EvidenceMix evidence={claims.map((c) => c.evidence)} />
         {b && (
-          <span className="text-xs text-muted-foreground">
+          <span className="ml-auto text-xs text-muted-foreground">
             {b.toolCalls} web calls · {(b.elapsedMs / 1000).toFixed(0)} s · est. $
             {(b.estimatedLlmUsd + b.estimatedProviderUsd).toFixed(3)} (estimate)
           </span>
@@ -161,6 +164,23 @@ export function ResearchResult({ part }: { part: ToolPart }) {
         />
       </CollapsibleContent>
     </Collapsible>
+  );
+}
+
+/** Findings per evidence class, strongest first: how solid the research is at a glance. */
+function EvidenceMix({ evidence }: { evidence: EvidenceClass[] }) {
+  return (
+    <span className="flex flex-wrap gap-1">
+      {EVIDENCE_CLASSES.map((e) => {
+        const n = evidence.filter((x) => x === e).length;
+        return n === 0 ? null : (
+          <span key={e} className="inline-flex items-center gap-0.5 text-xs tabular-nums">
+            <EvidenceBadge evidence={e} />
+            <span className="text-muted-foreground">×{n}</span>
+          </span>
+        );
+      })}
+    </span>
   );
 }
 

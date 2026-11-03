@@ -1,10 +1,19 @@
 import { getJobDetail } from "@copilot/db";
-import { CheckIcon } from "lucide-react";
+import {
+  BriefcaseIcon,
+  Building2Icon,
+  CheckIcon,
+  ClipboardPasteIcon,
+  GlobeIcon,
+  type LucideIcon,
+  MapPinIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { AssessmentView } from "@/components/assessment-view";
+import { VerdictBadge } from "@/components/assessment-visuals";
 import { EvidenceList } from "@/components/evidence-list";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +27,13 @@ const SOURCE_LABELS = {
   web: "Web page (research)",
   pasted: "Pasted text",
 } as const;
+
+const SOURCE_ICONS: Record<keyof typeof SOURCE_LABELS, LucideIcon> = {
+  linkedin: BriefcaseIcon,
+  ats: Building2Icon,
+  web: GlobeIcon,
+  pasted: ClipboardPasteIcon,
+};
 
 const formatDate = (d: Date) =>
   d.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
@@ -50,48 +66,23 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-semibold">{job.title ?? "Untitled job"}</h1>
-        <p className="text-sm text-muted-foreground">
-          {[job.company, job.location].filter(Boolean).join(" · ")}
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold tracking-tight">{job.title ?? "Untitled job"}</h1>
+        <p className="flex flex-wrap gap-x-4 text-sm text-muted-foreground">
+          {job.company && (
+            <span className="inline-flex items-center gap-1.5">
+              <Building2Icon className="size-4" />
+              {job.company}
+            </span>
+          )}
+          {job.location && (
+            <span className="inline-flex items-center gap-1.5">
+              <MapPinIcon className="size-4" />
+              {job.location}
+            </span>
+          )}
         </p>
       </div>
-
-      <section className="flex flex-col gap-2" aria-label="Sources">
-        <h2 className="font-medium">Sources read</h2>
-        <ul className="flex flex-col gap-1 text-sm">
-          {sources.map((s) => (
-            <li key={s.id} className="flex flex-wrap gap-x-2">
-              <span>{SOURCE_LABELS[s.kind]}</span>
-              {s.url && (
-                <a
-                  href={s.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="truncate underline-offset-4 hover:underline"
-                >
-                  {s.url}
-                </a>
-              )}
-              <span className="text-muted-foreground">
-                read {formatDate(s.retrievedAt)} via {s.provider}
-                {s.truncated ? " (snapshot truncated)" : ""}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {claims.length > 0 && (
-        <section className="flex flex-col gap-2" aria-label="Evidence">
-          <h2 className="font-medium">Research evidence</h2>
-          <p className="text-sm text-muted-foreground">
-            Findings from research runs, read from web pages (untrusted). Not part of an approved
-            snapshot unless a draft that cites them is approved.
-          </p>
-          <EvidenceList claims={claims} sources={sources} />
-        </section>
-      )}
 
       {draft && (
         <Card className="border-dashed" aria-label="Current draft">
@@ -115,7 +106,7 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
       )}
 
       <section className="flex flex-col gap-3" aria-label="Approved snapshots">
-        <h2 className="font-medium">Approved snapshots</h2>
+        <h2 className="font-semibold">Approved snapshots</h2>
         {snapshots.length === 0 && (
           <p className="text-sm text-muted-foreground">Nothing approved yet.</p>
         )}
@@ -128,6 +119,7 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
                     <CheckIcon />
                     Approved v{s.version}
                   </Badge>
+                  <VerdictBadge verdict={s.payload.assessment.recommendation.verdict} size="sm" />
                   <span className="text-sm text-muted-foreground">
                     {formatDate(s.createdAt)} · from draft v{s.payload.draftVersion}
                     {s.payload.profileVersion !== undefined &&
@@ -143,6 +135,46 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
             </Collapsible>
           </Card>
         ))}
+      </section>
+
+      {claims.length > 0 && (
+        <section className="flex flex-col gap-2" aria-label="Evidence">
+          <h2 className="font-semibold">Research evidence</h2>
+          <p className="text-sm text-muted-foreground">
+            Findings from research runs, read from web pages (untrusted). Not part of an approved
+            snapshot unless a draft that cites them is approved.
+          </p>
+          <EvidenceList claims={claims} sources={sources} />
+        </section>
+      )}
+
+      <section className="flex flex-col gap-2" aria-label="Sources">
+        <h2 className="font-semibold">Sources read</h2>
+        <ul className="flex flex-col gap-1.5 text-sm">
+          {sources.map((s) => {
+            const Icon = SOURCE_ICONS[s.kind];
+            return (
+              <li key={s.id} className="flex min-w-0 items-center gap-2">
+                <Icon className="size-4 shrink-0 text-muted-foreground" />
+                <span className="shrink-0 font-medium">{SOURCE_LABELS[s.kind]}</span>
+                {s.url && (
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="min-w-0 truncate text-muted-foreground underline-offset-4 hover:underline"
+                  >
+                    {s.url}
+                  </a>
+                )}
+                <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                  {formatDate(s.retrievedAt)} · {s.provider}
+                  {s.truncated ? " · truncated" : ""}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
       </section>
     </div>
   );

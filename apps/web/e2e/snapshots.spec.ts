@@ -22,7 +22,7 @@ test("a proposed snapshot is saved only after the user approves it", async ({ pa
   const chatPath = new URL(page.url()).pathname;
 
   await send(page, "Listing: Staff Data Engineer at Globex Analytics, remote within the EU.");
-  await expect(visible(page, '[data-role="assistant"]').last()).toContainText("Saved draft v1");
+  await expect(visible(page, '[aria-label="Assessment draft"]').last()).toContainText("Draft v1");
   await expect(visible(page, '[data-role="assistant"]').last()).toContainText(
     "Mock reply: save_job_draft v1",
   );
@@ -31,6 +31,7 @@ test("a proposed snapshot is saved only after the user approves it", async ({ pa
   const card = page.locator('[aria-label="Snapshot approval"]').filter({ visible: true });
   await expect(card).toContainText("Save approved snapshot?");
   await expect(card).toContainText("draft v1");
+  await expect(card).toContainText("Investigate further");
 
   const jobPath = await card.getByRole("link", { name: "Open job" }).getAttribute("href");
   expect(jobPath).toMatch(/^\/jobs\//);
@@ -40,6 +41,8 @@ test("a proposed snapshot is saved only after the user approves it", async ({ pa
   const row = page.getByRole("list", { name: "Jobs" }).locator(`a[href="${jobPath}"]`);
   await expect(row).toContainText("Draft v1");
   await expect(row).toContainText("Awaiting approval");
+  await expect(row).toContainText("Mock headline: listing read, pay unknown");
+  await expect(row).toContainText("Investigate further");
   await expect(row).not.toContainText("Approved");
 
   await page.goto(chatPath);

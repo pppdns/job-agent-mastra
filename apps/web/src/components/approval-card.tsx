@@ -1,12 +1,13 @@
 "use client";
 
 import type { ApprovalView, DecisionError, ProfileChangePayload } from "@copilot/db";
-import { PROFILE_FACT_LABELS, RECOMMENDATION_LABELS } from "@copilot/shared";
+import { assessmentSummary, PROFILE_FACT_LABELS } from "@copilot/shared";
 import { CheckIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { decideApprovalAction } from "@/app/actions";
 import { AssessmentView } from "@/components/assessment-view";
+import { FitMeter, SignalChips, VerdictBadge } from "@/components/assessment-visuals";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -92,8 +93,9 @@ export function ApprovalCard({
         <ItemDescription>
           {view.kind === "profile_change"
             ? view.payload.reason
-            : `${[view.payload.job.title, view.payload.job.company].filter(Boolean).join(" · ") || "Untitled job"} — draft v${view.draftVersion}. Recommendation: ${RECOMMENDATION_LABELS[view.payload.assessment.recommendation.verdict]}.`}
+            : `${[view.payload.job.title, view.payload.job.company].filter(Boolean).join(" · ") || "Untitled job"} — draft v${view.draftVersion}`}
         </ItemDescription>
+        {view.kind === "job_snapshot" && <SnapshotSignals view={view} />}
       </ItemContent>
       <ItemActions>
         {view.status === "pending" ? (
@@ -175,6 +177,17 @@ export function ProfileDiff({ payload }: { payload: ProfileChangePayload }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+function SnapshotSignals({ view }: { view: Extract<ApprovalView, { kind: "job_snapshot" }> }) {
+  const summary = assessmentSummary(view.payload.assessment);
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      <VerdictBadge verdict={summary.verdict} size="sm" />
+      <FitMeter fitLevel={summary.fitLevel} fitBasis={summary.fitBasis} />
+      <SignalChips counts={summary.counts} />
+    </div>
   );
 }
 
