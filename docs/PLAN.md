@@ -75,14 +75,15 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - [x] Official skills installed: ai-sdk, next-dev-loop, vercel-react-best-practices, shadcn, turborepo (+ mastra).
 - [x] Project permissions allowlist; `.env*` reads denied. Hooks (`PostToolUse` format, `Stop` check) are wired in M1 once the scripts exist.
 
-### M1 — Monorepo skeleton + streaming hello agent ✅ mock-verified (2026-11-03)
+### M1 — Monorepo skeleton + streaming hello agent ✅ (2026-11-03)
 - [x] pnpm workspace, Turbo, shared tsconfig, Biome, Vitest, Playwright.
 - [x] `apps/agent`: Mastra on 127.0.0.1:4111, SimpleAuth shared secret, libSQL storage, PinoLogger, tracing to storage, Zod env validation, `copilot` agent, `chatRoute` (AI SDK v7), mock model.
 - [x] `apps/web`: Next 16.4, Tailwind, shadcn chat components, chat page streaming via `/api/chat` proxy.
 - [x] `packages/shared`, `packages/db` (Drizzle + migrations, `app_users`), `.env.example`, `pnpm setup:env`.
 - [x] Hooks: Claude `PostToolUse` Biome format, `Stop` → `pnpm check`; git pre-commit → `pnpm check`.
 - [x] Verified (mock): browser → proxy → agent stream; 401 without secret; traces via `pnpm agent:api trace list`; `pnpm check` + `pnpm e2e` green.
-- [ ] **Live check pending your key:** `pnpm setup:env`, add `AI_GATEWAY_API_KEY`, `pnpm dev`, send a message.
+- [x] Live: real Sonnet 5.5 reply streamed in the UI; trace and usage verified ([verification.md](verification.md)).
+- [x] Stream errors reach the client only as a sanitized summary (`chatRoute` `onError`).
 - Deferred: Mastra metrics/cost dashboard needs a DuckDB observability store (M8). `chatRoute` aborts generation on client disconnect; durable runs replace it in M7.
 
 ### M2 — Chat sessions

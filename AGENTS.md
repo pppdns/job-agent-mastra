@@ -83,3 +83,4 @@ Claude Code reads this `AGENTS.md` directly. Do not add a `CLAUDE.md` or `CLAUDE
 
 - [project-brief.md](project-brief.md) — product intent and constraints
 - [docs/PLAN.md](docs/PLAN.md) — agreed decisions and milestone plan
+- [docs/verification.md](docs/verification.md) — live vs offline verification results
