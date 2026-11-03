@@ -16,7 +16,8 @@
     "check": "biome check . && turbo run typecheck test",
     "e2e": "pnpm --filter @copilot/web e2e",
     "db:migrate": "pnpm --filter @copilot/db migrate",
-    "agent:api": "scripts/agent-api.sh"
+    "agent:api": "scripts/agent-api.sh",
+    "prepare": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.4",

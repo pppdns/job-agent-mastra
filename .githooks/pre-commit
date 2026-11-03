@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Blocks commits unless lint, typecheck and unit tests pass (Turbo-cached, usually seconds).
+set -euo pipefail
+pnpm -s check
