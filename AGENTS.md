@@ -49,6 +49,7 @@ Simple, polished, functional: shadcn/ui (Radix Nova preset) defaults. Clear visu
 | `pnpm db:migrate` | Apply Drizzle migrations for app tables |
 | `pnpm dev` | Agent (http://127.0.0.1:4111, Studio) + web (http://127.0.0.1:3000) |
 | `pnpm check` | Biome + typecheck + unit tests (pre-commit and Claude Stop hook run this) |
+| `pnpm ngrok` | ngrok tunnel to the web app (basic auth required; login in `apps/web/.env.local` as `NGROK_BASIC_AUTH`, optional `NGROK_DOMAIN`). Run next to `pnpm dev` |
 | `pnpm e2e` | Playwright on an isolated mock stack; stop `pnpm dev` first |
 | `pnpm agent:api …` | `mastra api` against the local agent with auth, e.g. `agent run copilot '{"messages":"hi"}'`, `trace list` |
 
