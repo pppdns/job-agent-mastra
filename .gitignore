@@ -1,13 +1,35 @@
+# OS
 .DS_Store
+
+# Env (only .env.example is committed)
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.env.development
-.env.test
-.env.production
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
+
+# Dependencies and build output
+node_modules/
+.next/
+.mastra/
+.turbo/
+dist/
+out/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Local data (SQLite / libSQL)
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Test output
+playwright-report/
+test-results/
+blob-report/
+
+# Logs
+*.log
+
+# Personal Claude Code settings
+.claude/settings.local.json
