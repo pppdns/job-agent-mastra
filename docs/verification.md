@@ -14,3 +14,9 @@ Offline (mock/fixture) results and live results are kept separate. A live integr
 
 - `pnpm check`: Biome, typecheck, 9 agent + 3 db unit tests.
 - `pnpm e2e` (mock model, isolated stack): streamed reply through proxy; agent rejects requests without the shared secret (401).
+
+## Offline checks (M2)
+
+- `pnpm check`: agent unit tests add chat memory (same-thread recall, no cross-thread leak, foreign resource rejected, history route scoped) and the durable resume spike; web unit tests cover the `/api/chat` request schema and agent body.
+- `pnpm e2e` (7 tests): separate chat histories, reopen after reload, rename and delete, a thread inserted for another resource is absent from listings (even with `?resourceId=`), 403 on read/rename/delete, 404 on history, and a send from the UI fails with the sanitized error. New and existing routes return 401 without the secret.
+- Not yet exercised live: title generation with the real fast model.

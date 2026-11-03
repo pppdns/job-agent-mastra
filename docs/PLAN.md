@@ -86,11 +86,12 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - [x] Stream errors reach the client only as a sanitized summary (`chatRoute` `onError`).
 - Deferred: Mastra metrics/cost dashboard needs a DuckDB observability store (M8). `chatRoute` aborts generation on client disconnect; durable runs replace it in M7.
 
-### M2 — Chat sessions
-- Threads = Mastra memory threads under one `resourceId`; sidebar, New chat, reopen (history via `toAISdkMessages`), auto titles (cheap model).
-- Server-side ownership check on every thread access; web→agent shared secret.
-- Small spike: durable agent + `useChat` resume after refresh, to de-risk M7 early (keep if clean, else note findings).
-- **Done when:** independent chats reopen correctly; test proves no cross-thread context leak.
+### M2 — Chat sessions ✅ (2026-11-03)
+- [x] Threads = Mastra memory threads under one resource (`chatMemory`: last 20 messages, no semantic recall or resource working memory). Chat at `/c/<threadId>`; `/` redirects to a fresh id; the agent creates the thread on the first message.
+- [x] Sidebar (list, New chat, reopen, rename, delete), history via `/threads/:id/ui-messages` (`toAISdkMessages` v7), auto titles with the fast model (`generateTitle`, streamed `data-thread-title`).
+- [x] Ownership: `SimpleAuth` `mapUserToResourceId` pins every memory call to the local resource (Mastra filters lists, 403s foreign threads, rejects mismatched `/chat`). The `/api/chat` proxy accepts only `{ threadId, message }` and builds the agent body itself.
+- [x] Spike: durable agent resume works on the Mastra side; `chatRoute` can't be reused for it ([spikes/durable-resume.md](spikes/durable-resume.md)).
+- [x] Verified (mock): unit tests for recall, no cross-thread leak, resource mismatch, history scoping, proxy body; e2e for separate histories, reopen after reload, rename/delete, foreign threads hidden and inaccessible.
 
 ### M3 — Listing ingestion (spike + tools)
 - Spike script over 3–5 real public LinkedIn URLs: Tavily extract (advanced) vs Firecrawl scrape (+ ATS lookup). Results in `docs/spikes/extraction.md`; choose provider split.
@@ -123,7 +124,7 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - **Done when:** brief steps 3–4 work with cited sources; budget exhaustion fixture stops cleanly with partial results.
 
 ### M7 — Durability: reconnect, stop, compaction
-- Durable agent (`createDurableAgent`, beta) for chat runs; active run id persisted per thread; UI resumes via `observe(runId)` after refresh.
+- Durable agent (`createDurableAgent`, beta) for chat runs; active run id persisted per thread; UI resumes via `observe(runId)` after refresh. Custom `POST /chat` + `GET /chat/:threadId/stream` replace `chatRoute` (see [spikes/durable-resume.md](spikes/durable-resume.md)).
 - Stop research: abort in-flight work, mark run cancelled, keep partial results, list charges that may still occur.
 - Observational Memory (thread scope, Haiku) for compaction; compaction event recorded for the technical panel; pending approvals and profile unaffected (they live in DB).
 - Bounded retries with backoff on provider calls.
@@ -150,5 +151,5 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 5. **Durable agents are beta** in Mastra; if they block us, fall back to a regular agent plus our own `run_events` persistence for replay.
 
 ## Risks to verify early
-- Durable agent + AI SDK UI resume interplay (prototype in M2 rather than discovering in M7).
+- Durable agent + AI SDK UI resume interplay: Mastra side verified in the M2 spike; browser reload resume still to test in M7.
 - LinkedIn extraction reliability (M3 spike decides; pasted text is always supported).
