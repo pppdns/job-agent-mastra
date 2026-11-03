@@ -22,6 +22,8 @@ data/
 *.db
 *.db-shm
 *.db-wal
+*.duckdb
+*.duckdb.wal
 
 # Test output
 playwright-report/

@@ -56,7 +56,7 @@ Later: `pnpm eval`, `pnpm smoke:live`. Details: [docs/PLAN.md#verification-loops
 
 ## Database
 
-Single local libSQL file under `data/` (gitignored), shared by Mastra storage and app tables (`app_*`, managed by Drizzle in `packages/db`).
+Single local libSQL file under `data/` (gitignored), shared by Mastra storage and app tables (`app_*`, managed by Drizzle in `packages/db`). Mastra observability (traces, logs, metrics) lives in a DuckDB file next to it (`data/copilot.duckdb`).
 
 ## Agent Workflow
 

@@ -214,6 +214,9 @@ importers:
       '@mastra/core':
         specifier: ^1.81.0
         version: 1.81.0(ai@7.0.159(zod@4.6.7))(zod@4.6.7)
+      '@mastra/duckdb':
+        specifier: ^1.17.0
+        version: 1.17.0(@mastra/core@1.81.0(ai@7.0.159(zod@4.6.7))(zod@4.6.7))
       '@mastra/libsql':
         specifier: ^1.28.0
         version: 1.28.0(@mastra/core@1.81.0(ai@7.0.159(zod@4.6.7))(zod@4.6.7))
@@ -801,6 +804,56 @@ packages:
 
   '@drizzle-team/brocli@0.10.2':
     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
+
+  '@duckdb/node-api@1.5.2-r.2':
+    resolution: {integrity: sha512-IqFeTarPL9sImt8R6Y/NbNjTR95c7fksk9uFCpFLV0hxbIzbNCCF//xy2BgBqVJtU7/gk2eIpTJTvtE6FS2eog==}
+
+  '@duckdb/node-bindings-darwin-arm64@1.5.2-r.2':
+    resolution: {integrity: sha512-wA50u8kQxEXlf2ho1m/n8K4qdIWNNBUZ8xQ02x+9Vc12GAgabSlnXJOaZZFrby5Dj28y+mFBIfAEGftBeQKXaw==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@duckdb/node-bindings-darwin-x64@1.5.2-r.2':
+    resolution: {integrity: sha512-UJHIhxkHMpdzTnyXVqsGOZotG+TzwAqkX0POM20IkQVtWtFjPS52Kc9Q+qLrS8ZuabmnrFtX9AnlHNyPVqSqMA==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@duckdb/node-bindings-linux-arm64-musl@1.5.2-r.2':
+    resolution: {integrity: sha512-PVC9feqV+bgsnzGfiCv1pe+9mNqoC8k15/3Qmwhp6+AUloTNtk1ln9wlsHMUzhRfNG2wb2fN8P9PJ5zY5t/J/w==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@duckdb/node-bindings-linux-arm64@1.5.2-r.2':
+    resolution: {integrity: sha512-cAEALsSxYRzSfUgxAJCNbDZcmdlVQWvEKldd7r8lYWYZ7D2mxBjeLrF0WoL34vl+ZNEgqHAuqiv3I+wMU2dOXA==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@duckdb/node-bindings-linux-x64-musl@1.5.2-r.2':
+    resolution: {integrity: sha512-v2AUKCIHKq9+zFWmx+UdSWyxFLaT5wsWuTNID30pGBqGvwChxLGmm1szbHNxR7nNa00y2SGp9Gxoky0RS7YCwg==}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@duckdb/node-bindings-linux-x64@1.5.2-r.2':
+    resolution: {integrity: sha512-9SgKECgVtkDK6+HLBbDKxW41ORj+BciQjSgERFfhnuPIDYhgx08wTPZcnaU7KxvNdOmndIn5OmjzKZ6Jrvwv0g==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@duckdb/node-bindings-win32-arm64@1.5.2-r.2':
+    resolution: {integrity: sha512-g5ZWK07c0Qh7UFhJC37iC5y8oW8ZqxEgpNM2vTFD3ShM9Rn1NDXkxA7zjcheHRI+My5T1JpE9kNpCvhzItJrgw==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@duckdb/node-bindings-win32-x64@1.5.2-r.2':
+    resolution: {integrity: sha512-VUMbdeXQHWKHEXVWtfVaOSu7Mb4jR9gT56Yzu9FHyLyP9ogY/D6wpeohY5gAHZS9PHQGGq24qRtCn5g6vUolqA==}
+    cpu: [x64]
+    os: [win32]
+
+  '@duckdb/node-bindings@1.5.2-r.2':
+    resolution: {integrity: sha512-A17A6pXB7SEBAm93POdmEG+f4vQWMSujUP8/hNUfDWjaqp4C5mUWFnyuBM4XiB4qyXXH3vbjis2TYsnxAN2xEQ==}
 
   '@emnapi/runtime@1.11.3':
     resolution: {integrity: sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA==}
@@ -1565,6 +1618,12 @@ packages:
     engines: {node: '>=22.13.0'}
     peerDependencies:
       '@mastra/core': '>=1.81.0-0 <2.0.0-0'
+
+  '@mastra/duckdb@1.17.0':
+    resolution: {integrity: sha512-W3T2HkI9wh2K3wvqqlmK0ti2pitXuvHETpvjSC0UxvsTgiIeU2lRI9OubqCJGbbBuIZBaeZx2mDzeEhsym67Tw==}
+    engines: {node: '>=22.13.0'}
+    peerDependencies:
+      '@mastra/core': '>=1.80.0-0 <2.0.0-0'
 
   '@mastra/libsql@1.28.0':
     resolution: {integrity: sha512-xkc1FLIUQxAz1C0ST1L63y8t/M3WcrhMR6ARGaQWCATQU+KqRhL+X2XNfUqz5jB53UWW2h34OM27W/Ev+yttTA==}
@@ -5814,6 +5873,47 @@ snapshots:
 
   '@drizzle-team/brocli@0.10.2': {}
 
+  '@duckdb/node-api@1.5.2-r.2':
+    dependencies:
+      '@duckdb/node-bindings': 1.5.2-r.2
+
+  '@duckdb/node-bindings-darwin-arm64@1.5.2-r.2':
+    optional: true
+
+  '@duckdb/node-bindings-darwin-x64@1.5.2-r.2':
+    optional: true
+
+  '@duckdb/node-bindings-linux-arm64-musl@1.5.2-r.2':
+    optional: true
+
+  '@duckdb/node-bindings-linux-arm64@1.5.2-r.2':
+    optional: true
+
+  '@duckdb/node-bindings-linux-x64-musl@1.5.2-r.2':
+    optional: true
+
+  '@duckdb/node-bindings-linux-x64@1.5.2-r.2':
+    optional: true
+
+  '@duckdb/node-bindings-win32-arm64@1.5.2-r.2':
+    optional: true
+
+  '@duckdb/node-bindings-win32-x64@1.5.2-r.2':
+    optional: true
+
+  '@duckdb/node-bindings@1.5.2-r.2':
+    dependencies:
+      detect-libc: 2.1.2
+    optionalDependencies:
+      '@duckdb/node-bindings-darwin-arm64': 1.5.2-r.2
+      '@duckdb/node-bindings-darwin-x64': 1.5.2-r.2
+      '@duckdb/node-bindings-linux-arm64': 1.5.2-r.2
+      '@duckdb/node-bindings-linux-arm64-musl': 1.5.2-r.2
+      '@duckdb/node-bindings-linux-x64': 1.5.2-r.2
+      '@duckdb/node-bindings-linux-x64-musl': 1.5.2-r.2
+      '@duckdb/node-bindings-win32-arm64': 1.5.2-r.2
+      '@duckdb/node-bindings-win32-x64': 1.5.2-r.2
+
   '@emnapi/runtime@1.11.3':
     dependencies:
       tslib: 2.9.1
@@ -6386,6 +6486,11 @@ snapshots:
       - supports-color
       - utf-8-validate
       - zod
+
+  '@mastra/duckdb@1.17.0(@mastra/core@1.81.0(ai@7.0.159(zod@4.6.7))(zod@4.6.7))':
+    dependencies:
+      '@duckdb/node-api': 1.5.2-r.2
+      '@mastra/core': 1.81.0(ai@7.0.159(zod@4.6.7))(zod@4.6.7)
 
   '@mastra/libsql@1.28.0(@mastra/core@1.81.0(ai@7.0.159(zod@4.6.7))(zod@4.6.7))':
     dependencies:

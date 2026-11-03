@@ -1,8 +1,6 @@
-import { resolveDatabaseUrl } from "@copilot/db";
 import { LOCAL_USER_ID } from "@copilot/shared";
 import { Mastra } from "@mastra/core/mastra";
 import { SimpleAuth } from "@mastra/core/server";
-import { LibSQLStore } from "@mastra/libsql";
 import { PinoLogger } from "@mastra/loggers";
 import { MastraStorageExporter, Observability, SensitiveDataFilter } from "@mastra/observability";
 import { env } from "../env";
@@ -10,6 +8,7 @@ import { copilotAgent } from "./agents/copilot";
 import { researcherAgent } from "./agents/researcher";
 import { chatResumeRoute, chatRoute, chatStopRoute } from "./routes/chat";
 import { threadMessagesRoute } from "./routes/thread-messages";
+import { createStorage } from "./storage";
 
 /** Mastra's default sensitive fields plus cookies and token variants; redacts matching keys in every span. */
 export const TRACE_SENSITIVE_FIELDS = [
@@ -42,7 +41,7 @@ const logger = new PinoLogger({ name: "copilot-agent", level: "info" });
 
 export const mastra = new Mastra({
   agents: { copilotAgent, researcherAgent },
-  storage: new LibSQLStore({ id: "copilot-storage", url: resolveDatabaseUrl() }),
+  storage: createStorage(),
   logger,
   observability: new Observability({
     configs: {

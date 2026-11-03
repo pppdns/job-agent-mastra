@@ -7,6 +7,8 @@ const agentPort = 4112;
 const webPort = 3001;
 const e2eDbPath = resolve(import.meta.dirname, "../../data/e2e.db");
 export const e2eDb = `file:${e2eDbPath}`;
+// Mastra traces/logs/metrics (DuckDB); the agent derives this path from DATABASE_URL.
+const e2eObservabilityPath = resolve(import.meta.dirname, "../../data/e2e.duckdb");
 export const e2eAgentUrl = `http://127.0.0.1:${agentPort}`;
 export const e2eSecret = secret;
 
@@ -23,7 +25,7 @@ export default defineConfig({
   webServer: [
     {
       // Fresh database per run, so tests never see leftovers.
-      command: `rm -f ${e2eDbPath} ${e2eDbPath}-shm ${e2eDbPath}-wal && pnpm --filter @copilot/agent dev`,
+      command: `rm -f ${e2eDbPath} ${e2eDbPath}-shm ${e2eDbPath}-wal ${e2eObservabilityPath} ${e2eObservabilityPath}.wal && pnpm --filter @copilot/agent dev`,
       url: `${e2eAgentUrl}/api`,
       reuseExistingServer: false,
       timeout: 120_000,

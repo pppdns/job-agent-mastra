@@ -9,7 +9,7 @@ export * from "./assessments";
 export * from "./claims";
 export { AssessmentError, hashPayload } from "./hash";
 export * from "./jobs";
-export { findWorkspaceRoot, resolveDatabaseUrl } from "./paths";
+export { findWorkspaceRoot, resolveDatabaseUrl, resolveObservabilityPath } from "./paths";
 export * from "./profile";
 export * from "./runs";
 export type {

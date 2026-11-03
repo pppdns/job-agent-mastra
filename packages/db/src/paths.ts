@@ -22,3 +22,13 @@ export function resolveDatabaseUrl(env: NodeJS.ProcessEnv = process.env): string
   mkdirSync(dataDir, { recursive: true });
   return `file:${join(dataDir, "copilot.db")}`;
 }
+
+/**
+ * DuckDB file for Mastra observability (traces, logs, metrics): next to the libSQL file with a
+ * `.duckdb` extension, so a separate DATABASE_URL (e2e, tests) also gets its own observability store.
+ */
+export function resolveObservabilityPath(env: NodeJS.ProcessEnv = process.env): string {
+  const url = resolveDatabaseUrl(env);
+  if (!url.startsWith("file:")) return ":memory:";
+  return url.slice("file:".length).replace(/\.db$/, "") + ".duckdb";
+}

@@ -14,7 +14,7 @@ Source of intent: [project-brief.md](../project-brief.md). This file is the mile
 | Web providers | Tavily (search/extract) + Firecrawl (scrape, optional hosted browser). Final split decided by the M3 spike | Minimal stack |
 | Chat UI | shadcn/ui native chat components (MessageScroller, Message, Bubble), Radix base; AI Elements added per component only where it adds value | shadcn guidance; fewer dependencies |
 | Agent instructions | `AGENTS.md` only (Claude Code reads it natively) | One file for all coding agents |
-| Observability | Mastra native tracing to storage (Studio). No Langfuse | Brief: add platforms only for a concrete gap |
+| Observability | Mastra native tracing, logs and metrics to a DuckDB store (`data/copilot.duckdb`, Studio). No Langfuse | Brief: add platforms only for a concrete gap |
 | Compaction | Mastra Observational Memory, thread scope | Native mechanism; no cross-session summaries |
 | Session-local context | Thread-scoped working memory (no approval needed) | Idiomatic; global profile stays in app tables |
 | Global profile | App-owned versioned tables, injected per turn from DB | Approval + audit history; never sourced from a summary |
@@ -137,7 +137,7 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - [x] Panel ("Technical details" sheet per chat): run id, status, Studio trace link, model/provider/framework, LLM / search / extraction / browser / tools tables with status, duration, sanitized args/results, queries and URLs, tokens incl. cached and reasoning, estimated LLM vs external cost (labelled), retries, errors, compaction and approval events.
 - [x] Redaction: trace `SensitiveDataFilter` extended (cookies, `*_token`); event details sanitized and size-limited. Tool outputs were already bounded (listing 20k, page 12k chars).
 - [x] Verified: live turns match the Studio trace one-to-one per `model_step` (copilot, researcher, observer, title) with equal tokens; unit tests for totals, recorder, prices, sanitizer, redaction, metered model; e2e checks the panel after a research run.
-- Not done: DuckDB metrics store / Studio cost dashboard (not needed: the panel covers per-run and per-chat usage).
+- [x] DuckDB observability store: Studio traces (with token/cost columns), logs and metrics pages work; libSQL keeps memory and app tables.
 
 ### M9 — Security pass, eval suite, docs
 - Prompt-injection fixtures (memory change, credential reveal, approval bypass); SSRF/redirect tests; confirm web content can never create an approved state.
