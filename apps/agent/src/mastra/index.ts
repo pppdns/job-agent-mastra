@@ -8,11 +8,14 @@ import { PinoLogger } from "@mastra/loggers";
 import { MastraStorageExporter, Observability, SensitiveDataFilter } from "@mastra/observability";
 import { env } from "../env";
 import { copilotAgent } from "./agents/copilot";
+import { toClientErrorText } from "./errors";
+
+const logger = new PinoLogger({ name: "copilot-agent", level: "info" });
 
 export const mastra = new Mastra({
   agents: { copilotAgent },
   storage: new LibSQLStore({ id: "copilot-storage", url: resolveDatabaseUrl() }),
-  logger: new PinoLogger({ name: "copilot-agent", level: "info" }),
+  logger,
   observability: new Observability({
     configs: {
       default: {
@@ -29,6 +32,16 @@ export const mastra = new Mastra({
     auth: new SimpleAuth({
       tokens: { [env.AGENT_SHARED_SECRET]: { id: LOCAL_USER_ID } },
     }),
-    apiRoutes: [chatRoute({ path: "/chat", agent: COPILOT_AGENT_ID, version: "v7" })],
+    apiRoutes: [
+      chatRoute({
+        path: "/chat",
+        agent: COPILOT_AGENT_ID,
+        version: "v7",
+        onError: (error) => {
+          logger.error("chat stream failed", { error });
+          return toClientErrorText(error);
+        },
+      }),
+    ],
   },
 });

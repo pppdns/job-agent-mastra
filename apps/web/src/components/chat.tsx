@@ -64,7 +64,7 @@ export function Chat() {
 
       {error && (
         <p role="alert" className="px-4 pb-2 text-sm text-destructive">
-          Something went wrong talking to the agent. Check that it is running and try again.
+          {error.message || "Something went wrong talking to the agent."}
         </p>
       )}
 
