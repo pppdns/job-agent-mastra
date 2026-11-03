@@ -12,6 +12,7 @@ Source of intent: [project-brief.md](../project-brief.md). This file is the mile
 | Approvals | DB-backed proposals: `propose_*` tools write a pending row bound to payload hash + version; UI approves; app code applies idempotently | Survives compaction/restarts, approvable later, model can't self-approve |
 | Models | Vercel AI Gateway via Mastra model router. Main: Sonnet 5.5; cheap tasks (observational memory, titles, judges): Haiku 5.5. Env-configurable | Reuse Gateway; exact IDs verified against the provider registry in M1 |
 | Web providers | Tavily (search/extract) + Firecrawl (scrape, optional hosted browser). Final split decided by the M3 spike | Minimal stack |
+| Agent instructions | `AGENTS.md` only (Claude Code reads it natively) | One file for all coding agents |
 | Observability | Mastra native tracing to storage (Studio). No Langfuse | Brief: add platforms only for a concrete gap |
 | Compaction | Mastra Observational Memory, thread scope | Native mechanism; no cross-session summaries |
 | Session-local context | Thread-scoped working memory (no approval needed) | Idiomatic; global profile stays in app tables |
@@ -63,21 +64,20 @@ Live-integration claims are only made when `smoke:live` actually ran; results re
 
 Each milestone adds its own deterministic tests and eval fixtures; M9 completes the suite.
 
-### M0 — Repo hygiene & Claude setup
-- [x] Remove committed Langfuse key from `main` history (done 2026-11-03).
-- [ ] Delete stale `claude/personal-project-setup-*` branches/worktrees (still reference the old key commit), then `git reflog expire --expire=now --all && git gc --prune=now`. Rotate the key in Langfuse regardless.
-- [ ] `.mcp.json`: keep next-devtools, playwright, chrome-devtools, firecrawl; add Tavily MCP (key from shell env) and Mastra docs MCP; drop Stripe/PostHog.
-- [ ] Untrack + gitignore `.claude/settings.local.json`; drop stale `enabledMcpjsonServers` entries; ignore `data/`, `.DS_Store`.
-- [ ] `CLAUDE.md` → `@AGENTS.md` import (Claude Code reads CLAUDE.md, not AGENTS.md); fill AGENTS.md sections.
-- [ ] Skills: evaluate + install vetted official skills (AI SDK, Next.js/React best practices, Playwright) via `find-skills`; keep `skills-lock.json`.
-- [ ] Permissions allowlist for pnpm scripts, `mastra api`, git commit; hooks wired once M1 scripts exist.
-- **Done when:** clean history, MCPs connect, `git status` clean.
+### M0 — Repo hygiene & Claude setup ✅ (2026-11-03)
+- [x] Remove committed Langfuse key from all history; stale worktrees/branches deleted, objects purged. **You:** rotate the key in Langfuse.
+- [x] `.mcp.json`: next-devtools, playwright, chrome-devtools, firecrawl, tavily (both OAuth, no keys in config). Mastra docs MCP skipped: Mastra recommends the skill instead.
+- [x] `.claude/settings.local.json` untracked + gitignored; stale MCP entries removed.
+- [x] `AGENTS.md` filled and read natively by Claude Code (no `CLAUDE.md`, which would stop it loading).
+- [x] Official skills installed: ai-sdk, next-dev-loop, vercel-react-best-practices, shadcn, turborepo (+ mastra).
+- [x] Project permissions allowlist; `.env*` reads denied. Hooks (`PostToolUse` format, `Stop` check) are wired in M1 once the scripts exist.
 
 ### M1 — Monorepo skeleton + streaming hello agent
 - pnpm workspace, Turbo, shared tsconfig, Biome, Vitest, Playwright.
 - `apps/agent`: Mastra instance, libSQL storage (absolute path), PinoLogger, tracing to storage, env validation (Zod, fails fast with a readable message), `copilot` agent, AI SDK chat route, mock-model switch.
 - `apps/web`: Next 16, Tailwind, shadcn + AI Elements, one chat page streaming via proxy route.
 - `packages/shared`, `packages/db` (Drizzle + migration command), placeholder-only `.env.example`.
+- Claude hooks: `PostToolUse` → Biome on edited file; `Stop` → `pnpm check` if under ~30s. Pre-commit `biome check --staged`.
 - **You provide:** `AI_GATEWAY_API_KEY`.
 - **Done when:** `pnpm dev` starts both; real streamed reply in UI; trace visible in Studio and via `mastra api trace list`; `pnpm check` + `pnpm e2e` (mock) green.
 

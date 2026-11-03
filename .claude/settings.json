@@ -2,27 +2,44 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
+      "Bash(pnpm check)",
+      "Bash(pnpm check *)",
       "Bash(pnpm typecheck)",
+      "Bash(pnpm typecheck *)",
       "Bash(pnpm lint)",
       "Bash(pnpm lint *)",
       "Bash(pnpm format)",
       "Bash(pnpm format *)",
-      "Bash(pnpm format:check)",
       "Bash(pnpm test)",
       "Bash(pnpm test *)",
+      "Bash(pnpm e2e)",
+      "Bash(pnpm e2e *)",
+      "Bash(pnpm eval)",
+      "Bash(pnpm eval *)",
+      "Bash(pnpm --filter * typecheck)",
+      "Bash(pnpm --filter * lint)",
+      "Bash(pnpm --filter * test *)",
+      "Bash(pnpm biome *)",
+      "Bash(pnpm exec biome *)",
+      "Bash(pnpm mastra api *)",
+      "Bash(pnpm exec mastra api *)",
       "Bash(git status *)",
       "Bash(git diff *)",
       "Bash(git log *)",
       "Bash(git show *)",
-      "Bash(gh pr view *)",
-      "Bash(gh pr checks *)",
-      "Bash(gh pr diff *)",
-      "Bash(git push*stable*)"
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ],
-    "deny": [],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./**/.env)",
+      "Read(./**/.env.*)"
+    ],
     "ask": [
+      "Bash(pnpm smoke:live *)",
+      "Bash(git push *)"
     ]
   },
-  "hooks": {
-  }
+  "hooks": {}
 }
