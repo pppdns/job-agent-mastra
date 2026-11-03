@@ -1,4 +1,5 @@
-import type { Assessment } from "@copilot/shared";
+import type { Assessment, ProfileFactKind } from "@copilot/shared";
+import { PROFILE_FACT_KINDS } from "@copilot/shared";
 import { sql } from "drizzle-orm";
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -63,6 +64,8 @@ export const jobDrafts = sqliteTable(
       .references(() => jobs.id, { onDelete: "cascade" }),
     version: integer("version").notNull(),
     assessment: text("assessment", { mode: "json" }).$type<Assessment>().notNull(),
+    /** Approved profile version the assessment was written against (0 = empty profile). */
+    profileVersion: integer("profile_version").notNull().default(0),
     threadId: text("thread_id"),
     createdAt: createdAt(),
   },
@@ -80,8 +83,28 @@ export type SnapshotPayload = {
   };
   draftId: string;
   draftVersion: number;
+  profileVersion: number;
   assessment: Assessment;
 };
+
+/** A profile change as shown for approval: every change with the fact's text before and after. */
+export type ProfileChangePayload = {
+  baseVersion: number;
+  reason: string;
+  changes: (
+    | { op: "add"; kind: ProfileFactKind; text: string }
+    | {
+        op: "modify";
+        factId: string;
+        before: { kind: ProfileFactKind; text: string };
+        kind: ProfileFactKind;
+        text: string;
+      }
+    | { op: "remove"; factId: string; before: { kind: ProfileFactKind; text: string } }
+  )[];
+};
+
+export type ApprovalPayload = SnapshotPayload | ProfileChangePayload;
 
 /** Approved job snapshots. Insert-only: each approval adds the next version. */
 export const jobSnapshots = sqliteTable(
@@ -103,7 +126,7 @@ export const jobSnapshots = sqliteTable(
   (t) => [uniqueIndex("app_job_snapshots_job_version_uq").on(t.jobId, t.version)],
 );
 
-export const APPROVAL_KINDS = ["job_snapshot"] as const;
+export const APPROVAL_KINDS = ["job_snapshot", "profile_change"] as const;
 export const APPROVAL_STATUSES = [
   "pending",
   "approved",
@@ -124,19 +147,46 @@ export const approvals = sqliteTable("app_approvals", {
   jobId: text("job_id").references(() => jobs.id, { onDelete: "cascade" }),
   draftId: text("draft_id").references(() => jobDrafts.id),
   draftVersion: integer("draft_version"),
-  payload: text("payload", { mode: "json" }).$type<SnapshotPayload>().notNull(),
+  /** SnapshotPayload for job_snapshot, ProfileChangePayload for profile_change. */
+  payload: text("payload", { mode: "json" }).$type<ApprovalPayload>().notNull(),
   payloadHash: text("payload_hash").notNull(),
   idempotencyKey: text("idempotency_key").notNull().unique(),
   snapshotId: text("snapshot_id"),
+  /** Profile version created by an approved profile_change. */
+  profileVersion: integer("profile_version"),
   createdAt: createdAt(),
   resolvedAt: integer("resolved_at", { mode: "timestamp_ms" }),
 });
+
+/** One row per approved profile change; the highest version is the current profile. */
+export const profileVersions = sqliteTable("app_profile_versions", {
+  version: integer("version").primaryKey(),
+  approvalId: text("approval_id").notNull().unique(),
+  createdAt: createdAt(),
+});
+
+/** Profile facts. A fact is current while `supersededInVersion` is null; history is kept. */
+export const profileFacts = sqliteTable(
+  "app_profile_facts",
+  {
+    id: text("id").primaryKey(),
+    kind: text("kind", { enum: PROFILE_FACT_KINDS }).notNull(),
+    text: text("text").notNull(),
+    createdInVersion: integer("created_in_version").notNull(),
+    supersededInVersion: integer("superseded_in_version"),
+    /** The fact this one replaced (modify). */
+    supersedesId: text("supersedes_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("app_profile_facts_current_idx").on(t.supersededInVersion)],
+);
 
 export type Job = typeof jobs.$inferSelect;
 export type JobDraft = typeof jobDrafts.$inferSelect;
 export type JobSnapshot = typeof jobSnapshots.$inferSelect;
 export type Approval = typeof approvals.$inferSelect;
 export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
+export type ProfileFact = typeof profileFacts.$inferSelect;
 export type Source = typeof sources.$inferSelect;
 export type SourceKind = (typeof SOURCE_KINDS)[number];
 export type SourceProvider = (typeof SOURCE_PROVIDERS)[number];

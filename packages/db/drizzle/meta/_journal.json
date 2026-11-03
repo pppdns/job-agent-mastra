@@ -22,6 +22,20 @@
       "when": 1793706251246,
       "tag": "0002_drafts_snapshots_approvals",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1793707702240,
+      "tag": "0003_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793707702879,
+      "tag": "0004_jobs_fts",
+      "breakpoints": true
     }
   ]
 }

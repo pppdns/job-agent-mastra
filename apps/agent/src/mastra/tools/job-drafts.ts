@@ -1,4 +1,4 @@
-import { AssessmentError, proposeSnapshot, saveDraft } from "@copilot/db";
+import { AssessmentError, proposeSnapshot, saveDraft, snapshotPayloadOf } from "@copilot/db";
 import { assessmentSchema, RECOMMENDATION_LABELS } from "@copilot/shared";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
@@ -47,6 +47,7 @@ export const proposeJobSnapshotTool = createTool({
       const threadId = context?.agent?.threadId;
       if (!threadId) return { ok: false as const, error: "proposals need a chat thread" };
       const { approval, created } = await proposeSnapshot(await getAppDb(), { jobId, threadId });
+      const payload = snapshotPayloadOf(approval);
       return {
         ok: true as const,
         approvalId: approval.id,
@@ -54,9 +55,9 @@ export const proposeJobSnapshotTool = createTool({
         created,
         draftVersion: approval.draftVersion,
         summary: {
-          title: approval.payload.job.title,
-          company: approval.payload.job.company,
-          recommendation: RECOMMENDATION_LABELS[approval.payload.assessment.recommendation.verdict],
+          title: payload.job.title,
+          company: payload.job.company,
+          recommendation: RECOMMENDATION_LABELS[payload.assessment.recommendation.verdict],
         },
         note: "Waiting for the user's decision in the app.",
       };

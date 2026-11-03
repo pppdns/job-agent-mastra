@@ -30,10 +30,10 @@ const decisionSchema = z.object({
 });
 
 /**
- * The user's approve/reject click. App code enforces the rules (chat, payload hash, draft
+ * The user's approve/reject click on a snapshot or profile change. App code enforces the rules (chat, payload hash, draft
  * freshness, idempotency); retries of a decision that already went through return it again.
  */
-export async function decideSnapshot(
+export async function decideApprovalAction(
   input: z.infer<typeof decisionSchema>,
 ): Promise<{ error?: DecisionError | "invalid"; view?: ApprovalView }> {
   const parsed = decisionSchema.safeParse(input);

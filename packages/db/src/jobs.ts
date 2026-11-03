@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { Db } from "./index";
 import {
   type Job,
@@ -86,6 +86,7 @@ async function upsertJobUnlocked(
         .where(eq(jobs.id, existing.id))
         .returning();
       if (!job) throw new Error("job update returned no row");
+      await reindexJob(tx, job.id);
       return { job, created: false };
     }
 
@@ -103,6 +104,7 @@ async function upsertJobUnlocked(
       })
       .returning();
     if (!job) throw new Error("job insert returned no row");
+    await reindexJob(tx, job.id);
     return { job, created: true };
   });
 }
@@ -156,4 +158,39 @@ async function addSourceUnlocked(
   });
   if (!existing) throw new Error("source conflict without an existing row");
   return { source: existing, created: false };
+}
+
+type Writer = Pick<Db, "run">;
+
+/** Rebuilds a job's full-text row from its identity and latest draft overview. */
+export async function reindexJob(db: Writer, jobId: string): Promise<void> {
+  await db.run(sql`DELETE FROM app_jobs_fts WHERE job_id = ${jobId}`);
+  await db.run(sql`
+    INSERT INTO app_jobs_fts (job_id, title, company, location, summary)
+    SELECT j.id, coalesce(j.title, ''), coalesce(j.company, ''), coalesce(j.location, ''),
+      coalesce((SELECT json_extract(d.assessment, '$.overview') FROM app_job_drafts d
+                WHERE d.job_id = j.id ORDER BY d.version DESC LIMIT 1), '')
+    FROM app_jobs j WHERE j.id = ${jobId}`);
+}
+
+/** Turns free text into an FTS5 query of quoted prefix terms (no operators from the caller). */
+export function ftsQuery(text: string, join: "AND" | "OR"): string | null {
+  const terms = (text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).slice(0, 8);
+  return terms.length > 0 ? terms.map((t) => `"${t}"*`).join(` ${join} `) : null;
+}
+
+/**
+ * Saved jobs matching free text (title, company, location, latest overview). All words must
+ * match; if nothing does, any word may. Returns at most `limit` job ids, best first.
+ */
+export async function searchJobIds(db: Db, text: string, limit = 5): Promise<string[]> {
+  for (const join of ["AND", "OR"] as const) {
+    const query = ftsQuery(text, join);
+    if (!query) return [];
+    const rows = await db.all<{ job_id: string }>(
+      sql`SELECT job_id FROM app_jobs_fts WHERE app_jobs_fts MATCH ${query} ORDER BY rank LIMIT ${limit}`,
+    );
+    if (rows.length > 0) return rows.map((r) => r.job_id);
+  }
+  return [];
 }

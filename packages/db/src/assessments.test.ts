@@ -4,14 +4,14 @@ import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  AssessmentError,
   decideApproval,
   getJobDetail,
-  hashPayload,
   listJobs,
   proposeSnapshot,
   saveDraft,
+  snapshotPayloadOf,
 } from "./assessments";
+import { AssessmentError, hashPayload } from "./hash";
 import { createDb, type Db, migrateDb } from "./index";
 import { addSource, upsertJob } from "./jobs";
 import { jobSnapshots } from "./schema";
@@ -114,7 +114,9 @@ describe("proposeSnapshot", () => {
   it("binds the hash to the exact payload", async () => {
     const approval = await proposed();
     expect(approval.payloadHash).toBe(hashPayload(approval.payload));
-    expect(approval.payload.assessment.overview).toBe("Platform role at a robotics company.");
+    expect(snapshotPayloadOf(approval).assessment.overview).toBe(
+      "Platform role at a robotics company.",
+    );
   });
 
   it("supersedes an older pending proposal for the same job", async () => {

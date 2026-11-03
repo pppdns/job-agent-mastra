@@ -1,11 +1,11 @@
 "use client";
 
-import type { ApprovalView, DecisionError } from "@copilot/db";
-import { RECOMMENDATION_LABELS } from "@copilot/shared";
+import type { ApprovalView, DecisionError, ProfileChangePayload } from "@copilot/db";
+import { PROFILE_FACT_LABELS, RECOMMENDATION_LABELS } from "@copilot/shared";
 import { CheckIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
-import { decideSnapshot } from "@/app/actions";
+import { decideApprovalAction } from "@/app/actions";
 import { AssessmentView } from "@/components/assessment-view";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,23 +22,33 @@ import {
 const ERRORS: Record<DecisionError | "invalid", string> = {
   not_found: "This proposal no longer exists.",
   wrong_thread: "This proposal belongs to another chat.",
-  stale: "The draft changed after this was proposed. Ask for a new proposal.",
+  stale: "Things changed after this was proposed, so it no longer applies as shown.",
   superseded: "A newer proposal replaced this one.",
   already_resolved: "This proposal was already decided.",
   invalid: "The decision could not be sent.",
 };
 
 /**
- * Approval prompt for a proposed job snapshot. State comes from the database, and the
- * decision carries the hash of exactly the payload shown here.
+ * Approval prompt for a proposed job snapshot or profile change. State comes from the
+ * database, and the decision carries the hash of exactly the payload shown here.
  */
-export function ApprovalCard({ approvalId, threadId }: { approvalId: string; threadId: string }) {
-  const [view, setView] = useState<ApprovalView | null>(null);
+export function ApprovalCard({
+  approvalId,
+  threadId,
+  initial,
+}: {
+  approvalId: string;
+  threadId: string;
+  /** Server-loaded view (profile page); the chat fetches it. */
+  initial?: ApprovalView;
+}) {
+  const [view, setView] = useState<ApprovalView | null>(initial ?? null);
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
+    if (initial) return;
     let active = true;
     fetch(
       `/api/approvals/${encodeURIComponent(approvalId)}?threadId=${encodeURIComponent(threadId)}`,
@@ -53,16 +63,15 @@ export function ApprovalCard({ approvalId, threadId }: { approvalId: string; thr
     return () => {
       active = false;
     };
-  }, [approvalId, threadId]);
+  }, [approvalId, threadId, initial]);
 
   if (missing) return <p className="text-sm text-muted-foreground">Proposal not available.</p>;
   if (!view) return <p className="text-sm text-muted-foreground">Loading proposal…</p>;
 
-  const { job, assessment } = view.payload;
   const decide = (decision: "approve" | "reject") =>
     startTransition(async () => {
       setError(null);
-      const result = await decideSnapshot({
+      const result = await decideApprovalAction({
         approvalId,
         threadId,
         decision,
@@ -72,14 +81,18 @@ export function ApprovalCard({ approvalId, threadId }: { approvalId: string; thr
       if (result.error) setError(ERRORS[result.error]);
     });
 
+  const isProfile = view.kind === "profile_change";
   return (
-    <Item variant="outline" aria-label="Snapshot approval">
+    <Item
+      variant="outline"
+      aria-label={isProfile ? "Profile change approval" : "Snapshot approval"}
+    >
       <ItemContent>
-        <ItemTitle>Save approved snapshot?</ItemTitle>
+        <ItemTitle>{isProfile ? "Update your profile?" : "Save approved snapshot?"}</ItemTitle>
         <ItemDescription>
-          {[job.title, job.company].filter(Boolean).join(" · ") || "Untitled job"} — draft v
-          {view.draftVersion}. Recommendation:{" "}
-          {RECOMMENDATION_LABELS[assessment.recommendation.verdict]}.
+          {view.kind === "profile_change"
+            ? view.payload.reason
+            : `${[view.payload.job.title, view.payload.job.company].filter(Boolean).join(" · ") || "Untitled job"} — draft v${view.draftVersion}. Recommendation: ${RECOMMENDATION_LABELS[view.payload.assessment.recommendation.verdict]}.`}
         </ItemDescription>
       </ItemContent>
       <ItemActions>
@@ -102,23 +115,66 @@ export function ApprovalCard({ approvalId, threadId }: { approvalId: string; thr
         </p>
       )}
       <ItemFooter className="flex-col items-start gap-2">
-        <Collapsible className="w-full">
-          <CollapsibleTrigger asChild>
-            <Button variant="link" size="sm" className="h-auto px-0">
-              Show the exact snapshot
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-2">
-            <AssessmentView assessment={assessment} />
-          </CollapsibleContent>
-        </Collapsible>
-        {view.jobId && (
-          <Link href={`/jobs/${view.jobId}`} className="text-sm underline-offset-4 hover:underline">
-            Open job
-          </Link>
+        {view.kind === "profile_change" ? (
+          <ProfileDiff payload={view.payload} />
+        ) : (
+          <>
+            <Collapsible className="w-full">
+              <CollapsibleTrigger asChild>
+                <Button variant="link" size="sm" className="h-auto px-0">
+                  Show the exact snapshot
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-2">
+                <AssessmentView assessment={view.payload.assessment} />
+              </CollapsibleContent>
+            </Collapsible>
+            {view.jobId && (
+              <Link
+                href={`/jobs/${view.jobId}`}
+                className="text-sm underline-offset-4 hover:underline"
+              >
+                Open job
+              </Link>
+            )}
+          </>
         )}
       </ItemFooter>
     </Item>
+  );
+}
+
+/** The exact change, line by line: what is added, what it replaces, what is removed. */
+export function ProfileDiff({ payload }: { payload: ProfileChangePayload }) {
+  return (
+    <ul className="w-full space-y-1.5 text-sm" aria-label="Proposed profile changes">
+      {payload.changes.map((change, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: changes have no id and never reorder
+        <li key={i} className="flex flex-wrap items-baseline gap-x-2">
+          {change.op === "add" && (
+            <>
+              <Badge variant="secondary">Add</Badge>
+              <span>{change.text}</span>
+              <span className="text-muted-foreground">{PROFILE_FACT_LABELS[change.kind]}</span>
+            </>
+          )}
+          {change.op === "modify" && (
+            <>
+              <Badge variant="secondary">Change</Badge>
+              <span className="text-muted-foreground line-through">{change.before.text}</span>
+              <span>→ {change.text}</span>
+              <span className="text-muted-foreground">{PROFILE_FACT_LABELS[change.kind]}</span>
+            </>
+          )}
+          {change.op === "remove" && (
+            <>
+              <Badge variant="outline">Remove</Badge>
+              <span className="line-through">{change.before.text}</span>
+            </>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -128,7 +184,9 @@ function StatusBadge({ view }: { view: ApprovalView }) {
       return (
         <Badge>
           <CheckIcon />
-          Approved · v{view.snapshotVersion}
+          {view.kind === "profile_change"
+            ? `Approved · profile v${view.profileVersion}`
+            : `Approved · v${view.snapshotVersion}`}
         </Badge>
       );
     case "rejected":
