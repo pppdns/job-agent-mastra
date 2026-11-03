@@ -7,6 +7,9 @@ const envSchema = z.object({
   COPILOT_MODEL: z.string().min(1).default("anthropic/claude-sonnet-5.5"),
   COPILOT_FAST_MODEL: z.string().min(1).default("anthropic/claude-haiku-5.5"),
   AGENT_SHARED_SECRET: z.string().min(24, "must be at least 24 characters"),
+  // Web providers. Without them, URL ingestion asks the user to paste the listing.
+  TAVILY_API_KEY: z.string().min(1).optional(),
+  FIRECRAWL_API_KEY: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

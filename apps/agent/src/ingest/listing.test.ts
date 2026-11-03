@@ -3,7 +3,6 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   canonicalLinkedInUrl,
-  dedupeKey,
   linkedInJobId,
   matchesIdentity,
   parseGenericPage,
@@ -110,13 +109,5 @@ describe("parseGenericPage and matchesIdentity", () => {
       complete: false,
       reason: "no_listing",
     });
-  });
-});
-
-describe("dedupeKey", () => {
-  it("ignores case, accents and punctuation", () => {
-    expect(dedupeKey("Café Robotics, Inc.", "Senior  Engineer (Platform)")).toBe(
-      dedupeKey("cafe robotics inc", "senior engineer platform"),
-    );
   });
 });

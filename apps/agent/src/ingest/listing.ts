@@ -152,6 +152,10 @@ function parseCriteria(lines: string[]): Record<string, string> {
   return criteria;
 }
 
+/**
+ * Identity check for an employer/ATS page found by search: the expected title must be the
+ * page's heading (or appear verbatim) and the full company name must appear in the text.
+ */
 const normalize = (s: string) =>
   s
     .toLowerCase()
@@ -160,14 +164,6 @@ const normalize = (s: string) =>
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
 
-/** Normalized "company|title" used to dedupe listings without a stable id. */
-export const dedupeKey = (company: string, title: string) =>
-  `${normalize(company)}|${normalize(title)}`;
-
-/**
- * Identity check for an employer/ATS page found by search: the expected title must be the
- * page's heading (or appear verbatim) and the full company name must appear in the text.
- */
 export function matchesIdentity(page: ParsedPage, expected: { title: string; company: string }) {
   const text = ` ${normalize(page.description)} `;
   const title = normalize(expected.title);
