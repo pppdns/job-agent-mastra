@@ -11,6 +11,33 @@ import { researcherAgent } from "./agents/researcher";
 import { chatResumeRoute, chatRoute, chatStopRoute } from "./routes/chat";
 import { threadMessagesRoute } from "./routes/thread-messages";
 
+/** Mastra's default sensitive fields plus cookies and token variants; redacts matching keys in every span. */
+export const TRACE_SENSITIVE_FIELDS = [
+  "password",
+  "token",
+  "secret",
+  "key",
+  "apikey",
+  "auth",
+  "authorization",
+  "bearer",
+  "bearertoken",
+  "jwt",
+  "credential",
+  "clientsecret",
+  "privatekey",
+  "refresh",
+  "ssn",
+  "cookie",
+  "setcookie",
+  // Matching is exact on the normalized name, so list the common *_token variants too.
+  "accesstoken",
+  "refreshtoken",
+  "idtoken",
+  "sessiontoken",
+];
+const traceRedaction = new SensitiveDataFilter({ sensitiveFields: TRACE_SENSITIVE_FIELDS });
+
 const logger = new PinoLogger({ name: "copilot-agent", level: "info" });
 
 export const mastra = new Mastra({
@@ -22,7 +49,7 @@ export const mastra = new Mastra({
       default: {
         serviceName: "copilot-agent",
         exporters: [new MastraStorageExporter()],
-        spanOutputProcessors: [new SensitiveDataFilter()],
+        spanOutputProcessors: [traceRedaction],
       },
     },
   }),
