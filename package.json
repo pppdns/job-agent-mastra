@@ -15,7 +15,8 @@
     "format": "biome check --write .",
     "check": "biome check . && turbo run typecheck test",
     "e2e": "pnpm --filter @copilot/web e2e",
-    "db:migrate": "pnpm --filter @copilot/db migrate"
+    "db:migrate": "pnpm --filter @copilot/db migrate",
+    "agent:api": "scripts/agent-api.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.4",
