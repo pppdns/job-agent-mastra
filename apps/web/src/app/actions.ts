@@ -5,6 +5,7 @@ import {
   type ApprovalView,
   AssessmentError,
   approveDrafts,
+  approvedDraftIds,
   type BatchApprovalOutcome,
   type DecisionError,
   decideApproval,
@@ -14,7 +15,12 @@ import {
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { PROFILE_PAGE_THREAD, threadIdSchema, threadTitleSchema } from "@/lib/chat-schema";
+import {
+  JOB_PAGE_THREAD,
+  PROFILE_PAGE_THREAD,
+  threadIdSchema,
+  threadTitleSchema,
+} from "@/lib/chat-schema";
 import { agentFetch } from "@/server/agent";
 import { toAgentChatBody } from "@/server/chat-body";
 import { appDb } from "@/server/db";
@@ -99,9 +105,11 @@ export async function startRescoreAction(): Promise<{ error?: string }> {
   redirect(`/c/${threadId}`);
 }
 
+const draftIdSchema = z.string().min(1).max(64);
+
 const approveAllSchema = z.object({
   threadId: threadIdSchema,
-  draftIds: z.array(z.string().min(1).max(64)).min(1).max(50),
+  draftIds: z.array(draftIdSchema).min(1).max(50),
 });
 
 /**
@@ -116,4 +124,27 @@ export async function approveDraftsAction(
   const results = await approveDrafts(await appDb(), parsed.data);
   refresh();
   return { results: results.map(({ draftId, outcome }) => ({ draftId, outcome })) };
+}
+
+/**
+ * "Approve" on a job page: approves exactly the draft the page showed. If the job got a newer
+ * draft since, nothing is approved (`changed`).
+ */
+export async function approveJobDraftAction(
+  draftId: string,
+): Promise<{ error?: "invalid"; outcome?: BatchApprovalOutcome }> {
+  const parsed = draftIdSchema.safeParse(draftId);
+  if (!parsed.success) return { error: "invalid" };
+  const [result] = await approveDrafts(await appDb(), {
+    threadId: JOB_PAGE_THREAD,
+    draftIds: [parsed.data],
+  });
+  refresh();
+  return { outcome: result?.outcome };
+}
+
+/** Which of these drafts are approved, so a re-score card shows its state after a reload. */
+export async function approvedDraftIdsAction(draftIds: string[]): Promise<string[]> {
+  const parsed = z.array(draftIdSchema).max(50).safeParse(draftIds);
+  return parsed.success ? approvedDraftIds(await appDb(), parsed.data) : [];
 }

@@ -13,6 +13,7 @@ const job = (id: string, summary?: Partial<AssessmentSummary>): JobOverview => (
   updatedAt: new Date(0),
   draftVersion: null,
   approvedVersion: null,
+  approvedDraftVersion: null,
   pendingApproval: false,
   draftProfileVersion: null,
   profileStale: false,

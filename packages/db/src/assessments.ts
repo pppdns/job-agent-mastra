@@ -400,6 +400,8 @@ export type JobOverview = {
   updatedAt: Date;
   draftVersion: number | null;
   approvedVersion: number | null;
+  /** Draft version the latest approved snapshot was made from. */
+  approvedDraftVersion: number | null;
   pendingApproval: boolean;
   /** Profile version the latest draft used; compare with the current one for staleness. */
   draftProfileVersion: number | null;
@@ -426,6 +428,9 @@ export async function listJobs(db: Db, ids?: string[]): Promise<JobOverview[]> {
       approvedVersion: sql<
         number | null
       >`(select max(version) from app_job_snapshots s where s.job_id = "app_jobs"."id")`,
+      approvedDraftVersion: sql<
+        number | null
+      >`(select d.version from app_job_snapshots s join app_job_drafts d on d.id = s.draft_id where s.job_id = "app_jobs"."id" order by s.version desc limit 1)`,
       pending: sql<number>`(select count(*) from app_approvals a where a.job_id = "app_jobs"."id" and a.status = 'pending')`,
       draftProfileVersion: sql<
         number | null
@@ -564,6 +569,16 @@ export async function approvalsForThread(db: Db, threadId: string) {
     columns: { id: true, kind: true, status: true, createdAt: true, resolvedAt: true },
     orderBy: desc(approvals.createdAt),
   });
+}
+
+/** Which of these drafts were approved (have a snapshot), e.g. to show a past batch's state. */
+export async function approvedDraftIds(db: Db, draftIds: string[]): Promise<string[]> {
+  if (draftIds.length === 0) return [];
+  const rows = await db
+    .selectDistinct({ draftId: jobSnapshots.draftId })
+    .from(jobSnapshots)
+    .where(inArray(jobSnapshots.draftId, draftIds));
+  return rows.map((r) => r.draftId);
 }
 
 export type BatchApprovalOutcome = "approved" | "changed" | "not_found" | DecisionError;

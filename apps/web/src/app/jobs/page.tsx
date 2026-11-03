@@ -147,9 +147,9 @@ function JobRow({ job }: { job: JobOverview }) {
               Approved v{job.approvedVersion}
             </Badge>
           )}
-          {job.draftVersion !== null && (
+          {job.draftVersion !== null && job.draftVersion !== job.approvedDraftVersion && (
             <Badge variant="outline" className="border-dashed">
-              Draft v{job.draftVersion}
+              Draft v{job.draftVersion} · not approved
             </Badge>
           )}
           {job.pendingApproval && <Badge variant="secondary">Awaiting approval</Badge>}

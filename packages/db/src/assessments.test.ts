@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   approveDrafts,
+  approvedDraftIds,
   decideApproval,
   getJobDetail,
   listJobs,
@@ -302,7 +303,7 @@ describe("decideApproval", () => {
 
 describe("read models", () => {
   it("lists jobs with draft, approved and pending state", async () => {
-    await proposed();
+    const pending = await proposed();
     expect(await listJobs(db)).toMatchObject([
       { id: jobId, draftVersion: 1, approvedVersion: null, pendingApproval: true },
     ]);
@@ -312,6 +313,11 @@ describe("read models", () => {
       snapshots: [],
       sources: [{ kind: "pasted" }],
     });
+    await approve(pending);
+    await saveDraft(db, { jobId, assessment: assessment("Revised") });
+    expect(await listJobs(db)).toMatchObject([
+      { draftVersion: 2, approvedVersion: 1, approvedDraftVersion: 1, pendingApproval: false },
+    ]);
   });
 });
 
@@ -366,5 +372,6 @@ describe("approveDrafts", () => {
       outcome: "approved",
     });
     expect((await getJobDetail(db, jobId))?.snapshots).toHaveLength(1);
+    expect(await approvedDraftIds(db, [shown.id, outdated.id])).toEqual([shown.id]);
   });
 });
