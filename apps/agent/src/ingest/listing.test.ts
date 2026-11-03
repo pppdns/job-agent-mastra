@@ -7,6 +7,7 @@ import {
   matchesIdentity,
   parseGenericPage,
   parseLinkedInPage,
+  parseStoredListing,
 } from "./listing";
 
 const fixture = (name: string) =>
@@ -109,5 +110,16 @@ describe("parseGenericPage and matchesIdentity", () => {
       complete: false,
       reason: "no_listing",
     });
+  });
+});
+
+describe("parseStoredListing", () => {
+  it("parses by source kind and drops completeness", () => {
+    const linkedin = fixture("linkedin-complete.md");
+    const { completeness: _, ...expected } = parseLinkedInPage(linkedin);
+    expect(parseStoredListing("linkedin", linkedin)).toEqual(expected);
+    const stored = parseStoredListing("ats", fixture("ats-complete.md"));
+    expect(stored).not.toHaveProperty("completeness");
+    expect(stored.description).toBe(parseGenericPage(fixture("ats-complete.md")).description);
   });
 });

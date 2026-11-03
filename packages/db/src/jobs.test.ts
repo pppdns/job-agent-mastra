@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createDb, type Db, migrateDb } from "./index";
-import { addSource, dedupeKey, MAX_SNAPSHOT_CHARS, upsertJob } from "./jobs";
+import { addSource, dedupeKey, latestSource, MAX_SNAPSHOT_CHARS, upsertJob } from "./jobs";
 
 let db: Db;
 
@@ -82,6 +82,17 @@ describe("addSource", () => {
     });
     expect(source.content).toHaveLength(MAX_SNAPSHOT_CHARS);
     expect(source.truncated).toBe(true);
+  });
+});
+
+describe("latestSource", () => {
+  it("returns the most recently read source with its content", async () => {
+    const { job } = await upsertJob(db, northwind);
+    const base = { jobId: job.id, kind: "pasted", provider: "user" } as const;
+    await addSource(db, { ...base, content: "old", retrievedAt: new Date(1_000) });
+    await addSource(db, { ...base, content: "new", retrievedAt: new Date(2_000) });
+    expect((await latestSource(db, job.id))?.content).toBe("new");
+    expect(await latestSource(db, "missing")).toBeUndefined();
   });
 });
 

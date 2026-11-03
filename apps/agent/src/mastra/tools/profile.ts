@@ -1,6 +1,7 @@
 import {
   AssessmentError,
   getJobDetail,
+  latestSource,
   listJobs,
   proposeProfileChange,
   searchJobIds,
@@ -8,7 +9,9 @@ import {
 import { profileProposalSchema } from "@copilot/shared";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { parseStoredListing } from "../../ingest/listing";
 import { getAppDb } from "../app-db";
+import { UNTRUSTED_NOTICE } from "./ingest-listing";
 
 export const proposeProfileChangeTool = createTool({
   id: "propose_profile_change",
@@ -66,12 +69,22 @@ export const getJobTool = createTool({
   id: "get_job",
   description:
     "Load one saved job: identity, sources read, the latest draft assessment, the latest " +
-    "approved snapshot, and whether the assessment predates the current approved profile.",
-  inputSchema: z.object({ jobId: z.string().min(1).max(64) }),
-  execute: async ({ jobId }) => {
-    const detail = await getJobDetail(await getAppDb(), jobId);
+    "approved snapshot, and whether the assessment predates the current approved profile. " +
+    "Pass includeListing: true to also get the stored listing text, e.g. to re-assess the job " +
+    "against the current profile without reading it again.",
+  inputSchema: z.object({
+    jobId: z.string().min(1).max(64),
+    includeListing: z
+      .boolean()
+      .optional()
+      .describe("Also return the most recently read listing text"),
+  }),
+  execute: async ({ jobId, includeListing }) => {
+    const db = await getAppDb();
+    const detail = await getJobDetail(db, jobId);
     if (!detail) return { ok: false as const, error: `no saved job with id ${jobId}` };
     const latest = detail.snapshots[0];
+    const source = includeListing ? await latestSource(db, jobId) : undefined;
     return {
       ok: true as const,
       job: {
@@ -94,6 +107,15 @@ export const getJobTool = createTool({
         approvedAt: latest.createdAt.toISOString(),
       },
       pendingApproval: detail.pending.length > 0,
+      ...(source && {
+        listing: {
+          sourceId: source.id,
+          kind: source.kind,
+          truncated: source.truncated,
+          ...parseStoredListing(source.kind, source.content),
+        },
+        notice: UNTRUSTED_NOTICE,
+      }),
     };
   },
 });

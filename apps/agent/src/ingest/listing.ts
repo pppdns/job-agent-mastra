@@ -134,6 +134,13 @@ export function parseGenericPage(markdown: string): ParsedPage {
   return { title, description: bound(text), criteria: {}, completeness };
 }
 
+/** Listing fields from a stored source, parsed the same way as when it was ingested. */
+export function parseStoredListing(kind: string, content: string): ListingFields {
+  const { completeness: _, ...fields } =
+    kind === "linkedin" ? parseLinkedInPage(content) : parseGenericPage(content);
+  return fields;
+}
+
 function nextNonEmpty(lines: string[], from: number): string | undefined {
   return lines.slice(from).find((l) => l.trim() !== "");
 }

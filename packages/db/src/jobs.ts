@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import type { Db } from "./index";
 import {
   type Job,
@@ -158,6 +158,14 @@ async function addSourceUnlocked(
   });
   if (!existing) throw new Error("source conflict without an existing row");
   return { source: existing, created: false };
+}
+
+/** The most recently read source of a job, with its stored content. */
+export async function latestSource(db: Db, jobId: string): Promise<Source | undefined> {
+  return db.query.sources.findFirst({
+    where: eq(sources.jobId, jobId),
+    orderBy: desc(sources.retrievedAt),
+  });
 }
 
 type Writer = Pick<Db, "run">;

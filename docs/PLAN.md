@@ -113,6 +113,7 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - [x] Thread-scoped working memory for "for this chat" notes; instructions separate local / remember / hypothetical; drafts (shared by all chats) are written against the approved profile only.
 - [x] `/profile`: current facts, edits and additions become proposals approved on the page, history with diffs.
 - [x] Drafts record the profile version (set by app code); jobs list/detail and `get_job` flag assessments made under an older profile.
+- [x] Re-assess after a profile change: `get_job` with `includeListing: true` returns the stored listing, so the agent re-scores without the user sharing it again.
 - [x] `find_saved_jobs` (FTS5, quoted prefix terms, AND then OR) + `get_job`.
 - [x] Verified: db tests (diffs, supersede, stale base, idempotency, wrong chat, reject, draft profile version, search), working-memory isolation test, e2e for remember → approve → new chat sees it while local notes stay local, profile page approvals, stale flag; live runs ([verification.md](verification.md)).
 
