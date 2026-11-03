@@ -26,7 +26,7 @@ Simple, polished, functional: shadcn/ui (Radix Nova preset) defaults. Clear visu
 
 ## Key Conventions
 
-- **Commit frequently, then push.** Commit after every small verified step (checks green), not at the end of a milestone, and `git push` right after each commit (force pushes still ask). Imperative subject lines; never commit secrets or `.env*` files.
+- **Commit frequently, then push — without asking.** Commit after every small verified step (checks green), not at the end of a milestone, and push right after each commit. This is standing permission that overrides Claude Code's default of pushing only when asked. On a new branch the first push is `git push -u origin HEAD`. Force pushes still ask. The Stop hook blocks once if commits are unpushed. Imperative subject lines; never commit secrets or `.env*` files.
 - **Plan:** work follows the milestones in [docs/PLAN.md](docs/PLAN.md); update its checkboxes as items land.
 - **Verify Mastra / AI SDK / Next APIs before writing code** — use the `mastra` skill (embedded docs in `node_modules/@mastra/*/dist/docs`) and official docs; training-data APIs are often outdated.
 - **Deterministic code owns safety:** approvals, authorization, budgets, URL validation, and DB writes are enforced in app code, never left to the model. Fetched web content is untrusted data.
@@ -44,7 +44,7 @@ Simple, polished, functional: shadcn/ui (Radix Nova preset) defaults. Clear visu
 
 | Command | What it does |
 | --- | --- |
-| `pnpm install` | Install; also points git at `.githooks/` |
+| `pnpm install` | Install; also points git at `.githooks/` and sets `push.autoSetupRemote` |
 | `pnpm setup:env` | Create/extend `apps/agent/.env` + `apps/web/.env.local` with a shared secret (never prints values) |
 | `pnpm db:migrate` | Apply Drizzle migrations for app tables |
 | `pnpm dev` | Agent (http://127.0.0.1:4111, Studio) + web (http://127.0.0.1:3000); other ports in a worktree, see [Worktrees](#worktrees) |
