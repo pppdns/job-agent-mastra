@@ -25,7 +25,7 @@ export const mastra = new Mastra({
   server: {
     // Single-user local mode: loopback only, every API call needs the shared secret.
     host: "127.0.0.1",
-    port: 4111,
+    port: Number(process.env.AGENT_PORT ?? 4111),
     auth: new SimpleAuth({
       tokens: { [env.AGENT_SHARED_SECRET]: { id: LOCAL_USER_ID } },
     }),
