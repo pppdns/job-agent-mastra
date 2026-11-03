@@ -55,9 +55,16 @@ Single local libSQL file under `data/` (gitignored), shared by Mastra storage an
 
 ## Skills
 
-Installed in `.agents/skills/` (symlinked into `.claude/skills/`, tracked in `skills-lock.json`). Update with `pnpm dlx skills update`.
+Installed in `.agents/skills/` (symlinked into `.claude/skills/`, tracked in `skills-lock.json`). Add with `pnpm dlx skills add <owner/repo> -s <skill> -a universal claude-code -y`; update with `pnpm dlx skills update`.
 
 - `mastra` — Mastra APIs, docs lookup, `mastra api` CLI, traces, evals
+- `ai-sdk` — AI SDK (`useChat`, streaming, tools)
+- `next-dev-loop` — verify Next.js runtime behaviour (needs `agent-browser` CLI; otherwise use Playwright/Chrome DevTools MCP)
+- `vercel-react-best-practices` — React/Next.js performance patterns
+- `shadcn` — shadcn/ui components and chat UI composition
+- `turborepo` — `turbo.json`, task pipelines, caching
+
+Claude Code reads this `AGENTS.md` directly. Do not add a `CLAUDE.md` or `CLAUDE.local.md`: either one makes Claude Code stop loading `AGENTS.md`.
 
 ## Documentation Index
 
