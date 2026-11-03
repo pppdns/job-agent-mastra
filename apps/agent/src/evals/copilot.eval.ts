@@ -14,7 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { env } from "../env";
 import { getAppDb } from "../mastra/app-db";
 import { mastra } from "../mastra/index";
-import { EVAL_SUITES, type EvalSuite } from "./cases";
+import { EVAL_SUITES, type EvalCase, type EvalSuite } from "./cases";
 import { allScorers, EVAL_RUN_CONTEXT_KEY } from "./scorers";
 
 /** Scores that must be 1 on every item where they apply (not scorable = doesn't apply). */
@@ -27,6 +27,27 @@ const GATES = [
 ];
 const QUALITY = allScorers.copilotQuality.id;
 const QUALITY_THRESHOLD = 0.8;
+
+// Ad hoc runs: EVAL_ONLY=<name substring> picks cases, EVAL_REPEAT=<n> runs each n times
+// (for flaky behaviour). They use a separate "-adhoc" dataset, so the main ones keep their history.
+const ONLY = process.env.EVAL_ONLY?.trim().toLowerCase();
+const REPEAT = Math.max(1, Math.floor(Number(process.env.EVAL_REPEAT ?? 1)) || 1);
+const ADHOC = Boolean(ONLY) || REPEAT > 1;
+
+/** One dataset item: a case, repeated under distinct keys when EVAL_REPEAT > 1. */
+type CaseRun = { key: string; case: EvalCase };
+const runsOf = (suite: EvalSuite): CaseRun[] =>
+  suite.cases
+    .filter((c) => !ONLY || c.name.toLowerCase().includes(ONLY))
+    .flatMap((c) =>
+      Array.from({ length: REPEAT }, (_, i) => ({
+        key: REPEAT > 1 ? `${c.name} #${i + 1}` : c.name,
+        case: c,
+      })),
+    );
+const SUITES = EVAL_SUITES.map((suite) => ({ suite, runs: runsOf(suite) })).filter(
+  (s) => s.runs.length > 0,
+);
 
 const SEED_THREAD = "eval-seed";
 const report: string[] = [];
@@ -52,17 +73,18 @@ async function seedProfile(suite: EvalSuite) {
 }
 
 /** The suite's dataset, with its items replaced when the cases changed (a new dataset version). */
-async function syncDataset(suite: EvalSuite) {
-  const items = suite.cases.map((c) => ({
-    input: c.input,
-    groundTruth: c.groundTruth,
-    metadata: { case: c.name },
+async function syncDataset(suite: EvalSuite, runs: CaseRun[]) {
+  const items = runs.map((r) => ({
+    input: r.case.input,
+    groundTruth: r.case.groundTruth,
+    metadata: { case: r.key },
   }));
+  const id = ADHOC ? `${suite.id}-adhoc` : suite.id;
   const hash = createHash("sha256").update(JSON.stringify(items)).digest("hex").slice(0, 16);
-  const dataset = await mastra.datasets.get({ id: suite.id }).catch(() =>
+  const dataset = await mastra.datasets.get({ id }).catch(() =>
     mastra.datasets.create({
-      id: suite.id,
-      name: suite.name,
+      id,
+      name: ADHOC ? `${suite.name} (ad hoc)` : suite.name,
       description: suite.description,
     }),
   );
@@ -79,7 +101,7 @@ async function syncDataset(suite: EvalSuite) {
 const scoreOf = (item: ItemWithScores, id: string) => item.scores.find((s) => s.scorerId === id);
 const fmt = (n: number | null | undefined) => (n === null || n === undefined ? "–" : n.toFixed(2));
 
-describe.each(EVAL_SUITES)("$name", (suite) => {
+describe.each(SUITES)("$suite.name", ({ suite, runs }) => {
   const results = new Map<string, ItemWithScores>();
 
   beforeAll(async () => {
@@ -89,13 +111,13 @@ describe.each(EVAL_SUITES)("$name", (suite) => {
     }
     await resetAppTables(await getAppDb());
     await seedProfile(suite);
-    const dataset = await syncDataset(suite);
+    const dataset = await syncDataset(suite, runs);
     const summary = await dataset.startExperiment({
       name: `${env.COPILOT_MODEL} · judge ${env.EVAL_JUDGE_MODEL}`,
       metadata: { copilotModel: env.COPILOT_MODEL, judgeModel: env.EVAL_JUDGE_MODEL },
       targetType: "agent",
       targetId: COPILOT_AGENT_ID,
-      scorers: [...GATES.map((id) => id), QUALITY],
+      scorers: [...GATES, QUALITY],
       requestContext: { [EVAL_RUN_CONTEXT_KEY]: true },
       maxConcurrency: 3,
       itemTimeout: 10 * 60_000,
@@ -108,13 +130,13 @@ describe.each(EVAL_SUITES)("$name", (suite) => {
     report.push(
       `### ${suite.name}`,
       "",
-      `Experiment \`${summary.experimentId}\` (${summary.status}), dataset \`${suite.id}\`.`,
+      `Experiment \`${summary.experimentId}\` (${summary.status}), dataset \`${dataset.id}\`.`,
       "",
       "| Case | Expectations | Rubric | Quality | Seconds | Notes |",
       "| --- | --- | --- | --- | --- | --- |",
-      ...suite.cases.map((c) => {
-        const item = results.get(c.name);
-        if (!item) return `| ${c.name} | – | – | – | – | missing result |`;
+      ...runs.map(({ key }) => {
+        const item = results.get(key);
+        if (!item) return `| ${key} | – | – | – | – | missing result |`;
         const seconds = (item.completedAt.getTime() - item.startedAt.getTime()) / 1000;
         const failed = item.scores.filter((s) => s.error || (s.score !== null && s.score < 1));
         const notes = [
@@ -125,14 +147,14 @@ describe.each(EVAL_SUITES)("$name", (suite) => {
           .join(" · ")
           .replaceAll("|", "/")
           .replaceAll("\n", " ");
-        return `| ${c.name} | ${fmt(scoreOf(item, allScorers.caseExpectations.id)?.score)} | ${fmt(scoreOf(item, allScorers.caseRubric.id)?.score)} | ${fmt(scoreOf(item, QUALITY)?.score)} | ${seconds.toFixed(0)} | ${notes} |`;
+        return `| ${key} | ${fmt(scoreOf(item, allScorers.caseExpectations.id)?.score)} | ${fmt(scoreOf(item, allScorers.caseRubric.id)?.score)} | ${fmt(scoreOf(item, QUALITY)?.score)} | ${seconds.toFixed(0)} | ${notes} |`;
       }),
       "",
     );
   });
 
-  it.each(suite.cases)("$name", (c) => {
-    const item = results.get(c.name);
+  it.each(runs)("$key", ({ key }) => {
+    const item = results.get(key);
     expect(item, "no experiment result").toBeDefined();
     if (!item) return;
     expect(item.error?.message ?? null, "agent run failed").toBeNull();

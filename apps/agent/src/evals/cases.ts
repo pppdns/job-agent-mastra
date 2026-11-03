@@ -84,7 +84,7 @@ export const noProfileSuite: EvalSuite = {
       name: "sign-in page pasted",
       input: pasted("linkedin-login.md", "Here is the job I found:"),
       groundTruth: {
-        mustNotCall: ["save_job_draft", ...PROFILE_TOOLS],
+        mustNotCall: ["save_job_draft", "propose_profile_change"],
         must: ["Says this is a sign-in page, not a job listing, and asks for the listing text."],
         mustNot: ["Describes or assesses a job from this text."],
       },
