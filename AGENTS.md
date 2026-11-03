@@ -93,5 +93,7 @@ Claude Code reads this `AGENTS.md` directly. Do not add a `CLAUDE.md` or `CLAUDE
 ## Documentation Index
 
 - [project-brief.md](project-brief.md) — product intent and constraints
+- [README.md](README.md) — human-facing overview and setup
+- [docs/architecture.md](docs/architecture.md) — how it works, with mermaid diagrams (agent logic, tools, approvals, memory, research); update it when flows change
 - [docs/PLAN.md](docs/PLAN.md) — agreed decisions and milestone plan
 - [docs/verification.md](docs/verification.md) — live vs offline verification results
