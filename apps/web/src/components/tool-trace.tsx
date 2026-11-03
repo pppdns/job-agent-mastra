@@ -14,13 +14,16 @@ export type ToolPart = {
 export const isToolPart = (part: { type: string }): part is ToolPart =>
   part.type.startsWith("tool-");
 
-/** A successful snapshot or profile proposal renders as an approval prompt instead of a trace row. */
+/**
+ * A successful snapshot or profile proposal renders as an approval prompt instead of a trace
+ * row. A draft that was already approved (possibly in another chat) has nothing to decide.
+ */
 export function proposedApprovalId(part: ToolPart): string | undefined {
   const proposes =
     part.type === "tool-propose_job_snapshot" || part.type === "tool-propose_profile_change";
   if (!proposes || part.state !== "output-available") return;
-  const output = part.output as { ok?: boolean; approvalId?: string } | undefined;
-  return output?.ok ? output.approvalId : undefined;
+  const output = part.output as { ok?: boolean; approvalId?: string; status?: string } | undefined;
+  return output?.ok && output.status !== "approved" ? output.approvalId : undefined;
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -68,13 +71,22 @@ function ToolLine({ part }: { part: ToolPart }) {
     return <Line status="running" title={running[name] ?? `Running ${name}`} />;
   }
   if (name === "save_job_draft" || name === "propose_job_snapshot") {
-    const output = (part.output ?? {}) as { ok?: boolean; version?: number; error?: string };
+    const output = (part.output ?? {}) as {
+      ok?: boolean;
+      version?: number;
+      draftVersion?: number;
+      status?: string;
+      error?: string;
+    };
     if (output.ok === false) {
       const what = name === "save_job_draft" ? "Draft not saved" : "Snapshot not proposed";
       return <Line status="error" title={what} description={output.error} />;
     }
-    return name === "save_job_draft" ? (
-      <Line title={`Saved draft v${output.version}`} description="not approved" />
+    if (name === "save_job_draft") {
+      return <Line title={`Saved draft v${output.version}`} description="not approved" />;
+    }
+    return output.status === "approved" ? (
+      <Line title={`Draft v${output.draftVersion} is already approved`} />
     ) : (
       <Line title="Proposed a snapshot for approval" />
     );

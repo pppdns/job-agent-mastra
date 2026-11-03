@@ -390,9 +390,6 @@ describe("approveDrafts", () => {
     await approveDrafts(db, { threadId: "job-page", draftIds: [draft.id] });
     const again = await proposeSnapshot(db, { jobId, threadId: "chat-a" });
     expect(again).toMatchObject({ created: false, approval: { status: "approved" } });
-    const detail = await getJobDetail(db, jobId);
-    expect(detail?.pending).toEqual([]);
-    expect((await listJobs(db))[0]?.pendingApproval).toBe(false);
   });
 
   it("goes stale instead of snapshotting an already approved draft twice", async () => {
@@ -401,6 +398,8 @@ describe("approveDrafts", () => {
     await approveDrafts(db, { threadId: "job-page", draftIds: [draft.id] });
     // A proposal older code left pending for the now-approved draft:
     await db.update(approvals).set({ status: "pending" }).where(eq(approvals.id, chat.id));
+    expect((await getJobDetail(db, jobId))?.pending).toEqual([]);
+    expect((await listJobs(db))[0]?.pendingApproval).toBe(false);
     expect(await approve(chat, "chat-a")).toMatchObject({ ok: false, error: "stale" });
     expect(await snapshots()).toHaveLength(1);
   });
