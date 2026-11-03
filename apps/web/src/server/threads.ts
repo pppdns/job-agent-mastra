@@ -2,6 +2,7 @@ import "server-only";
 import { COPILOT_AGENT_ID } from "@copilot/shared";
 import type { UIMessage } from "ai";
 import { z } from "zod";
+import { isArchived, withArchived } from "@/lib/thread-archive";
 import { agentFetch } from "./agent";
 
 // The agent server scopes every memory call to the local user's resource
@@ -11,9 +12,11 @@ const threadSchema = z.object({
   id: z.string(),
   title: z.string().nullish(),
   updatedAt: z.coerce.date(),
+  metadata: z.record(z.string(), z.unknown()).nullish(),
 });
 
-export type ThreadSummary = z.infer<typeof threadSchema>;
+type Thread = z.infer<typeof threadSchema>;
+export type ThreadSummary = Omit<Thread, "metadata"> & { archived: boolean };
 
 const memoryPath = (threadId?: string) =>
   `/api/memory/threads${threadId ? `/${encodeURIComponent(threadId)}` : ""}?agentId=${COPILOT_AGENT_ID}`;
@@ -28,7 +31,10 @@ export async function listThreads(): Promise<ThreadSummary[]> {
     `${memoryPath()}&orderBy=updatedAt&sortDirection=DESC&perPage=100`,
   );
   const body = await (await expectOk(response, "listing chats")).json();
-  return z.object({ threads: z.array(threadSchema) }).parse(body).threads;
+  return z
+    .object({ threads: z.array(threadSchema) })
+    .parse(body)
+    .threads.map(({ metadata, ...thread }) => ({ ...thread, archived: isArchived(metadata) }));
 }
 
 /** Stored history, or null when the thread doesn't exist (yet) or isn't ours. */
@@ -56,4 +62,27 @@ export async function renameThread(threadId: string, title: string): Promise<voi
 export async function deleteThread(threadId: string): Promise<void> {
   const response = await agentFetch(memoryPath(threadId), { method: "DELETE" });
   if (response.status !== 404) await expectOk(response, "deleting chat");
+}
+
+async function getThread(threadId: string): Promise<Thread | null> {
+  const response = await agentFetch(memoryPath(threadId));
+  if (response.status === 404) return null;
+  return threadSchema.parse(await (await expectOk(response, "loading chat")).json());
+}
+
+/** Sets or clears the archive flag. Returns false when the thread doesn't exist. */
+export async function setThreadArchived(threadId: string, archived: boolean): Promise<boolean> {
+  const thread = await getThread(threadId);
+  if (!thread) return false;
+  // No-op writes would bump updatedAt and reorder the list.
+  if (isArchived(thread.metadata) === archived) return true;
+  await expectOk(
+    await agentFetch(memoryPath(threadId), {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ metadata: withArchived(thread.metadata, archived) }),
+    }),
+    archived ? "archiving chat" : "unarchiving chat",
+  );
+  return true;
 }

@@ -1,10 +1,17 @@
 "use client";
 
-import { MoreHorizontalIcon, PencilIcon, Trash2Icon } from "lucide-react";
+import {
+  ArchiveIcon,
+  ArchiveRestoreIcon,
+  ChevronRightIcon,
+  MoreHorizontalIcon,
+  PencilIcon,
+  Trash2Icon,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type FormEvent, useRef, useState, useTransition } from "react";
-import { deleteChat, renameChat } from "@/app/actions";
+import { deleteChat, renameChat, setChatArchived } from "@/app/actions";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,7 +38,7 @@ import {
 } from "@/components/ui/sidebar";
 import { MAX_TITLE_CHARS } from "@/lib/chat-schema";
 
-export type ThreadListItem = { id: string; title: string };
+export type ThreadListItem = { id: string; title: string; archived: boolean };
 
 const displayTitle = (title: string) => title.trim() || "New chat";
 
@@ -41,6 +48,7 @@ export function ThreadList({ threads }: { threads: ThreadListItem[] }) {
   const { setOpenMobile } = useSidebar();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<ThreadListItem | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const [pending, startTransition] = useTransition();
 
   if (threads.length === 0) {
@@ -57,10 +65,13 @@ export function ThreadList({ threads }: { threads: ThreadListItem[] }) {
     });
   }
 
-  return (
-    <>
-      <SidebarMenu aria-label="Chats">
-        {threads.map((thread) => {
+  const active = threads.filter((thread) => !thread.archived);
+  const archived = threads.filter((thread) => thread.archived);
+
+  function renderItems(items: ThreadListItem[], label: string) {
+    return (
+      <SidebarMenu aria-label={label}>
+        {items.map((thread) => {
           const href = `/c/${thread.id}`;
           return (
             <SidebarMenuItem key={thread.id}>
@@ -98,6 +109,14 @@ export function ThreadList({ threads }: { threads: ThreadListItem[] }) {
                         <PencilIcon />
                         Rename
                       </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          startTransition(() => setChatArchived(thread.id, !thread.archived))
+                        }
+                      >
+                        {thread.archived ? <ArchiveRestoreIcon /> : <ArchiveIcon />}
+                        {thread.archived ? "Unarchive" : "Archive"}
+                      </DropdownMenuItem>
                       <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(thread)}>
                         <Trash2Icon />
                         Delete
@@ -110,6 +129,28 @@ export function ThreadList({ threads }: { threads: ThreadListItem[] }) {
           );
         })}
       </SidebarMenu>
+    );
+  }
+
+  return (
+    <>
+      {renderItems(active, "Chats")}
+      {archived.length > 0 && (
+        <div className="mt-4">
+          <button
+            type="button"
+            aria-expanded={showArchived}
+            onClick={() => setShowArchived((open) => !open)}
+            className="flex w-full items-center gap-1 px-2 py-1 text-xs font-medium text-sidebar-foreground/70 hover:text-sidebar-foreground"
+          >
+            <ChevronRightIcon
+              className={`size-3 transition-transform ${showArchived ? "rotate-90" : ""}`}
+            />
+            Archived ({archived.length})
+          </button>
+          {showArchived && renderItems(archived, "Archived chats")}
+        </div>
+      )}
 
       <AlertDialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
         <AlertDialogContent>

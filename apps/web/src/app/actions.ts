@@ -12,7 +12,7 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import { PROFILE_PAGE_THREAD, threadIdSchema, threadTitleSchema } from "@/lib/chat-schema";
 import { appDb } from "@/server/db";
-import { deleteThread, renameThread } from "@/server/threads";
+import { deleteThread, renameThread, setThreadArchived } from "@/server/threads";
 
 export async function renameChat(threadId: string, title: string): Promise<void> {
   await renameThread(threadIdSchema.parse(threadId), threadTitleSchema.parse(title));
@@ -21,6 +21,11 @@ export async function renameChat(threadId: string, title: string): Promise<void>
 
 export async function deleteChat(threadId: string): Promise<void> {
   await deleteThread(threadIdSchema.parse(threadId));
+  refresh();
+}
+
+export async function setChatArchived(threadId: string, archived: boolean): Promise<void> {
+  await setThreadArchived(threadIdSchema.parse(threadId), z.boolean().parse(archived));
   refresh();
 }
 

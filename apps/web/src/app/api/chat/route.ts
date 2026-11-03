@@ -2,6 +2,7 @@ import { chatRequestSchema } from "@/lib/chat-schema";
 import { agentFetch } from "@/server/agent";
 import { toAgentChatBody } from "@/server/chat-body";
 import { streamHeaders } from "@/server/stream";
+import { setThreadArchived } from "@/server/threads";
 
 // Validates the browser's request, builds the agent body server-side, and streams
 // the agent's AI SDK UI message stream back.
@@ -10,6 +11,11 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return Response.json({ error: "Invalid chat request." }, { status: 400 });
   }
+
+  // Writing to an archived chat brings it back. Best effort: never block the reply.
+  await setThreadArchived(parsed.data.threadId, false).catch((error) =>
+    console.error("unarchiving chat failed", error),
+  );
 
   const upstream = await agentFetch("/chat", {
     method: "POST",

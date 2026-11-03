@@ -43,7 +43,11 @@ export function AppSidebar() {
 async function Threads() {
   try {
     const threads = await listThreads();
-    return <ThreadList threads={threads.map(({ id, title }) => ({ id, title: title ?? "" }))} />;
+    return (
+      <ThreadList
+        threads={threads.map(({ id, title, archived }) => ({ id, title: title ?? "", archived }))}
+      />
+    );
   } catch (error) {
     console.error("listing chats failed", error);
     return <p className="px-2 text-sm text-muted-foreground">Couldn't load chats.</p>;

@@ -70,6 +70,38 @@ test("a chat can be renamed and deleted", async ({ page }) => {
   await expect(visible(page, '[data-role="user"]')).toHaveCount(0);
 });
 
+test("a chat can be archived, unarchived, and writing to it unarchives it", async ({ page }) => {
+  const path = await newChat(page, "Hooli role DELTA-5");
+  const menu = async (item: string) => {
+    const row = page.getByRole("listitem").filter({ has: page.locator(`[href="${path}"]`) });
+    await row.hover();
+    await row.getByRole("button", { name: "Chat actions" }).click();
+    await page.getByRole("menuitem", { name: item }).click();
+  };
+  const archivedToggle = page.getByRole("button", { name: /^Archived \(/ });
+
+  await menu("Archive");
+  await expect(chatLink(page, path)).toHaveCount(0);
+  await archivedToggle.click();
+  const archivedLink = page
+    .getByRole("list", { name: "Archived chats" })
+    .locator(`a[href="${path}"]`);
+  await expect(archivedLink).toBeVisible();
+
+  await page.reload();
+  await archivedToggle.click();
+  await expect(archivedLink).toBeVisible();
+
+  await menu("Unarchive");
+  await expect(chatLink(page, path)).toBeVisible();
+  await expect(archivedToggle).toHaveCount(0);
+
+  await menu("Archive");
+  await expect(chatLink(page, path)).toHaveCount(0);
+  await send(page, "Still hiring?");
+  await expect(chatLink(page, path)).toBeVisible();
+});
+
 test.describe("threads owned by another resource", () => {
   const foreignId = randomUUID();
 
