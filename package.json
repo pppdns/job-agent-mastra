@@ -19,7 +19,7 @@
     "eval:studio": "scripts/ports.sh pnpm --filter @copilot/agent eval:studio",
     "db:migrate": "pnpm --filter @copilot/db migrate",
     "agent:api": "scripts/ports.sh scripts/agent-api.sh",
-    "prepare": "git config core.hooksPath .githooks",
+    "prepare": "git config core.hooksPath .githooks && git config push.autoSetupRemote true",
     "setup:env": "scripts/setup-env.sh",
     "ngrok": "scripts/ports.sh scripts/tunnel.sh"
   },
