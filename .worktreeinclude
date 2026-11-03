@@ -1,0 +1,9 @@
+# Gitignored files Claude Code copies into each new worktree (.gitignore syntax).
+# Secrets stay local: these are copied from this checkout, never committed.
+apps/agent/.env
+apps/web/.env.local
+# Snapshot of the dev database (profile, jobs, chats) so the worktree starts with real data.
+# Traces (data/copilot.duckdb) are not copied; each checkout records its own.
+data/copilot.db
+data/copilot.db-wal
+data/copilot.db-shm

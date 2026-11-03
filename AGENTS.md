@@ -67,6 +67,10 @@ Single local libSQL file under `data/` (gitignored), shared by Mastra storage an
 
 **Verify continuously.** Use the loops in [docs/PLAN.md](docs/PLAN.md#verification-loops): `pnpm check` before commits, `mastra api` to run the agent and read traces, browser/Playwright for UI. Only claim a live integration works if it was exercised live.
 
+## Worktrees
+
+New Claude Code worktrees branch from local `HEAD` (`worktree.baseRef` in `.claude/settings.json`) and get the env files plus a snapshot of `data/copilot.db` copied in via [.worktreeinclude](.worktreeinclude); the `SessionStart` hook runs `pnpm install` when `node_modules` is missing. Hooks resolve the session's checkout from their input `cwd`, because desktop worktree sessions run them from the main checkout. Ports are fixed (4111/3000), so run `pnpm dev` in one checkout at a time; run `pnpm db:migrate` if the branch adds migrations.
+
 ## Skills
 
 Installed in `.agents/skills/` (symlinked into `.claude/skills/`, tracked in `skills-lock.json`). Add with `pnpm dlx skills add <owner/repo> -s <skill> -a universal claude-code -y`; update with `pnpm dlx skills update`.

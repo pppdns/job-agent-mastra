@@ -35,3 +35,6 @@ blob-report/
 
 # Personal Claude Code settings
 .claude/settings.local.json
+
+# Claude Code CLI worktrees (claude --worktree)
+.claude/worktrees/
