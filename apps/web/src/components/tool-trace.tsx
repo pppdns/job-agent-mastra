@@ -1,3 +1,4 @@
+import { JOB_STATUS_LABELS, type JobStatus } from "@copilot/shared";
 import { FileTextIcon } from "lucide-react";
 import { Trace, TraceDescription, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
 
@@ -61,6 +62,7 @@ function ToolLine({ part }: { part: ToolPart }) {
     propose_profile_change: "Preparing a profile change",
     find_saved_jobs: "Searching saved jobs",
     get_job: "Loading a saved job",
+    set_job_status: "Updating the job status",
     updateWorkingMemory: "Noting this for this chat",
     research_company: "Researching",
   };
@@ -114,6 +116,27 @@ function ToolLine({ part }: { part: ToolPart }) {
       <Line
         title="Loaded saved job"
         description={`${what}${output.profileStale ? " · assessed with an older profile" : ""}`}
+      />
+    );
+  }
+  if (name === "set_job_status") {
+    const output = (part.output ?? {}) as {
+      ok?: boolean;
+      error?: string;
+      title?: string;
+      company?: string;
+      status?: JobStatus;
+      archived?: boolean;
+    };
+    if (output.ok === false) {
+      return <Line status="error" title="Status not changed" description={output.error} />;
+    }
+    const what = [output.title, output.company].filter(Boolean).join(" · ");
+    const label = output.status ? JOB_STATUS_LABELS[output.status] : "updated";
+    return (
+      <Line
+        title={`Marked ${label.toLowerCase()}${output.archived ? " · archived" : ""}`}
+        description={what || undefined}
       />
     );
   }
