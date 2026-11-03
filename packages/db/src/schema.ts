@@ -1,7 +1,7 @@
 import type { Assessment, EvidenceClass, ProfileFactKind, ResearchTopic } from "@copilot/shared";
 import { PROFILE_FACT_KINDS } from "@copilot/shared";
 import { sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // App-owned tables use the `app_` prefix; Mastra manages its own tables in the same file.
 
@@ -214,10 +214,58 @@ export const runs = sqliteTable(
     threadId: text("thread_id").notNull(),
     status: text("status", { enum: RUN_STATUSES }).notNull(),
     error: text("error"),
+    model: text("model"),
+    traceId: text("trace_id"),
+    /** Time to the first streamed text, ms. */
+    ttftMs: integer("ttft_ms"),
     startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
     endedAt: integer("ended_at", { mode: "timestamp_ms" }),
   },
   (t) => [index("app_runs_thread_idx").on(t.threadId, t.status)],
+);
+
+export const RUN_EVENT_TYPES = ["llm", "tool", "provider", "retry", "compaction", "error"] as const;
+/** llm: model calls; search/extraction/browser: web providers; memory: compaction model. */
+export const RUN_EVENT_CATEGORIES = [
+  "llm",
+  "search",
+  "extraction",
+  "browser",
+  "memory",
+  "app",
+] as const;
+
+/**
+ * Everything a run did, one row per model call or provider call (so totals are sums and
+ * nothing is counted twice), plus tool calls, retries, compaction and errors.
+ */
+export const runEvents = sqliteTable(
+  "app_run_events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    runId: text("run_id")
+      .notNull()
+      .references(() => runs.id, { onDelete: "cascade" }),
+    type: text("type", { enum: RUN_EVENT_TYPES }).notNull(),
+    category: text("category", { enum: RUN_EVENT_CATEGORIES }).notNull(),
+    /** Tool name, model id or provider operation. */
+    name: text("name").notNull(),
+    /** Who made the call: copilot, researcher, observer, ingest. */
+    actor: text("actor"),
+    status: text("status", { enum: ["ok", "error"] }).notNull(),
+    at: integer("at", { mode: "timestamp_ms" }).notNull(),
+    durationMs: integer("duration_ms"),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    cachedInputTokens: integer("cached_input_tokens"),
+    cacheWriteTokens: integer("cache_write_tokens"),
+    reasoningTokens: integer("reasoning_tokens"),
+    /** Estimated cost from the static price table (USD). */
+    estimatedUsd: real("estimated_usd"),
+    /** Sanitized, size-limited details (args, query, URL, result summary). */
+    data: text("data", { mode: "json" }).$type<Record<string, unknown>>(),
+  },
+  (t) => [index("app_run_events_run_idx").on(t.runId)],
 );
 
 export type Job = typeof jobs.$inferSelect;
@@ -228,6 +276,8 @@ export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
 export type ProfileFact = typeof profileFacts.$inferSelect;
 export type Claim = typeof claims.$inferSelect;
 export type Run = typeof runs.$inferSelect;
+export type RunEvent = typeof runEvents.$inferSelect;
+export type NewRunEvent = typeof runEvents.$inferInsert;
 export type Source = typeof sources.$inferSelect;
 export type SourceKind = (typeof SOURCE_KINDS)[number];
 export type SourceProvider = (typeof SOURCE_PROVIDERS)[number];

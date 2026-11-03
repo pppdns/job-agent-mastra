@@ -2,6 +2,7 @@ import { RESEARCH_TOPICS } from "@copilot/shared";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { runResearch } from "../../research/run";
+import { meterWeb, recorderFor } from "../../usage/recorder";
 import { webProviders, webResolver } from "../../web/active";
 import { getAppDb } from "../app-db";
 
@@ -19,7 +20,8 @@ export const researchCompanyTool = createTool({
   execute: async (input, context) =>
     runResearch(input, {
       db: await getAppDb(),
-      web: webProviders(),
+      web: meterWeb(webProviders(), recorderFor(context?.agent?.threadId), "researcher"),
+      recorder: recorderFor(context?.agent?.threadId),
       resolve: webResolver(),
       threadId: context?.agent?.threadId,
       signal: context?.abortSignal,

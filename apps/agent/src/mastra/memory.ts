@@ -1,5 +1,6 @@
 import { Memory } from "@mastra/memory";
 import { env } from "../env";
+import { recordMemoryCall } from "../usage/memory-usage";
 import { getModel } from "./models";
 
 /**
@@ -19,6 +20,13 @@ export const createChatMemory = ({ messageTokens = env.OM_MESSAGE_TOKENS } = {})
       observationalMemory: {
         scope: "thread",
         model: () => getModel("fast"),
+        // Observer/Reflector model calls aren't part of the agent's steps: record them separately.
+        hooks: {
+          onObservationEnd: ({ usage, threadId, error }) =>
+            recordMemoryCall("observation", threadId, usage, error),
+          onReflectionEnd: ({ usage, threadId, error }) =>
+            recordMemoryCall("reflection", threadId, usage, error),
+        },
         observation: {
           messageTokens,
           // These are re-injected from the database every turn; a copy here would go stale.

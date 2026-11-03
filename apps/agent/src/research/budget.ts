@@ -1,20 +1,13 @@
+import { estimateLlmUsd, estimateProviderUsd, type TokenUsage } from "../usage/prices";
+
 // Per-run research budget, enforced in app code. Spend is an ESTIMATE from a static price
 // table (providers don't return cost), so the monetary cap is soft: a call in flight when the
 // cap is crossed still finishes and may still be billed.
 
-/** USD per million tokens (input, output). Anthropic list prices as of 2026-10-06. */
-export const LLM_PRICES_PER_MTOK: Record<string, { input: number; output: number }> = {
-  "anthropic/claude-sonnet-5.5": { input: 2, output: 10 },
-  "anthropic/claude-haiku-5.5": { input: 0.1, output: 0.5 },
-};
-/** Fallback for unknown models: priced like the most expensive entry. */
-const UNKNOWN_MODEL = { input: 2, output: 10 };
-
-/** Tavily: 1 credit per basic search, 1 credit per 5 basic extracts. USD per credit is an estimate. */
-export const TAVILY_USD_PER_CREDIT = 0.008;
+/** Estimated USD per provider call kind, reserved before each call. */
 export const PROVIDER_CALL_USD = {
-  search: TAVILY_USD_PER_CREDIT,
-  extract: TAVILY_USD_PER_CREDIT / 5,
+  search: estimateProviderUsd({ provider: "tavily", op: "search" }),
+  extract: estimateProviderUsd({ provider: "tavily", op: "extract", depth: "basic" }),
 } as const;
 
 export type BudgetLimits = { maxToolCalls: number; maxMs: number; maxUsd: number };
@@ -69,10 +62,8 @@ export class ResearchBudget {
   }
 
   /** Adds one LLM step's usage; aborts the run once the spend estimate exceeds the cap. */
-  addLlmUsage(modelId: string, usage: { inputTokens?: number; outputTokens?: number }) {
-    const price = LLM_PRICES_PER_MTOK[modelId] ?? UNKNOWN_MODEL;
-    this.llmUsd +=
-      ((usage.inputTokens ?? 0) * price.input + (usage.outputTokens ?? 0) * price.output) / 1e6;
+  addLlmUsage(modelId: string, usage: TokenUsage) {
+    this.llmUsd += estimateLlmUsd(modelId, usage);
     if (this.spent() > this.limits.maxUsd) this.stop("spend");
   }
 

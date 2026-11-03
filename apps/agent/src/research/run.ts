@@ -4,6 +4,7 @@ import { RESEARCH_TOPIC_LABELS, type ResearchTopic } from "@copilot/shared";
 import { env } from "../env";
 import type { Resolver } from "../ingest/url-guard";
 import { researcherAgent } from "../mastra/agents/researcher";
+import type { RunRecorder } from "../usage/recorder";
 import type { WebProviders } from "../web/providers";
 import { type BudgetLimits, DEFAULT_LIMITS, ResearchBudget } from "./budget";
 import { createResearchTools, type ProgressEvent } from "./tools";
@@ -17,6 +18,8 @@ export type ResearchDeps = {
   /** Streams a progress event to the chat (data-research-progress). */
   emit: (data: ProgressEvent & { runId: string }) => Promise<void> | undefined;
   limits?: BudgetLimits;
+  /** Records the researcher's own model calls and retries in the chat run's usage. */
+  recorder?: RunRecorder;
   resolve?: Resolver;
 };
 
@@ -38,6 +41,7 @@ export async function runResearch(
   const limits = deps.limits ?? DEFAULT_LIMITS;
   const budget = new ResearchBudget(limits, deps.signal);
   const progress = async (event: ProgressEvent) => {
+    if (event.kind === "retry") deps.recorder?.retry(event.what, event.attempt, event.reason);
     await deps.emit({ runId, ...event });
   };
   const tools = createResearchTools({
@@ -68,7 +72,10 @@ export async function runResearch(
       toolsets: { research: tools },
       maxSteps: limits.maxToolCalls + 4,
       abortSignal: budget.signal,
-      onStepFinish: ({ usage }) => budget.addLlmUsage(env.COPILOT_MODEL, usage ?? {}),
+      onStepFinish: ({ usage }) => {
+        budget.addLlmUsage(env.COPILOT_MODEL, usage ?? {});
+        deps.recorder?.llm("researcher", env.COPILOT_MODEL, usage ?? {});
+      },
     });
     summary = result.text;
   } catch (error) {

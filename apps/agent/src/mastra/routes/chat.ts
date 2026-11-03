@@ -1,4 +1,4 @@
-import { activeRun, endRun, startRun } from "@copilot/db";
+import { activeRun, endRun, setRunDetails, startRun } from "@copilot/db";
 import { COPILOT_AGENT_ID } from "@copilot/shared";
 import { toAISdkStream } from "@mastra/ai-sdk";
 import type { DurableAgent } from "@mastra/core/agent/durable";
@@ -7,6 +7,8 @@ import { type ContextWithMastra, registerApiRoute } from "@mastra/core/server";
 import type { MastraModelOutput } from "@mastra/core/stream";
 import { createUIMessageStreamResponse, type UIMessageChunk } from "ai";
 import { z } from "zod";
+import { env } from "../../env";
+import { RunRecorder, registerRecorder, releaseRecorder } from "../../usage/recorder";
 import { THREAD_CONTEXT_KEY } from "../agents/copilot";
 import { getAppDb } from "../app-db";
 import { toClientErrorText } from "../errors";
@@ -68,6 +70,54 @@ async function ownedThread(c: ContextWithMastra): Promise<string | null> {
   return thread && thread.resourceId === resourceId ? threadId : null;
 }
 
+const FAILED_STATUSES = new Set(["blocked", "unavailable"]);
+
+/** Turns stream chunks into run events: one per model step, tool call and compaction. */
+export function recordChunk(recorder: RunRecorder, chunk: { type: string; payload?: unknown }) {
+  const p = (chunk.payload ?? {}) as {
+    toolCallId?: string;
+    toolName?: string;
+    args?: unknown;
+    result?: unknown;
+    isError?: boolean;
+    error?: unknown;
+    output?: { usage?: Record<string, number> };
+  };
+  switch (chunk.type) {
+    case "text-delta":
+      recorder.noteText();
+      break;
+    case "tool-call":
+      if (p.toolCallId) recorder.toolStart(p.toolCallId);
+      break;
+    case "tool-result": {
+      const r = (p.result ?? {}) as { ok?: boolean; status?: string };
+      const failed = Boolean(p.isError) || r.ok === false || FAILED_STATUSES.has(r.status ?? "");
+      recorder.toolEnd(p.toolCallId ?? "", p.toolName ?? "tool", p.args, p.result, failed);
+      break;
+    }
+    case "tool-error":
+      recorder.toolEnd(
+        p.toolCallId ?? "",
+        p.toolName ?? "tool",
+        p.args,
+        { error: String(p.error) },
+        true,
+      );
+      break;
+    case "step-finish":
+      if (p.output?.usage) recorder.llm("copilot", env.COPILOT_MODEL, p.output.usage);
+      break;
+    case "data-om-activation":
+    case "data-om-observation-end":
+      recorder.compaction(
+        chunk.type.slice("data-om-".length),
+        (chunk as { data?: Record<string, unknown> }).data,
+      );
+      break;
+  }
+}
+
 /** POST /chat — start a durable run for one new user message in one thread. */
 export const chatRoute = registerApiRoute("/chat", {
   method: "POST",
@@ -83,12 +133,24 @@ export const chatRoute = registerApiRoute("/chat", {
     requestContext.set(THREAD_CONTEXT_KEY, thread);
     const logger = c.get("mastra").getLogger();
 
-    let runId = "";
+    const recorder = new RunRecorder(db, thread);
+    registerRecorder(recorder);
+    let traceId: string | undefined;
     const ended = async (status: "completed" | "cancelled" | "failed", error?: unknown) => {
-      if (!runId) return;
-      await endRun(db, runId, status, error ? String(error) : undefined).catch((e) =>
-        logger?.error("could not record run end", { e }),
-      );
+      releaseRecorder(recorder);
+      if (error) recorder.error("run", String(error));
+      await recorder.flush();
+      if (!recorder.runId) return;
+      try {
+        await setRunDetails(db, recorder.runId, {
+          model: env.COPILOT_MODEL,
+          traceId: traceId ?? null,
+          ttftMs: recorder.firstTextAt ? recorder.firstTextAt - recorder.startedAt : null,
+        });
+        await endRun(db, recorder.runId, status, error ? String(error) : undefined);
+      } catch (e) {
+        logger?.error("could not record run end", { e });
+      }
     };
 
     const result = await durable(c).stream(body.data.messages as never, {
@@ -96,13 +158,15 @@ export const chatRoute = registerApiRoute("/chat", {
       requestContext,
       maxSteps: 12,
       modelSettings: { maxOutputTokens: 16_000 },
+      onChunk: (chunk) => recordChunk(recorder, chunk),
       // No abort on client disconnect: the run continues and can be observed again.
       onFinish: () => ended("completed"),
       onAbort: () => ended("cancelled"),
       onError: ({ error }) => ended("failed", error),
     });
-    runId = result.runId;
-    await startRun(db, { id: runId, threadId: thread });
+    traceId = result.output.traceId;
+    await startRun(db, { id: result.runId, threadId: thread });
+    recorder.attach(result.runId);
     return uiResponse(c, result.output);
   },
 });
