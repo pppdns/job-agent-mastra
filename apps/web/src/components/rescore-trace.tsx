@@ -142,7 +142,8 @@ export function RescoreResult({ part, threadId }: { part: ToolPart; threadId: st
     startTransition(async () => {
       const response = await approveDraftsAction({
         threadId,
-        draftIds,
+        // Drafts approved since (e.g. on a job page) are not sent again.
+        draftIds: draftIds.filter((id) => outcomeOf(id) !== "approved"),
       });
       if (response.error) setError("Couldn't approve these drafts. Try again.");
       else setOutcomes(response.results);

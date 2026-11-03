@@ -58,7 +58,7 @@ test("a proposed snapshot is saved only after the user approves it", async ({ pa
 
   await page.goto("/jobs");
   await row.click();
-  await expect(page.getByLabel("Current draft")).toContainText("Draft v1 · not approved");
+  await expect(page.getByLabel("Current draft")).toContainText("Draft v1 · approved as v1");
   await expect(page.getByLabel("Approved snapshots")).toContainText("Approved v1");
   await expect(page.getByLabel("Sources")).toContainText("Pasted text");
 

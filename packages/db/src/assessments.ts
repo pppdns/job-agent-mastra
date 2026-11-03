@@ -170,11 +170,21 @@ async function proposeSnapshotUnlocked(
   const draft = await latestDraft(db, job.id);
   if (!draft) throw new AssessmentError("this job has no draft yet; call save_job_draft first");
 
-  const idempotencyKey = `job_snapshot:${draft.id}:${input.threadId}`;
-  const existing = await db.query.approvals.findFirst({
-    where: eq(approvals.idempotencyKey, idempotencyKey),
+  // Idempotent per draft and chat, unless another proposal superseded the last one: then
+  // proposing the same draft again is a new request (e.g. a job-page approve after a chat's).
+  const earlier = await db.query.approvals.findMany({
+    where: and(
+      eq(approvals.kind, "job_snapshot"),
+      eq(approvals.draftId, draft.id),
+      eq(approvals.threadId, input.threadId),
+    ),
   });
+  const existing = earlier.find((a) => a.status !== "superseded");
   if (existing) return { approval: existing, created: false };
+  const approvalId = randomUUID();
+  const idempotencyKey = earlier.length
+    ? `job_snapshot:${draft.id}:${input.threadId}:${approvalId}`
+    : `job_snapshot:${draft.id}:${input.threadId}`;
 
   const payload: SnapshotPayload = {
     job: {
@@ -205,7 +215,7 @@ async function proposeSnapshotUnlocked(
     const [approval] = await tx
       .insert(approvals)
       .values({
-        id: randomUUID(),
+        id: approvalId,
         kind: "job_snapshot",
         status: "pending",
         threadId: input.threadId,
@@ -599,14 +609,17 @@ export async function approveDrafts(
       results.push({ draftId, outcome: "not_found" as const });
       continue;
     }
-    const { approval } = await proposeSnapshot(db, {
-      jobId: draft.jobId,
-      threadId: input.threadId,
-    });
-    if (approval.draftId !== draftId) {
+    // Checked inside the write lock, so a changed job never gets a proposal from this click.
+    const proposal = await serializeWrites(db, async () =>
+      (await latestDraft(db, draft.jobId))?.id === draftId
+        ? proposeSnapshotUnlocked(db, { jobId: draft.jobId, threadId: input.threadId })
+        : undefined,
+    );
+    if (!proposal) {
       results.push({ draftId, jobId: draft.jobId, outcome: "changed" as const });
       continue;
     }
+    const { approval } = proposal;
     const decided = await decideApproval(db, {
       approvalId: approval.id,
       threadId: input.threadId,

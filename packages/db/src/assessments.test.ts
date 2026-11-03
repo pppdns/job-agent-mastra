@@ -7,6 +7,7 @@ import {
   approveDrafts,
   approvedDraftIds,
   decideApproval,
+  getApproval,
   getJobDetail,
   listJobs,
   proposeSnapshot,
@@ -373,5 +374,22 @@ describe("approveDrafts", () => {
     });
     expect((await getJobDetail(db, jobId))?.snapshots).toHaveLength(1);
     expect(await approvedDraftIds(db, [shown.id, outdated.id])).toEqual([shown.id]);
+  });
+
+  it("leaves pending proposals alone when the shown draft changed", async () => {
+    const shown = await saveDraft(db, { jobId, assessment: assessment() });
+    await saveDraft(db, { jobId, assessment: assessment("newer") });
+    const chat = (await proposeSnapshot(db, { jobId, threadId: "chat-a" })).approval;
+    const [result] = await approveDrafts(db, { threadId: "job-page", draftIds: [shown.id] });
+    expect(result?.outcome).toBe("changed");
+    expect(await getApproval(db, chat.id)).toMatchObject({ status: "pending" });
+  });
+
+  it("approves again after a chat superseded this page's earlier proposal", async () => {
+    const draft = await saveDraft(db, { jobId, assessment: assessment() });
+    await proposeSnapshot(db, { jobId, threadId: "job-page" });
+    await proposeSnapshot(db, { jobId, threadId: "chat-a" }); // supersedes the page's
+    const [result] = await approveDrafts(db, { threadId: "job-page", draftIds: [draft.id] });
+    expect(result?.outcome).toBe("approved");
   });
 });
