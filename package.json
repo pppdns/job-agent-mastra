@@ -13,11 +13,12 @@
     "test": "turbo run test",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "check": "biome check . && turbo run typecheck test",
+    "check": "biome check . && turbo run typecheck test --output-logs=errors-only",
     "e2e": "pnpm --filter @copilot/web e2e",
     "db:migrate": "pnpm --filter @copilot/db migrate",
     "agent:api": "scripts/agent-api.sh",
-    "prepare": "git config core.hooksPath .githooks"
+    "prepare": "git config core.hooksPath .githooks",
+    "setup:env": "scripts/setup-env.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.4",

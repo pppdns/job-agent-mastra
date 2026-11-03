@@ -6,22 +6,23 @@ Job Research Copilot: a private, single-user chat assistant that assesses job li
 
 ## Tech Stack
 
-pnpm workspaces + Turborepo, TypeScript, Mastra (agent server + Studio), Next.js App Router + AI SDK UI + AI Elements, libSQL (SQLite) with Drizzle for app tables, Vercel AI Gateway for models, Tavily + Firecrawl for web access, Biome, Vitest, Playwright. Exact versions live in `package.json` files.
+pnpm workspaces + Turborepo, TypeScript, Mastra (agent server + Studio), Next.js App Router + AI SDK UI + shadcn/ui chat components, libSQL (SQLite) with Drizzle for app tables, Vercel AI Gateway for models, Tavily + Firecrawl for web access, Biome, Vitest, Playwright. Exact versions live in `package.json` files.
 
 ## Project Structure
 
-Planned (created in M1):
-
-- `apps/agent` — Mastra server: agents, tools, memory, durable runs, scorers (`src/mastra/`)
-- `apps/web` — Next.js UI; proxies to the agent server, runs approval actions
-- `packages/shared` — Zod schemas and types shared by both apps
+- `apps/agent` — Mastra server (agents, tools, memory, scorers in `src/mastra/`). See [apps/agent/AGENTS.md](apps/agent/AGENTS.md)
+- `apps/web` — Next.js UI; proxies to the agent server, runs approval actions. See [apps/web/AGENTS.md](apps/web/AGENTS.md)
+- `packages/shared` — constants, Zod schemas and types shared by both apps
 - `packages/db` — Drizzle schema, migrations, data-access functions
-- `fixtures/` — offline listings/pages for tests and evals
+- `scripts/` — `agent-api.sh` (authenticated `mastra api`), `setup-env.sh`
+- `fixtures/` (later) — offline listings/pages for tests and evals
 - `docs/` — plan, spikes, verification results
+
+Internal packages export TypeScript source directly (no build step); Next and Mastra transpile them.
 
 ## Visual Design
 
-Simple, polished, functional: shadcn/ui + AI Elements defaults. Clear visual distinction between draft vs approved records and transient vs durable (approved) memory.
+Simple, polished, functional: shadcn/ui (Radix Nova preset) defaults. Clear visual distinction between draft vs approved records and transient vs durable (approved) memory.
 
 ## Key Conventions
 
@@ -29,7 +30,9 @@ Simple, polished, functional: shadcn/ui + AI Elements defaults. Clear visual dis
 - **Plan:** work follows the milestones in [docs/PLAN.md](docs/PLAN.md); update its checkboxes as items land.
 - **Verify Mastra / AI SDK / Next APIs before writing code** — use the `mastra` skill (embedded docs in `node_modules/@mastra/*/dist/docs`) and official docs; training-data APIs are often outdated.
 - **Deterministic code owns safety:** approvals, authorization, budgets, URL validation, and DB writes are enforced in app code, never left to the model. Fetched web content is untrusted data.
-- **No secrets in config, prompts, logs, or traces.** Server-side env vars only, validated at startup; `.env.example` holds placeholders.
+- **No secrets in config, prompts, logs, or traces.** Server-side env vars only, validated at startup; `.env.example` holds placeholders. Agents never read `.env*` files.
+- **Dependencies:** pnpm enforces a 24h minimum release age. Pin to the newest version older than that; revert any `minimumReleaseAgeExclude` entries pnpm auto-adds to `pnpm-workspace.yaml`. Shared versions go in the workspace `catalog:`.
+- **Don't commit until `pnpm check` passes** (the pre-commit hook enforces it).
 
 ## Third-Party Services
 
@@ -39,7 +42,17 @@ Simple, polished, functional: shadcn/ui + AI Elements defaults. Clear visual dis
 
 ## Main Commands
 
-Available from M1: `pnpm dev`, `pnpm check` (typecheck + lint + unit), `pnpm e2e`, `pnpm eval`, `pnpm smoke:live`. See [docs/PLAN.md#verification-loops](docs/PLAN.md#verification-loops).
+| Command | What it does |
+| --- | --- |
+| `pnpm install` | Install; also points git at `.githooks/` |
+| `pnpm setup:env` | Create/extend `apps/agent/.env` + `apps/web/.env.local` with a shared secret (never prints values) |
+| `pnpm db:migrate` | Apply Drizzle migrations for app tables |
+| `pnpm dev` | Agent (http://127.0.0.1:4111, Studio) + web (http://127.0.0.1:3000) |
+| `pnpm check` | Biome + typecheck + unit tests (pre-commit and Claude Stop hook run this) |
+| `pnpm e2e` | Playwright on an isolated mock stack; stop `pnpm dev` first |
+| `pnpm agent:api …` | `mastra api` against the local agent with auth, e.g. `agent run copilot '{"messages":"hi"}'`, `trace list` |
+
+Later: `pnpm eval`, `pnpm smoke:live`. Details: [docs/PLAN.md#verification-loops](docs/PLAN.md#verification-loops).
 
 ## Database
 

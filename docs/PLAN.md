@@ -10,8 +10,9 @@ Source of intent: [project-brief.md](../project-brief.md). This file is the mile
 | Web → agent | Next route handlers / server actions proxy to Mastra; browser never talks to :4111 | Keys stay server-side, one origin, ownership checks in one place |
 | Database | libSQL file (`data/copilot.db`): Mastra storage + app tables (Drizzle, `app_*` prefix) | Zero setup, local prototype; Turso later if ever deployed |
 | Approvals | DB-backed proposals: `propose_*` tools write a pending row bound to payload hash + version; UI approves; app code applies idempotently | Survives compaction/restarts, approvable later, model can't self-approve |
-| Models | Vercel AI Gateway via Mastra model router. Main: Sonnet 5.5; cheap tasks (observational memory, titles, judges): Haiku 5.5. Env-configurable | Reuse Gateway; exact IDs verified against the provider registry in M1 |
+| Models | Vercel AI Gateway via the native `@ai-sdk/gateway` provider instance (not Mastra's `vercel/` router string, which uses Gateway's OpenAI-compatible endpoint and can drop cache/reasoning usage). Main `anthropic/claude-sonnet-5.5`, fast `anthropic/claude-haiku-5.5`; env-configurable; `LLM_MODE=mock` for a deterministic fake | Reuse Gateway with full usage data |
 | Web providers | Tavily (search/extract) + Firecrawl (scrape, optional hosted browser). Final split decided by the M3 spike | Minimal stack |
+| Chat UI | shadcn/ui native chat components (MessageScroller, Message, Bubble), Radix base; AI Elements added per component only where it adds value | shadcn guidance; fewer dependencies |
 | Agent instructions | `AGENTS.md` only (Claude Code reads it natively) | One file for all coding agents |
 | Observability | Mastra native tracing to storage (Studio). No Langfuse | Brief: add platforms only for a concrete gap |
 | Compaction | Mastra Observational Memory, thread scope | Native mechanism; no cross-session summaries |
@@ -19,9 +20,11 @@ Source of intent: [project-brief.md](../project-brief.md). This file is the mile
 | Global profile | App-owned versioned tables, injected per turn from DB | Approval + audit history; never sourced from a summary |
 | Auth boundary | Single local user, servers bound to 127.0.0.1, shared secret web→agent | Brief allows single-user local mode |
 
-## Stack (latest at planning time — re-verify at install)
+## Stack
 
-pnpm 12 workspaces + Turborepo · TypeScript (try 7.x, fall back to 6.x if Next/Mastra tooling breaks) · Biome 2 (lint + format) · Vitest · Playwright · Next.js 16 App Router · Tailwind 4 · shadcn/ui + AI Elements (Radix) · AI SDK 7 `useChat` · `@mastra/core`, `@mastra/memory`, `@mastra/libsql`, `@mastra/ai-sdk`, `@mastra/observability`, `@mastra/evals` · Drizzle · Zod 4.
+pnpm enforces a 24h minimum release age: pin to the newest version older than that; never accept the `minimumReleaseAgeExclude` entries pnpm auto-adds.
+
+pnpm 12 workspaces + Turborepo · TypeScript 6.0 (7.x is native-only with no JS API, which Next needs) · Biome 2 (lint + format) · Vitest 5 · Playwright (system Chrome) · Next.js 16.4 App Router (Cache Components on) · Tailwind 4 · shadcn/ui (Radix Nova) · AI SDK 7 `useChat` · `@mastra/core`, `@mastra/memory`, `@mastra/libsql`, `@mastra/ai-sdk`, `@mastra/observability`, `@mastra/evals` · Drizzle · Zod 4.
 
 ## Architecture
 
@@ -51,12 +54,12 @@ docs/           plan, spikes, decisions
 | Loop | Command / mechanism | When |
 | --- | --- | --- |
 | Format/lint on edit | Claude `PostToolUse` hook → `biome check --write <file>` | Every edit |
-| Static checks | `pnpm check` = typecheck + lint + unit tests (Turbo-cached) | Before every commit; Claude `Stop` hook if fast enough (<30s) |
-| Agent behaviour | `mastra api agent run …` then `mastra api trace list/get` | After agent/tool changes |
+| Static checks | `pnpm check` = Biome + typecheck + unit tests (Turbo-cached) | Git pre-commit hook; Claude `Stop` hook (blocks once, feeds errors back) |
+| Agent behaviour | `pnpm agent:api agent run copilot '{"messages":"…"}'`, `pnpm agent:api trace list` (wraps `mastra api` with the shared secret) | After agent/tool changes |
 | UI | next-devtools MCP (errors/routes), built-in browser / Playwright MCP for screenshots | After UI changes |
-| E2E | `pnpm e2e` — Playwright against dev servers with `LLM_MODE=mock` (AI SDK mock model, deterministic, free) | Per milestone |
+| E2E | `pnpm e2e` — Playwright starts its own stack (agent :4112, web :3001, `data/e2e.db`, mock model). Stop `pnpm dev` first: Mastra allows one `mastra dev` per project | Per milestone |
 | Evals | `pnpm eval` offline fixtures (deterministic + LLM-judge scorers); `pnpm smoke:live` real providers, costs money, on demand | M4 onward |
-| Git | Small commits after every verified step; pre-commit runs `biome check --staged` | Always |
+| Git | Small commits after every verified step; pre-commit runs `pnpm check` | Always |
 
 Live-integration claims are only made when `smoke:live` actually ran; results recorded in `docs/verification.md`.
 
@@ -72,14 +75,15 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - [x] Official skills installed: ai-sdk, next-dev-loop, vercel-react-best-practices, shadcn, turborepo (+ mastra).
 - [x] Project permissions allowlist; `.env*` reads denied. Hooks (`PostToolUse` format, `Stop` check) are wired in M1 once the scripts exist.
 
-### M1 — Monorepo skeleton + streaming hello agent
-- pnpm workspace, Turbo, shared tsconfig, Biome, Vitest, Playwright.
-- `apps/agent`: Mastra instance, libSQL storage (absolute path), PinoLogger, tracing to storage, env validation (Zod, fails fast with a readable message), `copilot` agent, AI SDK chat route, mock-model switch.
-- `apps/web`: Next 16, Tailwind, shadcn + AI Elements, one chat page streaming via proxy route.
-- `packages/shared`, `packages/db` (Drizzle + migration command), placeholder-only `.env.example`.
-- Claude hooks: `PostToolUse` → Biome on edited file; `Stop` → `pnpm check` if under ~30s. Pre-commit `biome check --staged`.
-- **You provide:** `AI_GATEWAY_API_KEY`.
-- **Done when:** `pnpm dev` starts both; real streamed reply in UI; trace visible in Studio and via `mastra api trace list`; `pnpm check` + `pnpm e2e` (mock) green.
+### M1 — Monorepo skeleton + streaming hello agent ✅ mock-verified (2026-11-03)
+- [x] pnpm workspace, Turbo, shared tsconfig, Biome, Vitest, Playwright.
+- [x] `apps/agent`: Mastra on 127.0.0.1:4111, SimpleAuth shared secret, libSQL storage, PinoLogger, tracing to storage, Zod env validation, `copilot` agent, `chatRoute` (AI SDK v7), mock model.
+- [x] `apps/web`: Next 16.4, Tailwind, shadcn chat components, chat page streaming via `/api/chat` proxy.
+- [x] `packages/shared`, `packages/db` (Drizzle + migrations, `app_users`), `.env.example`, `pnpm setup:env`.
+- [x] Hooks: Claude `PostToolUse` Biome format, `Stop` → `pnpm check`; git pre-commit → `pnpm check`.
+- [x] Verified (mock): browser → proxy → agent stream; 401 without secret; traces via `pnpm agent:api trace list`; `pnpm check` + `pnpm e2e` green.
+- [ ] **Live check pending your key:** `pnpm setup:env`, add `AI_GATEWAY_API_KEY`, `pnpm dev`, send a message.
+- Deferred: Mastra metrics/cost dashboard needs a DuckDB observability store (M8). `chatRoute` aborts generation on client disconnect; durable runs replace it in M7.
 
 ### M2 — Chat sessions
 - Threads = Mastra memory threads under one `resourceId`; sidebar, New chat, reopen (history via `toAISdkMessages`), auto titles (cheap model).
@@ -145,6 +149,5 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 5. **Durable agents are beta** in Mastra; if they block us, fall back to a regular agent plus our own `run_events` persistence for replay.
 
 ## Risks to verify early
-- TypeScript 7 compatibility with Next 16 / Mastra CLI (M1).
 - Durable agent + AI SDK UI resume interplay (prototype in M2 rather than discovering in M7).
 - LinkedIn extraction reliability (M3 spike decides; pasted text is always supported).
