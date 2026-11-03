@@ -80,4 +80,19 @@ describe("chat memory", () => {
     expect(await loadThreadUIMessages(memory, "thread-a", "intruder")).toBeNull();
     expect(await loadThreadUIMessages(memory, "missing", LOCAL_USER_ID)).toBeNull();
   });
+
+  it("keeps working memory (local assumptions) inside its own thread", async () => {
+    await run("hello", "thread-a");
+    await run("hello", "thread-b");
+    const memory = await agent.getMemory();
+    await memory?.updateWorkingMemory({
+      threadId: "thread-a",
+      resourceId: LOCAL_USER_ID,
+      workingMemory: "- Local assumptions and exceptions: include London roles",
+    });
+    await run("Any local notes?", "thread-a");
+    expect(JSON.stringify(prompts.at(-1))).toContain("include London roles");
+    await run("Any local notes?", "thread-b");
+    expect(JSON.stringify(prompts.at(-1))).not.toContain("include London roles");
+  });
 });

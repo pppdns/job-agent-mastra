@@ -55,6 +55,7 @@ async function JobList() {
                 <Badge variant="outline">Draft v{job.draftVersion}</Badge>
               )}
               {job.pendingApproval && <Badge variant="secondary">Awaiting approval</Badge>}
+              {job.profileStale && <Badge variant="destructive">Profile changed · review</Badge>}
             </span>
           </Link>
         </li>

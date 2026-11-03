@@ -3,14 +3,22 @@ import { getModel } from "./models";
 
 /**
  * Chat memory: one thread per chat, all under the single local resource.
- * Only the thread's own recent messages are recalled (no semantic recall, no
- * resource-scoped working memory), so chats never see each other's context.
+ * Only the thread's own recent messages and its own working memory are recalled (no
+ * semantic recall, nothing resource-scoped), so chats never see each other's context.
+ * Durable facts about the user live in the approved profile (app tables), not here.
  */
 export const chatMemory = new Memory({
   options: {
     lastMessages: 20,
     semanticRecall: false,
-    workingMemory: { enabled: false },
+    workingMemory: {
+      enabled: true,
+      scope: "thread",
+      template: `# This chat only (not part of the approved profile)
+- Local assumptions and exceptions:
+- Open questions:
+`,
+    },
     generateTitle: {
       model: () => getModel("fast"),
       instructions:

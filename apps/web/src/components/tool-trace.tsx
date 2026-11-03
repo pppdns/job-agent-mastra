@@ -13,9 +13,11 @@ export type ToolPart = {
 export const isToolPart = (part: { type: string }): part is ToolPart =>
   part.type.startsWith("tool-");
 
-/** A successful snapshot proposal renders as an approval prompt instead of a trace row. */
+/** A successful snapshot or profile proposal renders as an approval prompt instead of a trace row. */
 export function proposedApprovalId(part: ToolPart): string | undefined {
-  if (part.type !== "tool-propose_job_snapshot" || part.state !== "output-available") return;
+  const proposes =
+    part.type === "tool-propose_job_snapshot" || part.type === "tool-propose_profile_change";
+  if (!proposes || part.state !== "output-available") return;
   const output = part.output as { ok?: boolean; approvalId?: string } | undefined;
   return output?.ok ? output.approvalId : undefined;
 }
@@ -52,6 +54,10 @@ function ToolLine({ part }: { part: ToolPart }) {
     ingest_listing: "Reading the listing",
     save_job_draft: "Saving the draft",
     propose_job_snapshot: "Preparing the snapshot",
+    propose_profile_change: "Preparing a profile change",
+    find_saved_jobs: "Searching saved jobs",
+    get_job: "Loading a saved job",
+    updateWorkingMemory: "Noting this for this chat",
   };
   if (part.state === "output-error") {
     return <Line status="error" title={`Failed to run ${name}`} description={part.errorText} />;
@@ -69,6 +75,32 @@ function ToolLine({ part }: { part: ToolPart }) {
       <Line title={`Saved draft v${output.version}`} description="not approved" />
     ) : (
       <Line title="Proposed a snapshot for approval" />
+    );
+  }
+  if (name === "propose_profile_change") {
+    const output = (part.output ?? {}) as { error?: string };
+    return <Line status="error" title="Profile change not proposed" description={output.error} />;
+  }
+  if (name === "updateWorkingMemory") {
+    return <Line title="Noted for this chat only" description="not added to your profile" />;
+  }
+  if (name === "find_saved_jobs") {
+    const output = (part.output ?? {}) as { matches?: unknown[] };
+    return (
+      <Line title={`Searched saved jobs`} description={`${output.matches?.length ?? 0} found`} />
+    );
+  }
+  if (name === "get_job") {
+    const output = (part.output ?? {}) as {
+      job?: { title?: string; company?: string };
+      profileStale?: boolean;
+    };
+    const what = [output.job?.title, output.job?.company].filter(Boolean).join(" · ");
+    return (
+      <Line
+        title="Loaded saved job"
+        description={`${what}${output.profileStale ? " · assessed with an older profile" : ""}`}
+      />
     );
   }
   if (name !== "ingest_listing") return <Line title={`Ran ${name}`} />;

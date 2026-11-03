@@ -1,6 +1,6 @@
 "use client";
 
-import { BriefcaseIcon } from "lucide-react";
+import { BriefcaseIcon, UserIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -28,6 +28,14 @@ function Links({ pathname }: { pathname: string }) {
           <Link href="/jobs" onClick={() => setOpenMobile(false)}>
             <BriefcaseIcon />
             <span>Jobs</span>
+          </Link>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      <SidebarMenuItem>
+        <SidebarMenuButton asChild isActive={pathname.startsWith("/profile")}>
+          <Link href="/profile" onClick={() => setOpenMobile(false)}>
+            <UserIcon />
+            <span>Profile</span>
           </Link>
         </SidebarMenuButton>
       </SidebarMenuItem>

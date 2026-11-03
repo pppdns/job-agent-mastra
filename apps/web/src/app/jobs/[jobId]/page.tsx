@@ -43,7 +43,7 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
   await connection();
   const detail = await getJobDetail(await appDb(), jobId);
   if (!detail) notFound();
-  const { job, sources, draft, snapshots, pending } = detail;
+  const { job, sources, draft, snapshots, pending, profileVersion, profileStale } = detail;
   const latestApproved = snapshots[0];
   const draftAhead = draft && latestApproved && latestApproved.payload.draftVersion < draft.version;
 
@@ -87,9 +87,12 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
             <CardTitle className="flex flex-wrap items-center gap-2">
               Current draft <Badge variant="outline">Draft v{draft.version} · not approved</Badge>
               {pending.length > 0 && <Badge variant="secondary">Awaiting approval</Badge>}
+              {profileStale && <Badge variant="destructive">Profile changed · review</Badge>}
             </CardTitle>
             <CardDescription>
-              Saved automatically {formatDate(draft.createdAt)}.
+              Saved automatically {formatDate(draft.createdAt)} using profile v
+              {draft.profileVersion}
+              {profileStale ? ` (current profile is v${profileVersion})` : ""}.
               {draftAhead && ` Changed since approved v${latestApproved.version}.`}
             </CardDescription>
           </CardHeader>
@@ -115,6 +118,8 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
                   </Badge>
                   <span className="text-sm text-muted-foreground">
                     {formatDate(s.createdAt)} · from draft v{s.payload.draftVersion}
+                    {s.payload.profileVersion !== undefined &&
+                      ` · profile v${s.payload.profileVersion}`}
                   </span>
                 </CollapsibleTrigger>
               </CardHeader>

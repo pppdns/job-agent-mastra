@@ -2,13 +2,15 @@
 
 import {
   type ApprovalView,
+  AssessmentError,
   type DecisionError,
   decideApproval,
   getApprovalView,
+  proposeProfileChange,
 } from "@copilot/db";
 import { refresh } from "next/cache";
 import { z } from "zod";
-import { threadIdSchema, threadTitleSchema } from "@/lib/chat-schema";
+import { PROFILE_PAGE_THREAD, threadIdSchema, threadTitleSchema } from "@/lib/chat-schema";
 import { appDb } from "@/server/db";
 import { deleteThread, renameThread } from "@/server/threads";
 
@@ -42,5 +44,21 @@ export async function decideApprovalAction(
   const result = await decideApproval(db, parsed.data);
   const view = await getApprovalView(db, parsed.data.approvalId);
   const visible = view && view.threadId === parsed.data.threadId ? view : undefined;
+  refresh(); // profile page, jobs pages and their badges read the new state
   return result.ok ? { view: visible } : { error: result.error, view: visible };
+}
+
+/**
+ * Profile page edits never change the profile directly: they become a proposal (bound to
+ * the profile page) that the user then approves on the same page.
+ */
+export async function proposeProfileEdit(proposal: unknown): Promise<{ error?: string }> {
+  try {
+    await proposeProfileChange(await appDb(), { threadId: PROFILE_PAGE_THREAD, proposal });
+  } catch (error) {
+    if (error instanceof AssessmentError) return { error: error.message };
+    throw error;
+  }
+  refresh();
+  return {};
 }

@@ -24,3 +24,6 @@ export const chatRequestSchema = z.object({
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
 
 export const threadTitleSchema = z.string().trim().min(1).max(MAX_TITLE_CHARS);
+
+/** Approval "thread" for changes proposed from the profile page rather than a chat. */
+export const PROFILE_PAGE_THREAD = "profile-page";

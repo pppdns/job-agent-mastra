@@ -167,11 +167,39 @@ function mockTurn({
   if (offered("ingest_listing") && text.startsWith("Listing:")) {
     return call("ingest_listing", { fromLatestUserMessage: true });
   }
+  if (offered("propose_profile_change") && text.startsWith("Remember:")) {
+    return call("propose_profile_change", {
+      changes: [{ op: "add", kind: "soft_preference", text: text.slice(9).trim() }],
+      reason: "The user asked me to remember this.",
+    });
+  }
+  if (offered("updateWorkingMemory") && text.startsWith("For this chat:")) {
+    return call("updateWorkingMemory", {
+      memory: `# This chat only\n- Local assumptions and exceptions: ${text.slice(14).trim()}\n`,
+    });
+  }
+  // Report what the system prompt carries, so e2e can check what a chat can see.
+  if (text === "Profile?") {
+    const system = systemText(prompt);
+    const version = system.match(/Approved profile \(version (\d+)\)/)?.[1] ?? "?";
+    const facts = [...system.matchAll(/^- \[fact:[^\]]+\] (.+)$/gm)].map((m) => m[1]);
+    return { kind: "text", text: `Mock reply: profile v${version}: ${facts.join("; ") || "none"}` };
+  }
+  if (text === "Local?") {
+    const local = systemText(prompt).match(
+      /Local assumptions and exceptions:[ \t]*(\S[^\n]*)/,
+    )?.[1];
+    return { kind: "text", text: `Mock reply: local ${local?.trim() || "none"}` };
+  }
   if (offered("propose_job_snapshot") && text === "Propose snapshot") {
     const jobId = latestJobId(prompt);
     if (jobId) return call("propose_job_snapshot", { jobId });
   }
   return { kind: "text", text: `Mock reply: ${text}` };
+}
+
+function systemText(prompt: LanguageModelV4Prompt): string {
+  return prompt.flatMap((m) => (m.role === "system" ? [m.content] : [])).join("\n");
 }
 
 /** jobId from the most recent tool result in the conversation that carries one. */
