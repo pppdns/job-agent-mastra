@@ -15,6 +15,13 @@
       "when": 1793704896497,
       "tag": "0001_jobs_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793706251246,
+      "tag": "0002_drafts_snapshots_approvals",
+      "breakpoints": true
     }
   ]
 }

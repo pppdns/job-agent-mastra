@@ -9,6 +9,7 @@ import {
   type SourceProvider,
   sources,
 } from "./schema";
+import { serializeWrites } from "./write-lock";
 
 export const MAX_SNAPSHOT_CHARS = 100_000;
 
@@ -37,7 +38,14 @@ export type ListingIdentity = {
  * then company + title, but only against a job whose stable ids don't contradict ours.
  * Existing title/company are never overwritten; missing ids and location are filled in.
  */
-export async function upsertJob(
+export function upsertJob(
+  db: Db,
+  identity: ListingIdentity,
+): Promise<{ job: Job; created: boolean }> {
+  return serializeWrites(db, () => upsertJobUnlocked(db, identity));
+}
+
+async function upsertJobUnlocked(
   db: Db,
   identity: ListingIdentity,
 ): Promise<{ job: Job; created: boolean }> {
@@ -113,7 +121,11 @@ export type NewSource = {
 };
 
 /** Stores a bounded snapshot. Re-reading identical content for the same job returns the existing row. */
-export async function addSource(
+export function addSource(db: Db, input: NewSource): Promise<{ source: Source; created: boolean }> {
+  return serializeWrites(db, () => addSourceUnlocked(db, input));
+}
+
+async function addSourceUnlocked(
   db: Db,
   input: NewSource,
 ): Promise<{ source: Source; created: boolean }> {

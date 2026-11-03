@@ -6,3 +6,5 @@ export const COPILOT_AGENT_ID = "copilot";
 
 /** Header carrying the web → agent shared secret. */
 export const AGENT_SECRET_HEADER = "x-copilot-secret";
+
+export * from "./assessment";

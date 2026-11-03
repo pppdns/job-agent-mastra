@@ -1,3 +1,4 @@
+import type { Assessment } from "@copilot/shared";
 import { sql } from "drizzle-orm";
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -52,7 +53,90 @@ export const sources = sqliteTable(
   (t) => [uniqueIndex("app_sources_job_content_uq").on(t.jobId, t.contentHash)],
 );
 
+/** Automatic, versioned assessment drafts. Every save is a new row; nothing is overwritten. */
+export const jobDrafts = sqliteTable(
+  "app_job_drafts",
+  {
+    id: text("id").primaryKey(),
+    jobId: text("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    assessment: text("assessment", { mode: "json" }).$type<Assessment>().notNull(),
+    threadId: text("thread_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("app_job_drafts_job_version_uq").on(t.jobId, t.version)],
+);
+
+/** Exactly what a job snapshot approval would save (and what its hash covers). */
+export type SnapshotPayload = {
+  job: {
+    title: string | null;
+    company: string | null;
+    location: string | null;
+    linkedinJobId: string | null;
+    canonicalUrl: string | null;
+  };
+  draftId: string;
+  draftVersion: number;
+  assessment: Assessment;
+};
+
+/** Approved job snapshots. Insert-only: each approval adds the next version. */
+export const jobSnapshots = sqliteTable(
+  "app_job_snapshots",
+  {
+    id: text("id").primaryKey(),
+    jobId: text("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    draftId: text("draft_id")
+      .notNull()
+      .references(() => jobDrafts.id),
+    payload: text("payload", { mode: "json" }).$type<SnapshotPayload>().notNull(),
+    payloadHash: text("payload_hash").notNull(),
+    approvalId: text("approval_id").notNull().unique(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("app_job_snapshots_job_version_uq").on(t.jobId, t.version)],
+);
+
+export const APPROVAL_KINDS = ["job_snapshot"] as const;
+export const APPROVAL_STATUSES = [
+  "pending",
+  "approved",
+  "rejected",
+  "superseded",
+  "stale",
+] as const;
+
+/**
+ * Proposed durable changes awaiting the user. Bound to the chat that proposed them, the
+ * exact payload (hash) and the draft version, so stale or cross-chat decisions fail.
+ */
+export const approvals = sqliteTable("app_approvals", {
+  id: text("id").primaryKey(),
+  kind: text("kind", { enum: APPROVAL_KINDS }).notNull(),
+  status: text("status", { enum: APPROVAL_STATUSES }).notNull(),
+  threadId: text("thread_id").notNull(),
+  jobId: text("job_id").references(() => jobs.id, { onDelete: "cascade" }),
+  draftId: text("draft_id").references(() => jobDrafts.id),
+  draftVersion: integer("draft_version"),
+  payload: text("payload", { mode: "json" }).$type<SnapshotPayload>().notNull(),
+  payloadHash: text("payload_hash").notNull(),
+  idempotencyKey: text("idempotency_key").notNull().unique(),
+  snapshotId: text("snapshot_id"),
+  createdAt: createdAt(),
+  resolvedAt: integer("resolved_at", { mode: "timestamp_ms" }),
+});
+
 export type Job = typeof jobs.$inferSelect;
+export type JobDraft = typeof jobDrafts.$inferSelect;
+export type JobSnapshot = typeof jobSnapshots.$inferSelect;
+export type Approval = typeof approvals.$inferSelect;
+export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
 export type Source = typeof sources.$inferSelect;
 export type SourceKind = (typeof SOURCE_KINDS)[number];
 export type SourceProvider = (typeof SOURCE_PROVIDERS)[number];

@@ -327,6 +327,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@copilot/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@libsql/client':
         specifier: ^0.18.0
         version: 0.18.0

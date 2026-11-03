@@ -5,13 +5,25 @@ import { migrate } from "drizzle-orm/libsql/migrator";
 import { findWorkspaceRoot, resolveDatabaseUrl } from "./paths";
 import * as schema from "./schema";
 
+export * from "./assessments";
 export * from "./jobs";
 export { findWorkspaceRoot, resolveDatabaseUrl } from "./paths";
-export type { Job, Source, SourceKind, SourceProvider } from "./schema";
+export type {
+  Approval,
+  ApprovalStatus,
+  Job,
+  JobDraft,
+  JobSnapshot,
+  SnapshotPayload,
+  Source,
+  SourceKind,
+  SourceProvider,
+} from "./schema";
 export * as schema from "./schema";
 
 export function createDb(url: string = resolveDatabaseUrl()) {
-  return drizzle(createClient({ url }), { schema });
+  // Agent and web both write this file: wait for locks instead of failing with SQLITE_BUSY.
+  return drizzle(createClient({ url, timeout: 5_000 }), { schema });
 }
 
 export type Db = ReturnType<typeof createDb>;
