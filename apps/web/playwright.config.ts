@@ -3,8 +3,9 @@ import { defineConfig } from "@playwright/test";
 
 // Isolated stack: own ports, own database, deterministic mock model, throwaway secret.
 const secret = "e2e-secret-e2e-secret-e2e-secret";
-const agentPort = 4112;
-const webPort = 3001;
+// Ports come from scripts/ports.sh (pnpm e2e), so worktrees can run e2e side by side.
+const agentPort = Number(process.env.E2E_AGENT_PORT ?? 4112);
+const webPort = Number(process.env.E2E_WEB_PORT ?? 3001);
 const e2eDbPath = resolve(import.meta.dirname, "../../data/e2e.db");
 export const e2eDb = `file:${e2eDbPath}`;
 // Mastra traces/logs/metrics (DuckDB); the agent derives this path from DATABASE_URL.
@@ -52,7 +53,7 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 120_000,
       env: {
-        AGENT_URL: e2eAgentUrl,
+        AGENT_PORT: String(agentPort),
         AGENT_SHARED_SECRET: secret,
         DATABASE_URL: e2eDb,
       },

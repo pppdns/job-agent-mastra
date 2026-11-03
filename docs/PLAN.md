@@ -57,7 +57,7 @@ docs/           plan, spikes, decisions
 | Static checks | `pnpm check` = Biome + typecheck + unit tests (Turbo-cached) | Git pre-commit hook; Claude `Stop` hook (blocks once, feeds errors back) |
 | Agent behaviour | `pnpm agent:api agent run copilot '{"messages":"…"}'`, `pnpm agent:api trace list` (wraps `mastra api` with the shared secret) | After agent/tool changes |
 | UI | next-devtools MCP (errors/routes), built-in browser / Playwright MCP for screenshots | After UI changes |
-| E2E | `pnpm e2e` — Playwright starts its own stack (agent :4112, web :3001, `data/e2e.db`, mock model). Stop `pnpm dev` first: Mastra allows one `mastra dev` per project | Per milestone |
+| E2E | `pnpm e2e` — Playwright starts its own stack (agent :4112, web :3001 in the main checkout, `scripts/ports.sh` slot in a worktree; `data/e2e.db`, mock model). Stop `pnpm dev` first: Mastra allows one `mastra dev` per checkout | Per milestone |
 | Evals | `pnpm eval` offline fixtures (deterministic + LLM-judge scorers); `pnpm smoke:live` real providers, costs money, on demand | M4 onward |
 | Git | Small commits after every verified step; pre-commit runs `pnpm check` | Always |
 

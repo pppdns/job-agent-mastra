@@ -38,3 +38,6 @@ blob-report/
 
 # Claude Code CLI worktrees (claude --worktree)
 .claude/worktrees/
+
+# Per-worktree dev port slot (scripts/ports.sh)
+.dev-ports

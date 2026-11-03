@@ -7,21 +7,21 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "turbo run dev",
+    "dev": "scripts/ports.sh turbo run dev",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "lint": "biome check .",
     "format": "biome check --write .",
     "check": "biome check . && turbo run typecheck test --output-logs=errors-only",
-    "e2e": "pnpm --filter @copilot/web e2e",
+    "e2e": "scripts/ports.sh pnpm --filter @copilot/web e2e",
     "eval": "pnpm --filter @copilot/agent eval",
-    "eval:studio": "pnpm --filter @copilot/agent eval:studio",
+    "eval:studio": "scripts/ports.sh pnpm --filter @copilot/agent eval:studio",
     "db:migrate": "pnpm --filter @copilot/db migrate",
-    "agent:api": "scripts/agent-api.sh",
+    "agent:api": "scripts/ports.sh scripts/agent-api.sh",
     "prepare": "git config core.hooksPath .githooks",
     "setup:env": "scripts/setup-env.sh",
-    "ngrok": "scripts/tunnel.sh"
+    "ngrok": "scripts/ports.sh scripts/tunnel.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.4",

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Exposes the local web app (http://127.0.0.1:3000) through an ngrok tunnel.
+# Exposes the local web app (127.0.0.1:$WEB_PORT, default 3000) through an ngrok tunnel.
 # The app has no login of its own, so the tunnel is always behind HTTP basic auth:
 # NGROK_BASIC_AUTH=user:password (>= 8 char password) lives in apps/web/.env.local;
-# it is generated and shown once if missing. Only the web app is exposed, never the agent (4111).
+# it is generated and shown once if missing. Only the web app is exposed, never the agent.
 # Optional: NGROK_DOMAIN=my-name.ngrok-free.dev to use a reserved domain.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -23,6 +23,6 @@ fi
 [[ "$auth" =~ ^[^:]+:.{8,}$ ]] || { echo "NGROK_BASIC_AUTH must look like user:password (password >= 8 chars)" >&2; exit 1; }
 
 domain="${NGROK_DOMAIN:-$(value_of NGROK_DOMAIN)}"
-args=(http 127.0.0.1:3000 --basic-auth "$auth")
+args=(http "127.0.0.1:${WEB_PORT:-3000}" --basic-auth "$auth")
 [[ -n "$domain" ]] && args+=(--url "$domain")
 exec ngrok "${args[@]}"

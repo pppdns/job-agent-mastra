@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { e2eAgentUrl } from "../playwright.config";
 
 test("streams an agent reply through the web proxy", async ({ page }) => {
   await page.goto("/");
@@ -14,8 +15,8 @@ test("streams an agent reply through the web proxy", async ({ page }) => {
 });
 
 test("the agent API rejects requests without the shared secret", async ({ request }) => {
-  const response = await request.post("http://127.0.0.1:4112/chat", { data: {} });
+  const response = await request.post(`${e2eAgentUrl}/chat`, { data: {} });
   expect(response.status()).toBe(401);
-  const history = await request.get("http://127.0.0.1:4112/threads/any/ui-messages");
+  const history = await request.get(`${e2eAgentUrl}/threads/any/ui-messages`);
   expect(history.status()).toBe(401);
 });

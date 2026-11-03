@@ -14,7 +14,7 @@ pnpm workspaces + Turborepo, TypeScript, Mastra (agent server + Studio), Next.js
 - `apps/web` — Next.js UI; proxies to the agent server, runs approval actions. See [apps/web/AGENTS.md](apps/web/AGENTS.md)
 - `packages/shared` — constants, Zod schemas and types shared by both apps (assessment shape in `src/assessment.ts`)
 - `packages/db` — Drizzle schema, migrations, data-access functions, approval state machine. See [packages/db/AGENTS.md](packages/db/AGENTS.md)
-- `scripts/` — `agent-api.sh` (authenticated `mastra api`), `setup-env.sh`
+- `scripts/` — `agent-api.sh` (authenticated `mastra api`), `setup-env.sh`, `ports.sh` (per-checkout dev ports), `wait-for-idle.sh` (queue heavy tasks), `stop-dev.sh` (stop this checkout's servers)
 - `fixtures/` — synthetic listings/pages for tests and evals (no third-party text)
 - `docs/` — plan, spikes, verification results
 
@@ -47,7 +47,7 @@ Simple, polished, functional: shadcn/ui (Radix Nova preset) defaults. Clear visu
 | `pnpm install` | Install; also points git at `.githooks/` |
 | `pnpm setup:env` | Create/extend `apps/agent/.env` + `apps/web/.env.local` with a shared secret (never prints values) |
 | `pnpm db:migrate` | Apply Drizzle migrations for app tables |
-| `pnpm dev` | Agent (http://127.0.0.1:4111, Studio) + web (http://127.0.0.1:3000) |
+| `pnpm dev` | Agent (http://127.0.0.1:4111, Studio) + web (http://127.0.0.1:3000); other ports in a worktree, see [Worktrees](#worktrees) |
 | `pnpm check` | Biome + typecheck + unit tests (pre-commit and Claude Stop hook run this) |
 | `pnpm ngrok` | ngrok tunnel to the web app (basic auth required; login in `apps/web/.env.local` as `NGROK_BASIC_AUTH`, optional `NGROK_DOMAIN`). Run next to `pnpm dev` |
 | `pnpm e2e` | Playwright on an isolated mock stack; stop `pnpm dev` first |
@@ -71,7 +71,11 @@ Single local libSQL file under `data/` (gitignored), shared by Mastra storage an
 
 ## Worktrees
 
-CLI worktrees (`claude -w`) branch from local `HEAD` (`worktree.baseRef` in `.claude/settings.json`); desktop-app worktrees ignore that and branch from `origin/main`, so push `main` first (or pick the local branch when starting the session). Every worktree gets the env files plus a snapshot of `data/copilot.db` copied in via [.worktreeinclude](.worktreeinclude); the `SessionStart` hook runs `pnpm install` when `node_modules` is missing. Hooks resolve the session's checkout from their input `cwd`, because desktop worktree sessions run them from the main checkout. Ports are fixed (4111/3000), so run `pnpm dev` in one checkout at a time; run `pnpm db:migrate` if the branch adds migrations. When the work in a worktree is done (checks green, pushed), open a GitHub PR against `main` with `gh pr create`.
+CLI worktrees (`claude -w`) branch from local `HEAD` (`worktree.baseRef` in `.claude/settings.json`); desktop-app worktrees ignore that and branch from `origin/main`, so push `main` first (or pick the local branch when starting the session). Every worktree gets the env files plus a snapshot of `data/copilot.db` copied in via [.worktreeinclude](.worktreeinclude); the `SessionStart` hook runs `pnpm install` when `node_modules` is missing. Hooks resolve the session's checkout from their input `cwd`, because desktop worktree sessions run them from the main checkout. Each checkout has its own database (`data/` under its root) and its own port slot, so worktrees can run `pnpm dev` and `pnpm e2e` side by side: [scripts/ports.sh](scripts/ports.sh) gives the main checkout the default ports and each worktree the next free slot (web `3000+10k`, agent `4111+10k`, e2e `+1`), saved in its gitignored `.dev-ports`. The `SessionStart` hook prints a worktree's URLs; `scripts/ports.sh` prints them again. The root `pnpm` scripts (`dev`, `e2e`, `eval:studio`, `agent:api`, `ngrok`) pass the ports on, so start servers through them, not `pnpm --filter`. Browser MCPs run `--isolated`, so parallel sessions don't share a browser profile. Run `pnpm db:migrate` if the branch adds migrations. When the work in a worktree is done (checks green, pushed), open a GitHub PR against `main` with `gh pr create`.
+
+**Share the machine.** Agents in other worktrees may be working at the same time. Before a CPU- or memory-heavy task (`pnpm eval`, `pnpm e2e`, `next build`), run [scripts/wait-for-idle.sh](scripts/wait-for-idle.sh) first (`scripts/wait-for-idle.sh && pnpm eval`, in the background since it can wait up to 30 min). It waits while load or memory use is high or another eval/e2e run is going, so heavy runs queue instead of failing or flaking each other. If it gives up, report that instead of running anyway. `pnpm check` and short commands don't need it.
+
+**Stop servers you started.** When your task is done, or before handing back to the user for something that doesn't need them, stop the dev servers you started with [scripts/stop-dev.sh](scripts/stop-dev.sh). It stops only this checkout's port slot. If you leave them running so the user can try something, say so and stop them in your next turn once that's done. In the main checkout, never stop a `pnpm dev` you didn't start.
 
 ## Skills
 
