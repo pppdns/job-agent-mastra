@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!.agents", "!.claude/skills", "!**/*.md"]
+    "includes": ["**", "!.agents", "!.claude/skills", "!**/*.md", "!apps/web/src/components/ui"]
   },
   "formatter": {
     "enabled": true,
@@ -32,6 +32,11 @@
       "source": {
         "organizeImports": "on"
       }
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
     }
   }
 }

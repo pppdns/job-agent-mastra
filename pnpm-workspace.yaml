@@ -4,6 +4,7 @@ packages:
 
 allowBuilds:
   esbuild: true
+  sharp: false
 
 catalog:
   typescript: 6.0.3
