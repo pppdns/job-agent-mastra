@@ -15,6 +15,7 @@ import {
   ResearchProgress,
   ResearchResult,
 } from "@/components/research-trace";
+import { TechnicalPanel } from "@/components/technical-panel";
 import { isToolPart, proposedApprovalId, type ToolPart, ToolTrace } from "@/components/tool-trace";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
@@ -80,7 +81,9 @@ export function Chat({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PageHeader />
+      <PageHeader>
+        <TechnicalPanel threadId={threadId} />
+      </PageHeader>
       <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
         <MessageScrollerProvider autoScroll>
           <MessageScroller className="min-h-0 flex-1">

@@ -37,6 +37,24 @@ test("research streams real progress and shows cited findings", async ({ page })
   );
   await expect(lastReply(page)).toContainText("Mock reply: research_company completed 1 claims");
 
+  // Technical panel: one search + one extraction, model calls from both agents, estimates labelled.
+  await page.getByRole("button", { name: "Technical details" }).click();
+  const panel = page.getByRole("dialog");
+  await expect(panel).toContainText("Costs are estimates");
+  const latest = panel.getByLabel("Run").first();
+  await expect(latest).toContainText("completed");
+  await expect(latest).toContainText("search 1 · extraction 1 · browser 0");
+  await expect(latest.getByLabel("LLM calls")).toContainText(
+    "copilot · anthropic/claude-sonnet-5.5",
+  );
+  await expect(latest.getByLabel("LLM calls")).toContainText(
+    "researcher · anthropic/claude-sonnet-5.5",
+  );
+  await expect(latest.getByLabel("Search")).toContainText("Northwind Robotics company");
+  await expect(latest.getByLabel("Tools")).toContainText("research_company");
+  await expect(panel.getByLabel("Chat totals")).toContainText("2 runs");
+  await page.keyboard.press("Escape");
+
   // Progress and findings come back from stored history after a reload.
   await page.reload();
   await expect(lastReply(page).getByLabel("Research progress")).toContainText("Research finished");
@@ -44,8 +62,7 @@ test("research streams real progress and shows cited findings", async ({ page })
   await page.goto("/jobs");
   await page
     .getByRole("list", { name: "Jobs" })
-    .getByRole("link", { name: /Northwind Robotics/ })
-    .first()
+    .getByRole("link", { name: /^Platform Engineer/ })
     .click();
   const evidence = page.getByLabel("Evidence");
   await expect(evidence).toContainText(

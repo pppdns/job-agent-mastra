@@ -493,3 +493,12 @@ export async function pendingApprovalsForThread(db: Db, threadId: string) {
         },
   );
 }
+
+/** Approval lifecycle events of one chat (for the technical panel). */
+export async function approvalsForThread(db: Db, threadId: string) {
+  return db.query.approvals.findMany({
+    where: eq(approvals.threadId, threadId),
+    columns: { id: true, kind: true, status: true, createdAt: true, resolvedAt: true },
+    orderBy: desc(approvals.createdAt),
+  });
+}
