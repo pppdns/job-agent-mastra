@@ -10,6 +10,9 @@
 
 ## Key Conventions
 
+- **Commit frequently.** Commit after every small verified step (checks green), not at the end of a milestone. Imperative subject lines; never commit secrets or `.env*` files.
+- **Plan:** work follows the milestones in [docs/PLAN.md](docs/PLAN.md); update its checkboxes as items land.
+
 ## Third-Party Services
 
 ## Main Commands
@@ -25,3 +28,6 @@
 ## Skills
 
 ## Documentation Index
+
+- [project-brief.md](project-brief.md) — product intent and constraints
+- [docs/PLAN.md](docs/PLAN.md) — agreed decisions and milestone plan
