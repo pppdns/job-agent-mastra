@@ -9,6 +9,7 @@ import { MastraStorageExporter, Observability, SensitiveDataFilter } from "@mast
 import { env } from "../env";
 import { copilotAgent } from "./agents/copilot";
 import { toClientErrorText } from "./errors";
+import { threadMessagesRoute } from "./routes/thread-messages";
 
 const logger = new PinoLogger({ name: "copilot-agent", level: "info" });
 
@@ -31,6 +32,9 @@ export const mastra = new Mastra({
     port: Number(process.env.AGENT_PORT ?? 4111),
     auth: new SimpleAuth({
       tokens: { [env.AGENT_SHARED_SECRET]: { id: LOCAL_USER_ID } },
+      // Pins every memory operation to this resource: Mastra filters thread lists and
+      // returns 403 (or a mismatch error on /chat) for threads owned by anyone else.
+      mapUserToResourceId: (user) => user.id,
     }),
     apiRoutes: [
       chatRoute({
@@ -42,6 +46,7 @@ export const mastra = new Mastra({
           return toClientErrorText(error);
         },
       }),
+      threadMessagesRoute,
     ],
   },
 });

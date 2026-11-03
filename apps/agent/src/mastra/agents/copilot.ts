@@ -1,5 +1,6 @@
 import { COPILOT_AGENT_ID } from "@copilot/shared";
 import { Agent } from "@mastra/core/agent";
+import { chatMemory } from "../memory";
 import { getModel } from "../models";
 
 export const copilotAgent = new Agent({
@@ -11,4 +12,5 @@ export const copilotAgent = new Agent({
 You currently have no tools and know nothing about the user beyond this conversation.
 Be concise. Never invent facts about a job, company, or the user; say what is unknown.`,
   model: () => getModel("main"),
+  memory: chatMemory,
 });
