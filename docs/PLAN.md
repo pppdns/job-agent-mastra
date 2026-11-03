@@ -125,12 +125,12 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - Hosted browser not added: Tavily extraction covered the live research run.
 - [x] Verified: budget/run unit tests (completed, budget exhausted, cancelled), offline e2e of a research run with reload, live research run on Dwelly ([verification.md](verification.md)).
 
-### M7 — Durability: reconnect, stop, compaction
-- Durable agent (`createDurableAgent`, beta) for chat runs; active run id persisted per thread; UI resumes via `observe(runId)` after refresh. Custom `POST /chat` + `GET /chat/:threadId/stream` replace `chatRoute` (see [spikes/durable-resume.md](spikes/durable-resume.md)).
-- Stop research: abort in-flight work, mark run cancelled, keep partial results, list charges that may still occur.
-- Observational Memory (thread scope, Haiku) for compaction; compaction event recorded for the technical panel; pending approvals and profile unaffected (they live in DB).
-- Bounded retries with backoff on provider calls.
-- **Done when:** refresh mid-research reconnects; stop works; forced-low-budget test compacts and still knows pending approvals + preferences.
+### M7 — Durability: reconnect, stop, compaction ✅ (2026-11-03)
+- [x] Chat runs use the durable copilot (`createDurableAgent`); `app_runs` maps a thread to its active run (one at a time, else 409). `GET /chat/:threadId/stream` re-observes it for `useChat({ resume: true })`; `POST /chat/:threadId/stop` → `abortRunStream`. Runs left `running` by a previous process are marked `interrupted` at startup (replay cache is in-process: simplification 1).
+- [x] Stop: ends the run on the server (research included), stops new provider calls, keeps claims already recorded.
+- [x] Observational Memory (thread scope, fast model) replaces the fixed message window; raw messages stay in storage; the Observer is told not to copy the profile or approval statuses. Profile and this chat's pending approvals are injected from the DB every turn. Compaction events render in chat (technical panel: M8).
+- [x] Bounded retries (2, exponential backoff) on network errors, timeouts, 429 and 5xx for Tavily/Firecrawl; research shows retries in its timeline.
+- [x] Verified: unit tests (runs, compaction at a forced-low threshold keeps profile + pending approval, retries), e2e (refresh mid-reply reconnects and history has one reply, Stop → cancelled and reply stays cut, second message → 409), live runs ([verification.md](verification.md)).
 
 ### M8 — Technical panel & usage accounting
 - `runs` + `run_events` tables; per-run and per-session totals.
@@ -153,5 +153,5 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 5. **Durable agents are beta** in Mastra; if they block us, fall back to a regular agent plus our own `run_events` persistence for replay.
 
 ## Risks to verify early
-- Durable agent + AI SDK UI resume interplay: Mastra side verified in the M2 spike; browser reload resume still to test in M7.
+- Durable agent + AI SDK UI resume interplay: verified in M7 (e2e and live).
 - LinkedIn extraction reliability: Tavily read 5/5 sample listings (M3); layout changes degrade to ATS lookup or paste, never to assessing a partial page.

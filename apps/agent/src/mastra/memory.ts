@@ -19,7 +19,14 @@ export const createChatMemory = ({ messageTokens = env.OM_MESSAGE_TOKENS } = {})
       observationalMemory: {
         scope: "thread",
         model: () => getModel("fast"),
-        observation: { messageTokens },
+        observation: {
+          messageTokens,
+          // These are re-injected from the database every turn; a copy here would go stale.
+          instruction:
+            "Do not record the user's approved profile, profile changes, or approval statuses: " +
+            "the app provides the current versions separately every turn. Do record what was " +
+            "discussed in this chat, local assumptions, open questions, and job/approval ids mentioned.",
+        },
       },
       workingMemory: {
         enabled: true,

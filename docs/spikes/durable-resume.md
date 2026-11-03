@@ -20,6 +20,6 @@ Goal: de-risk M7 (refresh/reconnect mid-run) before building on it. Result: **cl
 | Durable agents don't emit the `data-thread-title` chunk yet | M7 must refresh the sidebar another way (e.g. refresh after `finish`, then once more shortly after) |
 | Active run per thread must be stored by us | Small `app_runs` row or thread metadata keyed by thread id, cleared on finish/abort (fits M8 `runs` table) |
 
-## Not covered
+## Follow-up (M7)
 
-The browser half (`useChat` resume after a real page reload) was not exercised; it is standard AI SDK behaviour and gets an e2e test in M7.
+Implemented as planned (`apps/agent/src/mastra/routes/chat.ts`); browser reload resume verified in e2e and live. Durable runs can store one turn as several assistant messages; history merges them.

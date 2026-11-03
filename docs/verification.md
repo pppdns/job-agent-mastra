@@ -25,6 +25,11 @@ Offline (mock/fixture) results and live results are kept separate. A live integr
 | 2026-11-03 | M5 | Re-check after the fix: chat-only "Budapest office roles acceptable", then reassess Flex | ✅ Exception applied in the reply only; new draft v2 written against the approved profile without it |
 | 2026-11-03 | M6 | Research run 1 (Dwelly Applied AI Engineer chat, business health + engineering) | ⚠️ Research finished (4 claims, 6 pages, publication dates kept) but the turn died: Sonnet's follow-up `save_job_draft` arguments (5.7k chars) were not valid JSON and Mastra's v7 stream sent `tool-input-available` without `input`, which `useChat` rejects → custom `/chat` route with chunk sanitizer + `maxOutputTokens` 16k |
 | 2026-11-03 | M6 | Research run 2 (new chat, Dwelly AI Engineering Team Lead: engineering + stability) | ✅ `find_saved_jobs` → `get_job` → `research_company`: 3 searches, 5 pages, 5 claims (listing/official, independent, unknown/conflicting) with links and publication dates; 8 web calls, 39 s, est. $0.20; reply flagged London vs remote-only and listed unknowns; draft saved |
+| 2026-11-03 | M7 | Reload during a live research run (Dwelly, foreground Chrome via Playwright) | ✅ After the reload the user message was back and the resumed run finished in view; history afterwards showed one reply (after merging the two assistant rows Mastra stored for that turn) |
+| 2026-11-03 | M7 | Stop during a live research run (Dwelly) | ✅ 2 claims stored at 17 s → Stop → run `cancelled`; no new claims 25 s later; reload shows the partial timeline and findings |
+| 2026-11-03 | M7 | Live research hitting the tool-call budget (Flex) | ⚠️ Stopped cleanly at 12 calls but had recorded no claims; the reply said so and kept the old draft → researcher now sees remaining calls and records after each page (re-check above recorded early) |
+| 2026-11-03 | M7 | Observational Memory with Haiku 5.5 at `OM_MESSAGE_TOKENS=1000` (agent:api, 6 turns) | ✅ Observer output parsed (buffered, then activated); pending tokens fell after activation; the agent still recalled a codename from turn 1. The Observer had copied the approved profile → told not to (instruction change not re-run live) |
+| 2026-11-03 | M7 | Built-in browser pane (hidden) after reload | ⚠️ Chat stayed on its loading fallback; same page in foreground Chrome rendered fine (background-tab scheduling, not an app bug) |
 | 2026-11-03 | M1 | Gateway free tier → Sonnet 5.5 | ❌ 403 `RestrictedModelsError` (resolved by funding the account). Client received only the sanitized summary; full error stayed in server log and trace |
 
 ## Offline checks (M1)
@@ -57,3 +62,8 @@ Offline (mock/fixture) results and live results are kept separate. A live integr
 - `pnpm check`: budget (tool-call limit, spend refused before the call, LLM spend abort, time, parent cancel incl. already-aborted signal), claims (dates, sourced-class rule, foreign sources), `runResearch` with mock model + fixture pages (completed with progress order, budget exhausted after one search with no claims, cancelled, unavailable), `/chat` chunk sanitizer.
 - `pnpm e2e` (13 tests): adds a research run in the UI (timeline lines, findings with evidence badge, source link, labelled estimate; timeline after reload; job page evidence).
 - Not exercised live: a budget-limited or cancelled run (offline only).
+
+## Offline checks (M7)
+
+- `pnpm check`: runs (active run, first final status wins, interrupted at startup), forced-low-threshold compaction (old raw message gone, observations present, approved profile and pending approval id still in the prompt), retries (bounded, only retryable errors, abort), research retry progress, history merge.
+- `pnpm e2e` (16 tests): adds reconnect after refresh mid-reply, Stop → `cancelled` with the reply cut short after reload, 409 for a second message while running. One flaky failure seen once under parallel load (profile flow timeout); two re-runs green, timeout raised to 60 s.
