@@ -16,6 +16,16 @@ async function ChatLoader({ params }: Pick<PageProps<"/c/[threadId]">, "params">
   const { threadId } = await params;
   if (!threadIdSchema.safeParse(threadId).success) notFound();
   // A chat that doesn't exist yet (fresh id) starts empty; the agent creates it on send.
-  const messages = (await getThreadMessages(threadId)) ?? [];
-  return <Chat key={threadId} threadId={threadId} initialMessages={messages} />;
+  let messages: Awaited<ReturnType<typeof getThreadMessages>>;
+  try {
+    messages = await getThreadMessages(threadId);
+  } catch (error) {
+    console.error("loading chat failed", error);
+    return (
+      <p role="alert" className="p-6 text-sm text-destructive">
+        The agent server is unavailable. Start it with <code>pnpm dev</code> and reload.
+      </p>
+    );
+  }
+  return <Chat key={threadId} threadId={threadId} initialMessages={messages ?? []} />;
 }

@@ -5,6 +5,7 @@ Drizzle schema (`src/schema.ts`, `app_*` tables), migrations in `drizzle/` (gene
 - `jobs.ts`: `upsertJob` (dedupe: LinkedIn id → canonical URL → normalized company+title without conflicting ids), `addSource` (bounded snapshot, idempotent per job + content hash).
 - `assessments.ts`: versioned drafts (with the profile version at save time), snapshot proposals, the approval decision, read models (incl. `profileStale`).
 - `profile.ts`: current profile/version, profile change proposals, applying an approved change, history.
+- `claims.ts`: research claims (`recordClaim` enforces sources of the same job for sourced evidence classes), `listClaims`.
 - `jobs.ts` also maintains `app_jobs_fts` (FTS5) via `reindexJob`; `searchJobIds` only builds quoted prefix terms.
 - Every write function goes through `serializeWrites` (`write-lock.ts`): libsql's native calls are synchronous, so two write transactions in one process deadlock instead of queueing. `createDb` sets a 5 s busy timeout for the other process (agent vs web).
 

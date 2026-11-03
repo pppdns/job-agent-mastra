@@ -116,13 +116,14 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - [x] `find_saved_jobs` (FTS5, quoted prefix terms, AND then OR) + `get_job`.
 - [x] Verified: db tests (diffs, supersede, stale base, idempotency, wrong chat, reject, draft profile version, search), working-memory isolation test, e2e for remember → approve → new chat sees it while local notes stay local, profile page approvals, stale flag; live runs ([verification.md](verification.md)).
 
-### M6 — Deep research + real progress
-- Tools: `web_search`, `extract_page` (URL guard), source persistence, claims with evidence class (official / independent / anonymous / inference / unknown-conflicting) and publication vs event dates.
-- Research as a subagent with topic-scoped instructions; progress via custom data parts emitted by tools (no extra LLM calls).
-- Budgets: per-run max tool calls, elapsed time, estimated spend; reserve-before-call wrapper; `budget_limited` event.
-- UI: progress timeline, evidence panel with source links and class badges.
-- Optional: Firecrawl hosted browser only if the spike showed extraction gaps.
-- **Done when:** brief steps 3–4 work with cited sources; budget exhaustion fixture stops cleanly with partial results.
+### M6 — Deep research + real progress ✅ (2026-11-03)
+- [x] `research_company` → researcher agent with per-run `web_search`, `extract_page` (URL guard, stored as `web` source), `record_claim` (`app_claims`: evidence class, cited sources, publication vs event date). Overview: [apps/agent/src/research/AGENTS.md](../apps/agent/src/research/AGENTS.md).
+- [x] Budget: per-run tool calls, elapsed time, estimated spend (static price table, labelled); reserve-before-call; abort on limit; `budget_limited` / `cancelled` keep partial claims.
+- [x] Progress as persisted `data-research-progress` parts (no extra LLM calls); UI timeline + findings panel (topic, evidence badge, dates, source links, web calls/duration/est. cost); job page "Research evidence".
+- [x] `WEB_MODE=fixture` (synthetic pages incl. an injection attempt) for offline e2e/evals.
+- [x] Replaced `chatRoute` with a validated `/chat` route (`handleChatStream` + chunk sanitizer for tool arguments that aren't valid JSON); copilot `maxOutputTokens` 16k.
+- Hosted browser not added: Tavily extraction covered the live research run.
+- [x] Verified: budget/run unit tests (completed, budget exhausted, cancelled), offline e2e of a research run with reload, live research run on Dwelly ([verification.md](verification.md)).
 
 ### M7 — Durability: reconnect, stop, compaction
 - Durable agent (`createDurableAgent`, beta) for chat runs; active run id persisted per thread; UI resumes via `observe(runId)` after refresh. Custom `POST /chat` + `GET /chat/:threadId/stream` replace `chatRoute` (see [spikes/durable-resume.md](spikes/durable-resume.md)).
