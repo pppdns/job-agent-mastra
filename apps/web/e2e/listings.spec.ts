@@ -3,7 +3,8 @@ import { expect, type Page, test } from "@playwright/test";
 import { e2eDb } from "../playwright.config";
 
 // The mock model calls ingest_listing for a bare URL or a message starting with "Listing:".
-// e2e has no web provider keys, so URLs always end in the honest "paste it" fallback.
+// e2e uses fixture web pages (WEB_MODE=fixture) with no LinkedIn pages, so LinkedIn URLs end
+// in the honest "paste it" fallback.
 
 const visible = (page: Page, selector: string) => page.locator(selector).filter({ visible: true });
 

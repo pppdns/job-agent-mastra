@@ -8,6 +8,7 @@ import { applyProfileChange, currentProfileVersion } from "./profile";
 import {
   type Approval,
   approvals,
+  claims,
   type JobDraft,
   type JobSnapshot,
   jobDrafts,
@@ -418,9 +419,13 @@ export async function getJobDetail(db: Db, jobId: string) {
       columns: { id: true, threadId: true, draftVersion: true },
     }),
   ]);
-  const profileVersion = await currentProfileVersion(db);
+  const [profileVersion, jobClaims] = await Promise.all([
+    currentProfileVersion(db),
+    db.query.claims.findMany({ where: eq(claims.jobId, jobId), orderBy: desc(claims.createdAt) }),
+  ]);
   return {
     job,
+    claims: jobClaims,
     sources: jobSources,
     draft,
     snapshots,

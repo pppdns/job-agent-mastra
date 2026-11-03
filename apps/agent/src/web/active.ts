@@ -1,4 +1,5 @@
 import { env } from "../env";
+import type { Resolver } from "../ingest/url-guard";
 import { createFixtureWebProviders } from "./fixture-providers";
 import { createWebProviders, type WebProviders } from "./providers";
 
@@ -13,4 +14,16 @@ export function webProviders(): WebProviders | null {
         : createWebProviders({ tavily: env.TAVILY_API_KEY, firecrawl: env.FIRECRAWL_API_KEY });
   }
   return cached;
+}
+
+/**
+ * DNS for the URL guard. In fixture mode the synthetic `.example` hosts resolve to a public
+ * documentation-free address; every other guard check still applies. Live mode uses real DNS.
+ */
+export function webResolver(): Resolver | undefined {
+  if (env.WEB_MODE !== "fixture") return undefined;
+  return async (host) => {
+    if (!host.endsWith(".example")) throw new Error("ENOTFOUND");
+    return ["93.184.216.34"];
+  };
 }

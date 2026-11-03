@@ -8,6 +8,12 @@ import { type FormEvent, type KeyboardEvent, type ReactNode, useState } from "re
 import { Streamdown } from "streamdown";
 import { ApprovalCard } from "@/components/approval-card";
 import { PageHeader } from "@/components/page-header";
+import {
+  isProgressPart,
+  type ProgressPart,
+  ResearchProgress,
+  ResearchResult,
+} from "@/components/research-trace";
 import { isToolPart, proposedApprovalId, type ToolPart, ToolTrace } from "@/components/tool-trace";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
@@ -153,9 +159,32 @@ function ChatMessage({
     if (tools.length > 0) blocks.push(<ToolTrace key={tools[0]?.toolCallId} parts={tools} />);
     tools = [];
   };
+  // Progress events stream as separate data parts; the n-th research run belongs to the
+  // n-th research_company call in this message.
+  const runs: ProgressPart[][] = [];
+  const runIndex = new Map<string, number>();
+  for (const part of message.parts) {
+    if (!isProgressPart(part)) continue;
+    const runId = (part.data as { runId?: string }).runId ?? "";
+    if (!runIndex.has(runId)) runIndex.set(runId, runs.push([]) - 1);
+    runs[runIndex.get(runId) ?? 0]?.push(part);
+  }
+  let researchCalls = 0;
+
   message.parts.forEach((part, index) => {
     const approvalId = isToolPart(part) ? proposedApprovalId(part) : undefined;
-    if (approvalId) {
+    if (isProgressPart(part)) return;
+    if (isToolPart(part) && part.type === "tool-research_company") {
+      flushTools();
+      const done = part.state === "output-available" || part.state === "output-error";
+      blocks.push(
+        <div key={part.toolCallId} className="flex flex-col gap-2">
+          <ResearchProgress parts={runs[researchCalls] ?? []} running={!done && streaming} />
+          {part.state === "output-available" && <ResearchResult part={part} />}
+        </div>,
+      );
+      researchCalls += 1;
+    } else if (approvalId) {
       // A pending approval is a prompt, not a trace row.
       flushTools();
       blocks.push(<ApprovalCard key={approvalId} approvalId={approvalId} threadId={threadId} />);

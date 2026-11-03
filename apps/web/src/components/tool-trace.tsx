@@ -58,6 +58,7 @@ function ToolLine({ part }: { part: ToolPart }) {
     find_saved_jobs: "Searching saved jobs",
     get_job: "Loading a saved job",
     updateWorkingMemory: "Noting this for this chat",
+    research_company: "Researching",
   };
   if (part.state === "output-error") {
     return <Line status="error" title={`Failed to run ${name}`} description={part.errorText} />;

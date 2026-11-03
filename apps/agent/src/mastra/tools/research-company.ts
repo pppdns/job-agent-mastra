@@ -2,7 +2,7 @@ import { RESEARCH_TOPICS } from "@copilot/shared";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { runResearch } from "../../research/run";
-import { webProviders } from "../../web/active";
+import { webProviders, webResolver } from "../../web/active";
 import { getAppDb } from "../app-db";
 
 export const researchCompanyTool = createTool({
@@ -20,6 +20,7 @@ export const researchCompanyTool = createTool({
     runResearch(input, {
       db: await getAppDb(),
       web: webProviders(),
+      resolve: webResolver(),
       threadId: context?.agent?.threadId,
       signal: context?.abortSignal,
       emit: (data) => context?.writer?.custom({ type: "data-research-progress", data }),

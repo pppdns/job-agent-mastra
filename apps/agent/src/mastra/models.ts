@@ -192,7 +192,11 @@ function mockTurn({
     return call("ingest_listing", { url: text });
   }
   if (offered("ingest_listing") && text.startsWith("Listing:")) {
-    return call("ingest_listing", { fromLatestUserMessage: true });
+    const named = text.match(/^Listing: (.+?) at ([^,.]+)/);
+    return call("ingest_listing", {
+      fromLatestUserMessage: true,
+      ...(named ? { title: named[1], company: named[2]?.trim() } : {}),
+    });
   }
   // Researcher run (see research_company): start with one search for the company.
   if (offered("web_search") && text.startsWith("Company:")) {

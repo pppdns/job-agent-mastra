@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { AssessmentView } from "@/components/assessment-view";
+import { EvidenceList } from "@/components/evidence-list";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +15,7 @@ import { appDb } from "@/server/db";
 const SOURCE_LABELS = {
   linkedin: "LinkedIn listing",
   ats: "Employer job posting",
-  web: "Web page",
+  web: "Web page (research)",
   pasted: "Pasted text",
 } as const;
 
@@ -43,7 +44,7 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
   await connection();
   const detail = await getJobDetail(await appDb(), jobId);
   if (!detail) notFound();
-  const { job, sources, draft, snapshots, pending, profileVersion, profileStale } = detail;
+  const { job, sources, draft, snapshots, pending, profileVersion, profileStale, claims } = detail;
   const latestApproved = snapshots[0];
   const draftAhead = draft && latestApproved && latestApproved.payload.draftVersion < draft.version;
 
@@ -80,6 +81,17 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
           ))}
         </ul>
       </section>
+
+      {claims.length > 0 && (
+        <section className="flex flex-col gap-2" aria-label="Evidence">
+          <h2 className="font-medium">Research evidence</h2>
+          <p className="text-sm text-muted-foreground">
+            Findings from research runs, read from web pages (untrusted). Not part of an approved
+            snapshot unless a draft that cites them is approved.
+          </p>
+          <EvidenceList claims={claims} sources={sources} />
+        </section>
+      )}
 
       {draft && (
         <Card className="border-dashed" aria-label="Current draft">

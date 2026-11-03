@@ -80,6 +80,9 @@ export async function runResearch(
 
   const snapshot = budget.snapshot();
   const claims = await listClaims(deps.db, { runId });
+  const cited = new Set(claims.flatMap((c) => c.sourceIds));
+  const sources =
+    (await getJobDetail(deps.db, input.jobId))?.sources.filter((s) => cited.has(s.id)) ?? [];
   const status =
     snapshot.limitedBy === "cancelled"
       ? ("cancelled" as const)
@@ -105,6 +108,11 @@ export async function runResearch(
       quote: c.quote,
       publishedAt: c.publishedAt,
       eventDate: c.eventDate,
+    })),
+    sources: sources.map((s) => ({
+      sourceId: s.id,
+      url: s.url,
+      retrievedAt: s.retrievedAt.toISOString(),
     })),
     researcherSummary: summary.slice(0, 3000),
     budget: { ...snapshot, note: "Costs are estimates from a static price table." },

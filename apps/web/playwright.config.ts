@@ -34,6 +34,8 @@ export default defineConfig({
         DATABASE_URL: e2eDb,
         // Blank the web provider keys `mastra dev` would load from .env: no live calls in e2e.
         TAVILY_API_KEY: "",
+        // Research runs read synthetic pages from fixtures/web.
+        WEB_MODE: "fixture",
         FIRECRAWL_API_KEY: "",
       },
     },
