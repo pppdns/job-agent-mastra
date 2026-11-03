@@ -5,7 +5,10 @@ import { defineConfig } from "@playwright/test";
 const secret = "e2e-secret-e2e-secret-e2e-secret";
 const agentPort = 4112;
 const webPort = 3001;
-const e2eDb = `file:${resolve(import.meta.dirname, "../../data/e2e.db")}`;
+const e2eDbPath = resolve(import.meta.dirname, "../../data/e2e.db");
+export const e2eDb = `file:${e2eDbPath}`;
+export const e2eAgentUrl = `http://127.0.0.1:${agentPort}`;
+export const e2eSecret = secret;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -19,8 +22,9 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: "pnpm --filter @copilot/agent dev",
-      url: `http://127.0.0.1:${agentPort}/api`,
+      // Fresh database per run, so tests never see leftovers.
+      command: `rm -f ${e2eDbPath} ${e2eDbPath}-shm ${e2eDbPath}-wal && pnpm --filter @copilot/agent dev`,
+      url: `${e2eAgentUrl}/api`,
       reuseExistingServer: false,
       timeout: 120_000,
       env: {
@@ -36,7 +40,7 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 120_000,
       env: {
-        AGENT_URL: `http://127.0.0.1:${agentPort}`,
+        AGENT_URL: e2eAgentUrl,
         AGENT_SHARED_SECRET: secret,
       },
     },

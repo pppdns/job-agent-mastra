@@ -1,11 +1,19 @@
+import { chatRequestSchema } from "@/lib/chat-schema";
 import { agentFetch } from "@/server/agent";
+import { toAgentChatBody } from "@/server/chat-body";
 
-// Streams the agent's AI SDK UI message stream through to the browser.
+// Validates the browser's request, builds the agent body server-side, and streams
+// the agent's AI SDK UI message stream back.
 export async function POST(request: Request) {
+  const parsed = chatRequestSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    return Response.json({ error: "Invalid chat request." }, { status: 400 });
+  }
+
   const upstream = await agentFetch("/chat", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: await request.text(),
+    body: JSON.stringify(toAgentChatBody(parsed.data)),
     signal: request.signal,
   });
 

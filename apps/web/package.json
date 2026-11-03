@@ -28,6 +28,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@libsql/client": "^0.18.0",
     "@playwright/test": "1.64.1",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "catalog:",
