@@ -6,7 +6,9 @@ import { ArrowUpIcon, SquareIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, type KeyboardEvent, type ReactNode, useState } from "react";
 import { Streamdown } from "streamdown";
-import { isToolPart, type ToolPart, ToolTrace } from "@/components/tool-trace";
+import { ApprovalCard } from "@/components/approval-card";
+import { PageHeader } from "@/components/page-header";
+import { isToolPart, proposedApprovalId, type ToolPart, ToolTrace } from "@/components/tool-trace";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
 import { Message, MessageContent } from "@/components/ui/message";
@@ -18,7 +20,6 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Textarea } from "@/components/ui/textarea";
 import type { ChatRequest } from "@/lib/chat-schema";
 
@@ -62,9 +63,7 @@ export function Chat({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex h-12 shrink-0 items-center border-b px-2">
-        <SidebarTrigger />
-      </header>
+      <PageHeader />
       <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
         <MessageScrollerProvider autoScroll>
           <MessageScroller className="min-h-0 flex-1">
@@ -84,6 +83,7 @@ export function Chat({
                     <ChatMessage
                       message={message}
                       streaming={status === "streaming" && message.id === messages.at(-1)?.id}
+                      threadId={threadId}
                     />
                   </MessageScrollerItem>
                 ))}
@@ -124,7 +124,15 @@ export function Chat({
   );
 }
 
-function ChatMessage({ message, streaming }: { message: UIMessage; streaming: boolean }) {
+function ChatMessage({
+  message,
+  streaming,
+  threadId,
+}: {
+  message: UIMessage;
+  streaming: boolean;
+  threadId: string;
+}) {
   if (message.role === "user") {
     const text = message.parts.flatMap((p) => (p.type === "text" ? [p.text] : [])).join("");
     return (
@@ -146,7 +154,12 @@ function ChatMessage({ message, streaming }: { message: UIMessage; streaming: bo
     tools = [];
   };
   message.parts.forEach((part, index) => {
-    if (isToolPart(part)) {
+    const approvalId = isToolPart(part) ? proposedApprovalId(part) : undefined;
+    if (approvalId) {
+      // A pending approval is a prompt, not a trace row.
+      flushTools();
+      blocks.push(<ApprovalCard key={approvalId} approvalId={approvalId} threadId={threadId} />);
+    } else if (isToolPart(part)) {
       tools.push(part);
     } else if (part.type === "text" && part.text) {
       flushTools();

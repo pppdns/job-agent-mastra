@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { NavLinks } from "@/components/nav-links";
 import { NewChatButton } from "@/components/new-chat-button";
 import { ThreadList } from "@/components/thread-list";
 import {
@@ -20,6 +21,10 @@ export function AppSidebar() {
       <SidebarHeader>
         <p className="px-2 pt-1 text-sm font-semibold">Job Research Copilot</p>
         <NewChatButton />
+        {/* usePathname() needs a Suspense boundary under Cache Components. */}
+        <Suspense fallback={<NavLinks />}>
+          <NavLinks active />
+        </Suspense>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>

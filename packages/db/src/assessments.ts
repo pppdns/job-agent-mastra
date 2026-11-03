@@ -369,3 +369,27 @@ export async function getJobDetail(db: Db, jobId: string) {
   ]);
   return { job, sources: jobSources, draft, snapshots, pending };
 }
+
+/** An approval as the approval card shows it, including the snapshot version once approved. */
+export async function getApprovalView(db: Db, id: string) {
+  const approval = await getApproval(db, id);
+  if (!approval) return undefined;
+  const snapshot = approval.snapshotId
+    ? await db.query.jobSnapshots.findFirst({
+        where: eq(jobSnapshots.id, approval.snapshotId),
+        columns: { version: true },
+      })
+    : undefined;
+  return {
+    id: approval.id,
+    threadId: approval.threadId,
+    jobId: approval.jobId,
+    status: approval.status,
+    draftVersion: approval.draftVersion,
+    payload: approval.payload,
+    payloadHash: approval.payloadHash,
+    snapshotVersion: snapshot?.version ?? null,
+  };
+}
+
+export type ApprovalView = NonNullable<Awaited<ReturnType<typeof getApprovalView>>>;

@@ -40,7 +40,8 @@ test("pasted listing text is saved with the chat as provenance", async ({ page }
   await send(page, "Listing: Senior Platform Engineer at Northwind Robotics, Lisbon. Hybrid.");
   const reply = visible(page, '[data-role="assistant"]');
   await expect(reply).toContainText("Read your pasted text (may be incomplete)");
-  await expect(reply).toContainText("Mock reply: ingest_listing saved");
+  // The mock then saves a draft automatically, like the real agent is instructed to.
+  await expect(reply).toContainText("Saved draft v1");
 
   const db = createClient({ url: e2eDb });
   const { rows } = await db.execute({

@@ -36,7 +36,7 @@ export function createMockModel(modelId = "mock"): LanguageModelV4 {
             ? [
                 {
                   type: "tool-call",
-                  toolCallId: "mock-call",
+                  toolCallId: turn.toolCallId,
                   toolName: turn.toolName,
                   input: turn.input,
                 },
@@ -59,7 +59,7 @@ export function createMockModel(modelId = "mock"): LanguageModelV4 {
               { type: "stream-start", warnings: [] },
               {
                 type: "tool-call",
-                toolCallId: "mock-call",
+                toolCallId: turn.toolCallId,
                 toolName: turn.toolName,
                 input: turn.input,
               },
@@ -94,7 +94,36 @@ export function createMockModel(modelId = "mock"): LanguageModelV4 {
   });
 }
 
-type MockTurn = { kind: "text"; text: string } | { kind: "tool"; toolName: string; input: string };
+type MockTurn =
+  | { kind: "text"; text: string }
+  | { kind: "tool"; toolName: string; input: string; toolCallId: string };
+
+type ToolResultValue = {
+  status?: string;
+  ok?: boolean;
+  error?: string;
+  jobId?: string;
+  version?: number;
+  source?: { id?: string };
+};
+
+/** JSON value of a tool-result part, if any. */
+function toolResultValue(part: unknown): ToolResultValue {
+  const output = (part as { output?: { type?: string; value?: unknown } } | undefined)?.output;
+  return output?.type === "json" && output.value && typeof output.value === "object"
+    ? (output.value as ToolResultValue)
+    : {};
+}
+
+const MOCK_ASSESSMENT = (sourceId: string) => ({
+  overview: "Mock assessment of the pasted listing.",
+  fitBasis: "role_only",
+  strengths: [
+    { text: "The listing text was provided.", evidence: "official", sourceIds: [sourceId] },
+  ],
+  unknowns: [{ question: "What is the salary?", whyItMatters: "Not stated." }],
+  recommendation: { verdict: "investigate_further", rationale: "Mock rationale." },
+});
 
 function mockTurn({
   prompt,
@@ -103,30 +132,58 @@ function mockTurn({
   prompt: LanguageModelV4Prompt;
   tools?: { name: string }[];
 }): MockTurn {
+  const offered = (name: string) => tools?.some((t) => t.name === name) ?? false;
+  const call = (toolName: string, input: unknown): MockTurn => ({
+    kind: "tool",
+    toolName,
+    input: JSON.stringify(input),
+    // Unique per turn: AI SDK matches tool results to calls by id.
+    toolCallId: `mock-${toolName}-${prompt.length}`,
+  });
+
   const last = prompt.at(-1);
   if (last?.role === "tool") {
-    const result = last.content.find((part) => part.type === "tool-result");
-    const output = result?.output;
-    const status =
-      output?.type === "json" && output.value && typeof output.value === "object"
-        ? (output.value as { status?: string }).status
-        : undefined;
-    return { kind: "text", text: `Mock reply: ${result?.toolName} ${status ?? "done"}` };
+    const part = last.content.find((p) => p.type === "tool-result");
+    const value = toolResultValue(part);
+    const name = part?.type === "tool-result" ? part.toolName : "tool";
+    if (name === "ingest_listing" && value.status === "saved" && value.jobId && value.source?.id) {
+      if (offered("save_job_draft")) {
+        return call("save_job_draft", {
+          jobId: value.jobId,
+          assessment: MOCK_ASSESSMENT(value.source.id),
+        });
+      }
+    }
+    const outcome =
+      value.status ??
+      (value.ok === false ? `error ${value.error}` : value.version ? `v${value.version}` : "done");
+    return { kind: "text", text: `Mock reply: ${name} ${outcome}` };
   }
+
   const text = lastUserText(prompt);
-  if (tools?.some((t) => t.name === "ingest_listing")) {
-    if (/^https?:\/\/\S+$/.test(text)) {
-      return { kind: "tool", toolName: "ingest_listing", input: JSON.stringify({ url: text }) };
-    }
-    if (text.startsWith("Listing:")) {
-      return {
-        kind: "tool",
-        toolName: "ingest_listing",
-        input: JSON.stringify({ fromLatestUserMessage: true }),
-      };
-    }
+  if (offered("ingest_listing") && /^https?:\/\/\S+$/.test(text)) {
+    return call("ingest_listing", { url: text });
+  }
+  if (offered("ingest_listing") && text.startsWith("Listing:")) {
+    return call("ingest_listing", { fromLatestUserMessage: true });
+  }
+  if (offered("propose_job_snapshot") && text === "Propose snapshot") {
+    const jobId = latestJobId(prompt);
+    if (jobId) return call("propose_job_snapshot", { jobId });
   }
   return { kind: "text", text: `Mock reply: ${text}` };
+}
+
+/** jobId from the most recent tool result in the conversation that carries one. */
+function latestJobId(prompt: LanguageModelV4Prompt): string | undefined {
+  for (const message of [...prompt].reverse()) {
+    if (message.role !== "tool") continue;
+    for (const part of message.content) {
+      const jobId = toolResultValue(part).jobId;
+      if (jobId) return jobId;
+    }
+  }
+  return undefined;
 }
 
 function lastUserText(prompt: LanguageModelV4Prompt): string {

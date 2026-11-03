@@ -45,6 +45,7 @@ export default defineConfig({
       env: {
         AGENT_URL: e2eAgentUrl,
         AGENT_SHARED_SECRET: secret,
+        DATABASE_URL: e2eDb,
       },
     },
   ],

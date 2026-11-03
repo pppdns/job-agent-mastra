@@ -13,6 +13,13 @@ export type ToolPart = {
 export const isToolPart = (part: { type: string }): part is ToolPart =>
   part.type.startsWith("tool-");
 
+/** A successful snapshot proposal renders as an approval prompt instead of a trace row. */
+export function proposedApprovalId(part: ToolPart): string | undefined {
+  if (part.type !== "tool-propose_job_snapshot" || part.state !== "output-available") return;
+  const output = part.output as { ok?: boolean; approvalId?: string } | undefined;
+  return output?.ok ? output.approvalId : undefined;
+}
+
 const SOURCE_LABELS: Record<string, string> = {
   linkedin: "the LinkedIn listing",
   ats: "the employer's job posting",
@@ -41,15 +48,27 @@ export function ToolTrace({ parts }: { parts: ToolPart[] }) {
 
 function ToolLine({ part }: { part: ToolPart }) {
   const name = part.type.slice("tool-".length);
+  const running: Record<string, string> = {
+    ingest_listing: "Reading the listing",
+    save_job_draft: "Saving the draft",
+    propose_job_snapshot: "Preparing the snapshot",
+  };
   if (part.state === "output-error") {
     return <Line status="error" title={`Failed to run ${name}`} description={part.errorText} />;
   }
   if (part.state !== "output-available") {
-    return (
-      <Line
-        status="running"
-        title={name === "ingest_listing" ? "Reading the listing" : `Running ${name}`}
-      />
+    return <Line status="running" title={running[name] ?? `Running ${name}`} />;
+  }
+  if (name === "save_job_draft" || name === "propose_job_snapshot") {
+    const output = (part.output ?? {}) as { ok?: boolean; version?: number; error?: string };
+    if (output.ok === false) {
+      const what = name === "save_job_draft" ? "Draft not saved" : "Snapshot not proposed";
+      return <Line status="error" title={what} description={output.error} />;
+    }
+    return name === "save_job_draft" ? (
+      <Line title={`Saved draft v${output.version}`} description="not approved" />
+    ) : (
+      <Line title="Proposed a snapshot for approval" />
     );
   }
   if (name !== "ingest_listing") return <Line title={`Ran ${name}`} />;
