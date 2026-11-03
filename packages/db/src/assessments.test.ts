@@ -15,7 +15,7 @@ import {
 import { AssessmentError, hashPayload } from "./hash";
 import { createDb, type Db, migrateDb } from "./index";
 import { addSource, upsertJob } from "./jobs";
-import { proposeProfileChange } from "./profile";
+import { currentProfile, proposeProfileChange } from "./profile";
 import { jobSnapshots } from "./schema";
 
 let db: Db;
@@ -41,6 +41,34 @@ beforeEach(async () => {
   sourceId = (
     await addSource(db, { jobId, kind: "pasted", provider: "user", content: "listing text" })
   ).source.id;
+});
+
+/** Approves one hard requirement and returns its fact id. */
+async function approvedFact(): Promise<string> {
+  const { approval } = await proposeProfileChange(db, {
+    threadId: "seed",
+    proposal: {
+      changes: [{ op: "add", kind: "hard_requirement", text: "At most one office day a week" }],
+      reason: "User said so",
+    },
+  });
+  await decideApproval(db, {
+    approvalId: approval.id,
+    threadId: "seed",
+    decision: "approve",
+    payloadHash: approval.payloadHash,
+  });
+  const fact = (await currentProfile(db)).facts[0];
+  if (!fact) throw new Error("fact not applied");
+  return fact.id;
+}
+
+const fitPoint = (factId: string) => ({
+  text: "Three office days a week conflicts with at most one",
+  evidence: "inference",
+  sourceIds: [sourceId],
+  quote: "three days a week in our Lisbon office",
+  profileFactIds: [factId],
 });
 
 const snapshots = () => db.select().from(jobSnapshots).where(eq(jobSnapshots.jobId, jobId));
@@ -82,12 +110,55 @@ describe("saveDraft", () => {
     await expect(
       saveDraft(db, { jobId, assessment: { ...assessment(), fitBasis: "with_profile" } }),
     ).rejects.toThrow(/needs a fitLevel/);
+    const factId = await approvedFact();
     await expect(
       saveDraft(db, {
         jobId,
-        assessment: { ...assessment(), fitBasis: "with_profile", fitLevel: "good" },
+        assessment: {
+          ...assessment(),
+          fitBasis: "with_profile",
+          fitLevel: "good",
+          strengths: [fitPoint(factId)],
+        },
       }),
     ).resolves.toMatchObject({ version: 1 });
+  });
+
+  it("makes fit points cite current profile facts as inference, only with the profile", async () => {
+    const factId = await approvedFact();
+    const withProfile = (strengths: unknown[]) => ({
+      ...assessment(),
+      fitBasis: "with_profile",
+      fitLevel: "good",
+      strengths,
+    });
+    // No fit point at all: the profile can't have informed it.
+    await expect(saveDraft(db, { jobId, assessment: withProfile([]) })).rejects.toThrow(
+      /at least one point that cites the profile/,
+    );
+    // A comparison with the profile labelled as listing fact.
+    await expect(
+      saveDraft(db, {
+        jobId,
+        assessment: withProfile([{ ...fitPoint(factId), evidence: "official" }]),
+      }),
+    ).rejects.toThrow(/compares the job with the profile, so its evidence is inference/);
+    await expect(
+      saveDraft(db, { jobId, assessment: withProfile([fitPoint("not-a-fact")]) }),
+    ).rejects.toThrow(/not in the approved profile/);
+    await expect(
+      saveDraft(db, { jobId, assessment: { ...assessment(), strengths: [fitPoint(factId)] } }),
+    ).rejects.toThrow(/role_only drafts can't cite profileFactIds/);
+    // The prompt's "[fact:<id>]" form is accepted and stored as the bare id.
+    const prefixed = await saveDraft(db, {
+      jobId,
+      assessment: withProfile([fitPoint(`fact:${factId}`)]),
+    });
+    expect(prefixed.assessment.strengths[0]?.profileFactIds).toEqual([factId]);
+    // Listing sources and quotes stay allowed on a fit point.
+    await expect(
+      saveDraft(db, { jobId, assessment: withProfile([fitPoint(factId)]) }),
+    ).resolves.toMatchObject({ version: 2 });
   });
 
   it("requires a source for listing/official evidence but not for inference", async () => {

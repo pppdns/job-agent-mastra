@@ -154,10 +154,25 @@ function mockTurn({
   // Rescorer (structured output): a with_profile assessment citing the listing source.
   if (responseFormat?.type === "json") {
     const sourceId = lastUserText(prompt).match(/Listing \(source id ([^,)]+)/)?.[1] ?? "";
+    // with_profile drafts must cite a profile fact in a fit point (inference).
+    const factId = lastUserText(prompt).match(/\[fact:([^\]]+)\]/)?.[1];
+    const base = MOCK_ASSESSMENT(sourceId);
     return {
       kind: "text",
       text: JSON.stringify({
-        ...MOCK_ASSESSMENT(sourceId),
+        ...base,
+        strengths: [
+          ...base.strengths,
+          ...(factId
+            ? [
+                {
+                  text: "Mock fit with the profile.",
+                  evidence: "inference",
+                  profileFactIds: [factId],
+                },
+              ]
+            : []),
+        ],
         headline: "Mock re-score against the current profile",
         fitBasis: "with_profile",
         fitLevel: "good",

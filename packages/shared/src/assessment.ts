@@ -35,6 +35,13 @@ export const assessmentPointSchema = z.object({
   evidence: z.enum(EVIDENCE_CLASSES),
   sourceIds: z.array(z.string().max(64)).max(5).default([]),
   quote: z.string().trim().max(300).optional().describe("Short supporting quote from the source"),
+  profileFactIds: z
+    .array(z.string().max(64))
+    .max(5)
+    .default([])
+    .describe(
+      "Approved profile fact ids this point compares the job against; such a point is a fit judgement, so its evidence is inference",
+    ),
 });
 export type AssessmentPoint = z.infer<typeof assessmentPointSchema>;
 

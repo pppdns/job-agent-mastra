@@ -10,7 +10,7 @@ import { and, desc, eq, inArray, max, sql, TransactionRollbackError } from "driz
 import { AssessmentError, hashPayload } from "./hash";
 import type { Db } from "./index";
 import { reindexJob } from "./jobs";
-import { applyProfileChange, currentProfileVersion } from "./profile";
+import { applyProfileChange, currentProfile, currentProfileVersion } from "./profile";
 import {
   type Approval,
   approvals,
@@ -35,7 +35,8 @@ export function snapshotPayloadOf(approval: Approval): SnapshotPayload {
 
 /**
  * Saves the next draft version for a job. Evidence must cite sources stored for that job,
- * and sourced evidence classes must cite at least one.
+ * and sourced evidence classes must cite at least one. Points citing profile facts must be
+ * inference, cite current facts, and appear only (and at least once) in with_profile drafts.
  */
 export function saveDraft(db: Db, input: DraftInput): Promise<JobDraft> {
   return serializeWrites(db, () => saveDraftUnlocked(db, input));
@@ -53,6 +54,10 @@ async function saveDraftUnlocked(db: Db, input: DraftInput): Promise<JobDraft> {
   const parsed = assessmentSchema.safeParse(input.assessment);
   if (!parsed.success) throw new AssessmentError(`invalid assessment: ${parsed.error.message}`);
   const assessment = parsed.data;
+  // Models copy the prompt's "[fact:<id>]" form; store the bare id.
+  for (const point of allPoints(assessment)) {
+    point.profileFactIds = point.profileFactIds.map((id) => id.replace(/^fact:/, ""));
+  }
   if (assessment.fitBasis === "role_only" && assessment.fitLevel) {
     throw new AssessmentError("fitLevel needs fitBasis with_profile; omit it for role_only");
   }
@@ -68,6 +73,31 @@ async function saveDraftUnlocked(db: Db, input: DraftInput): Promise<JobDraft> {
       (s) => s.id,
     ),
   );
+  // Fit points (comparisons with the profile) are the model's judgement: deterministic labels.
+  const facts = new Set((await currentProfile(db)).facts.map((f) => f.id));
+  const fitPoints = allPoints(assessment).filter((p) => p.profileFactIds.length > 0);
+  if (assessment.fitBasis === "role_only" && fitPoints.length > 0) {
+    throw new AssessmentError("role_only drafts can't cite profileFactIds; judge fit with_profile");
+  }
+  if (assessment.fitBasis === "with_profile" && fitPoints.length === 0) {
+    throw new AssessmentError(
+      "with_profile drafts need at least one point that cites the profile facts it compares against (profileFactIds)",
+    );
+  }
+  for (const point of fitPoints) {
+    const stale = point.profileFactIds.filter((id) => !facts.has(id));
+    if (stale.length > 0) {
+      throw new AssessmentError(
+        `profile fact ids ${stale.join(", ")} are not in the approved profile; use the [fact:…] ids shown to you`,
+      );
+    }
+    if (point.evidence !== "inference") {
+      throw new AssessmentError(
+        `"${point.text.slice(0, 60)}" compares the job with the profile, so its evidence is inference ` +
+          "(keep the listing sourceIds and quote); state listing facts as separate official points",
+      );
+    }
+  }
   for (const point of allPoints(assessment)) {
     const unknown = point.sourceIds.filter((id) => !known.has(id));
     if (unknown.length > 0) {
