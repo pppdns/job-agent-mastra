@@ -105,15 +105,16 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - [x] `save_job_draft` (automatic, versioned, sources must belong to the job) and `propose_job_snapshot` → `app_approvals` (payload hash, draft version, thread id, idempotency key). State machine: [packages/db/AGENTS.md](../packages/db/AGENTS.md).
 - [x] Approval card in chat (state from DB, decision with displayed payload hash); jobs list + detail with draft vs approved versions and sources read.
 - [x] Verified: db tests for stale (newer draft, changed hash), cross-chat, duplicate, lost-response retry, concurrent approve, superseded, versioning; offline e2e of paste → draft → propose → approve → jobs pages; live run of steps 1–2 and 8–9 ([verification.md](verification.md)).
-- Deferred to M5: the agent learns about a decision only when it reads state again (approvals and profile get injected per turn in M5).
+- The agent sees approval outcomes through the per-turn profile (M5) and `get_job`; pending snapshot approvals of other chats are not injected.
 
-### M5 — Profile memory, local context, comparisons
-- `profile_facts` (kind: hard requirement / soft preference / background; versioned, supersedes, audit). `propose_profile_change` (exact add/modify/remove diff) → approval. Profile injected each turn from DB with its version id.
-- Thread-scoped working memory for local assumptions/exceptions; instructions distinguish "for this chat" vs "remember", hypotheticals change nothing.
-- Profile page: view; edits create proposals.
-- Assessments record profile version; stale flag when it differs.
-- `find_saved_jobs` (SQLite FTS on company/title/summary) + `get_job`; agent asks when a reference is ambiguous.
-- **Done when:** brief steps 5–7 work; new chat sees approved profile but not prior local assumptions; comparison flags stale assessments.
+### M5 — Profile memory, local context, comparisons ✅ (2026-11-03)
+- [x] `app_profile_facts` (hard requirement / soft preference / background) + `app_profile_versions`; facts are superseded, never overwritten. `propose_profile_change` (exact add/modify/remove diff with the text before) → approval bound to the base version; stale if the profile moved. State machine: [packages/db/AGENTS.md](../packages/db/AGENTS.md).
+- [x] Approved profile injected every turn from the DB (async `instructions`, with version and fact ids); never from summaries.
+- [x] Thread-scoped working memory for "for this chat" notes; instructions separate local / remember / hypothetical; drafts (shared by all chats) are written against the approved profile only.
+- [x] `/profile`: current facts, edits and additions become proposals approved on the page, history with diffs.
+- [x] Drafts record the profile version (set by app code); jobs list/detail and `get_job` flag assessments made under an older profile.
+- [x] `find_saved_jobs` (FTS5, quoted prefix terms, AND then OR) + `get_job`.
+- [x] Verified: db tests (diffs, supersede, stale base, idempotency, wrong chat, reject, draft profile version, search), working-memory isolation test, e2e for remember → approve → new chat sees it while local notes stay local, profile page approvals, stale flag; live runs ([verification.md](verification.md)).
 
 ### M6 — Deep research + real progress
 - Tools: `web_search`, `extract_page` (URL guard), source persistence, claims with evidence class (official / independent / anonymous / inference / unknown-conflicting) and publication vs event dates.

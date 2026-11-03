@@ -18,6 +18,11 @@ Offline (mock/fixture) results and live results are kept separate. A live integr
 | 2026-11-03 | M3 | Link-local metadata URL in chat | ⚠️ Model declined to call the tool, so the guard was not reached live (guard covered by unit + e2e tests) |
 | 2026-11-03 | M4 | Web UI: LinkedIn URL (Dwelly Applied AI Engineer) | ✅ Listing read, qualified role-only assessment in chat, `save_job_draft` v1 with sourced and inference points, three research directions offered (≈22 s turn) |
 | 2026-11-03 | M4 | "Save this as the final snapshot" → approve in the card | ✅ `propose_job_snapshot` created a pending approval; agent said it is not saved until approved; Approve → "Approved · v1"; `/jobs` and job page show approved v1 and draft v1 (≈3 s turn) |
+| 2026-11-03 | M5 | "Remember that I only want fully remote roles, and that I prefer small teams." | ✅ `propose_profile_change` with one hard requirement + one soft preference; nothing applied until approved in the chat card → profile v1 |
+| 2026-11-03 | M5 | "For this chat, also include London hybrid roles" | ✅ Written to thread working memory as a local exception; profile unchanged |
+| 2026-11-03 | M5 | Hypothetical ("if I were open to relocating to Budapest…") | ✅ No profile proposal; answered against approved profile + local note (≈41k in tokens incl. re-reading the listing) |
+| 2026-11-03 | M5 | New chat: "Compare the Dwelly role I saved with the Flex job" | ✅ `find_saved_jobs` + `get_job` for both; criteria table against the approved profile; flagged the Dwelly assessment as predating the profile and re-drafted it. ⚠️ Found chat A's local exception inside a shared draft (did not rely on it) → instructions fixed |
+| 2026-11-03 | M5 | Re-check after the fix: chat-only "Budapest office roles acceptable", then reassess Flex | ✅ Exception applied in the reply only; new draft v2 written against the approved profile without it |
 | 2026-11-03 | M1 | Gateway free tier → Sonnet 5.5 | ❌ 403 `RestrictedModelsError` (resolved by funding the account). Client received only the sanitized summary; full error stayed in server log and trace |
 
 ## Offline checks (M1)
@@ -39,3 +44,8 @@ Offline (mock/fixture) results and live results are kept separate. A live integr
 
 - `pnpm check`: assessment schema; db state machine (versions, foreign/unsourced evidence rejected, idempotent proposals, supersede, approve → v1, retry returns same snapshot, concurrent approvals → one snapshot, wrong chat, changed hash, newer draft → stale, reject then approve refused, v1 kept when v2 approved).
 - `pnpm e2e` (11 tests): adds paste → draft → propose → approve with the mock model; jobs list shows "Awaiting approval" before and "Approved v1" after; status survives reload; another chat gets 404 for the approval.
+
+## Offline checks (M5)
+
+- `pnpm check`: profile changes (approve applies a new version, modify supersedes with history, remove, unknown fact ids rejected, stale when the base version moved, idempotent per chat, wrong chat, reject leaves profile), drafts record profile version and staleness, FTS search (prefix, overview text, injection-shaped input); thread working memory isolation; profile prompt formatting.
+- `pnpm e2e` (12 tests): adds remember → card → approve; "Profile?" in a new chat shows the approved fact; "Local?" shows the note only in its own chat; jobs list flags the earlier draft; profile page add → pending → approve → history.
