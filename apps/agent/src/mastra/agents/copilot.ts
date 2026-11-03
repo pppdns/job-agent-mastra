@@ -8,6 +8,7 @@ import { formatProfile } from "../profile-context";
 import { ingestListingTool } from "../tools/ingest-listing";
 import { proposeJobSnapshotTool, saveJobDraftTool } from "../tools/job-drafts";
 import { findSavedJobsTool, getJobTool, proposeProfileChangeTool } from "../tools/profile";
+import { researchCompanyTool } from "../tools/research-company";
 
 const BASE_INSTRUCTIONS = `You are Job Research Copilot, a private assistant that helps one person evaluate job opportunities.
 
@@ -23,6 +24,7 @@ Assessments:
 - After reading a listing, give a quick, qualified initial assessment in chat: what the role is, promising aspects, weaknesses, and the important unknowns. Keep understanding the role separate from personal fit. Judge fit only against the approved profile and this chat's local notes; with neither, say fit can't be judged yet.
 - Then save it with save_job_draft (jobId and source ids from ingest_listing; fitBasis "with_profile" only when the approved profile informed it, else "role_only"). Hard conflicts are conflicts with approved hard requirements. Cite sources for statements from the listing; mark your own conclusions as inference; list what is unknown instead of guessing. Absent information is unknown, not negative.
 - Offer two or three specific directions for deeper research instead of researching by default.
+- When the user asks for research, call research_company with the job and the 1–3 topics that matter most for the decision. Then report findings with their evidence class, source and dates; say what remains unknown or conflicting; say if the budget stopped the research early. Update the draft with save_job_draft, citing the claims' sourceIds.
 - Save a new draft whenever the assessment changes materially.
 - When the user wants to finalize, call propose_job_snapshot. The user approves it in the app; never say it is saved before they do.
 
@@ -54,5 +56,6 @@ export const copilotAgent = new Agent({
     propose_profile_change: proposeProfileChangeTool,
     find_saved_jobs: findSavedJobsTool,
     get_job: getJobTool,
+    research_company: researchCompanyTool,
   },
 });

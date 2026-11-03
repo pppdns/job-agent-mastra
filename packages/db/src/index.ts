@@ -6,6 +6,7 @@ import { findWorkspaceRoot, resolveDatabaseUrl } from "./paths";
 import * as schema from "./schema";
 
 export * from "./assessments";
+export * from "./claims";
 export { AssessmentError, hashPayload } from "./hash";
 export * from "./jobs";
 export { findWorkspaceRoot, resolveDatabaseUrl } from "./paths";
@@ -14,6 +15,7 @@ export type {
   Approval,
   ApprovalPayload,
   ApprovalStatus,
+  Claim,
   Job,
   JobDraft,
   JobSnapshot,

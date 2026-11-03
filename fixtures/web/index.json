@@ -1,0 +1,29 @@
+{
+  "_note": "Synthetic pages for offline research (WEB_MODE=fixture). Companies and text are invented.",
+  "pages": [
+    {
+      "url": "https://northwind-robotics.example/about",
+      "title": "About Northwind Robotics",
+      "keywords": ["northwind", "robotics", "about", "company", "product", "business", "customers"],
+      "file": "northwind-about.md"
+    },
+    {
+      "url": "https://techwire.example/2026/03/northwind-series-b",
+      "title": "Northwind Robotics raises Series B",
+      "keywords": ["northwind", "funding", "series", "raises", "health", "investors", "business"],
+      "file": "northwind-funding.md"
+    },
+    {
+      "url": "https://reviews.example/northwind-robotics",
+      "title": "Northwind Robotics employee reviews",
+      "keywords": ["northwind", "reviews", "engineering", "culture", "on-call", "employees"],
+      "file": "northwind-reviews.md"
+    },
+    {
+      "url": "https://northwind-robotics.example/blog/platform",
+      "title": "How we run our robot fleet platform",
+      "keywords": ["northwind", "engineering", "platform", "kubernetes", "blog", "stack"],
+      "file": "northwind-eng-blog.md"
+    }
+  ]
+}

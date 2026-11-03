@@ -11,6 +11,8 @@ const envSchema = z.object({
   COPILOT_FAST_MODEL: z.string().min(1).default("anthropic/claude-haiku-5.5"),
   AGENT_SHARED_SECRET: z.string().min(24, "must be at least 24 characters"),
   // Web providers. Without them, URL ingestion asks the user to paste the listing.
+  // "fixture" serves fixtures/web instead of Tavily (offline e2e/evals); never in normal use.
+  WEB_MODE: z.enum(["live", "fixture"]).default("live"),
   TAVILY_API_KEY: optionalKey,
   FIRECRAWL_API_KEY: optionalKey,
 });

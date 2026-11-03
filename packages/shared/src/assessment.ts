@@ -90,3 +90,39 @@ export const allPoints = (a: Assessment): AssessmentPoint[] => [
   ...a.hardConflicts,
   ...a.softTradeoffs,
 ];
+
+export const RESEARCH_TOPICS = [
+  "business",
+  "product",
+  "engineering",
+  "learning_ownership",
+  "business_health",
+  "role_facts",
+] as const;
+export type ResearchTopic = (typeof RESEARCH_TOPICS)[number];
+
+export const RESEARCH_TOPIC_LABELS: Record<ResearchTopic, string> = {
+  business: "What the company does",
+  product: "Product and mission",
+  engineering: "Engineering",
+  learning_ownership: "Learning and ownership",
+  business_health: "Business health",
+  role_facts: "Role-specific facts",
+};
+
+const isoDate = z
+  .string()
+  .regex(/^\d{4}(-\d{2}(-\d{2})?)?$/, "YYYY, YYYY-MM or YYYY-MM-DD")
+  .optional();
+
+/** One researched claim. Publication date (of the source) and event date are kept apart. */
+export const claimInputSchema = z.object({
+  topic: z.enum(RESEARCH_TOPICS),
+  text: z.string().trim().min(5).max(600),
+  evidence: z.enum(EVIDENCE_CLASSES),
+  sourceIds: z.array(z.string().max(64)).max(5).default([]),
+  quote: z.string().trim().max(300).optional(),
+  publishedAt: isoDate.describe("When the source was published"),
+  eventDate: isoDate.describe("When the described event happened, if different"),
+});
+export type ClaimInput = z.infer<typeof claimInputSchema>;

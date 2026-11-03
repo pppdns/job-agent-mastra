@@ -105,6 +105,10 @@ type ToolResultValue = {
   jobId?: string;
   version?: number;
   source?: { id?: string };
+  results?: { url: string }[];
+  sourceId?: string;
+  url?: string;
+  claims?: unknown[];
 };
 
 /** JSON value of a tool-result part, if any. */
@@ -154,6 +158,29 @@ function mockTurn({
         });
       }
     }
+    if (name === "web_search" && value.results?.[0]) {
+      return call("extract_page", { url: value.results[0].url });
+    }
+    if (name === "extract_page" && value.sourceId) {
+      return call("record_claim", {
+        topic: "business",
+        text: `Mock finding read from ${value.url}`,
+        evidence: "official",
+        sourceIds: [value.sourceId],
+      });
+    }
+    if (name === "record_claim" || name === "web_search" || name === "extract_page") {
+      return {
+        kind: "text",
+        text: `Mock research summary (${name} ${value.ok === false ? "failed" : "done"})`,
+      };
+    }
+    if (name === "research_company") {
+      return {
+        kind: "text",
+        text: `Mock reply: research_company ${value.status} ${value.claims?.length ?? 0} claims`,
+      };
+    }
     const outcome =
       value.status ??
       (value.ok === false ? `error ${value.error}` : value.version ? `v${value.version}` : "done");
@@ -166,6 +193,17 @@ function mockTurn({
   }
   if (offered("ingest_listing") && text.startsWith("Listing:")) {
     return call("ingest_listing", { fromLatestUserMessage: true });
+  }
+  // Researcher run (see research_company): start with one search for the company.
+  if (offered("web_search") && text.startsWith("Company:")) {
+    const company = text.match(/^Company: (.+)$/m)?.[1] ?? "";
+    return call("web_search", { query: `${company} company` });
+  }
+  if (offered("research_company") && text.startsWith("Research:")) {
+    const jobId = latestJobId(prompt);
+    const topics = text.slice(9).trim().split(/[ ,]+/).filter(Boolean);
+    if (jobId)
+      return call("research_company", { jobId, topics: topics.length ? topics : ["business"] });
   }
   if (offered("propose_profile_change") && text.startsWith("Remember:")) {
     return call("propose_profile_change", {

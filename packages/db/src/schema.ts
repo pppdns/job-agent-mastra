@@ -1,4 +1,4 @@
-import type { Assessment, ProfileFactKind } from "@copilot/shared";
+import type { Assessment, EvidenceClass, ProfileFactKind, ResearchTopic } from "@copilot/shared";
 import { PROFILE_FACT_KINDS } from "@copilot/shared";
 import { sql } from "drizzle-orm";
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
@@ -181,12 +181,35 @@ export const profileFacts = sqliteTable(
   (t) => [index("app_profile_facts_current_idx").on(t.supersededInVersion)],
 );
 
+/** Researched claims, written one by one during a research run (partial results survive stops). */
+export const claims = sqliteTable(
+  "app_claims",
+  {
+    id: text("id").primaryKey(),
+    jobId: text("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    runId: text("run_id").notNull(),
+    threadId: text("thread_id"),
+    topic: text("topic").$type<ResearchTopic>().notNull(),
+    text: text("text").notNull(),
+    evidence: text("evidence").$type<EvidenceClass>().notNull(),
+    sourceIds: text("source_ids", { mode: "json" }).$type<string[]>().notNull(),
+    quote: text("quote"),
+    publishedAt: text("published_at"),
+    eventDate: text("event_date"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("app_claims_job_idx").on(t.jobId)],
+);
+
 export type Job = typeof jobs.$inferSelect;
 export type JobDraft = typeof jobDrafts.$inferSelect;
 export type JobSnapshot = typeof jobSnapshots.$inferSelect;
 export type Approval = typeof approvals.$inferSelect;
 export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
 export type ProfileFact = typeof profileFacts.$inferSelect;
+export type Claim = typeof claims.$inferSelect;
 export type Source = typeof sources.$inferSelect;
 export type SourceKind = (typeof SOURCE_KINDS)[number];
 export type SourceProvider = (typeof SOURCE_PROVIDERS)[number];

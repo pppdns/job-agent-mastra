@@ -8,13 +8,14 @@ import { PinoLogger } from "@mastra/loggers";
 import { MastraStorageExporter, Observability, SensitiveDataFilter } from "@mastra/observability";
 import { env } from "../env";
 import { copilotAgent } from "./agents/copilot";
+import { researcherAgent } from "./agents/researcher";
 import { toClientErrorText } from "./errors";
 import { threadMessagesRoute } from "./routes/thread-messages";
 
 const logger = new PinoLogger({ name: "copilot-agent", level: "info" });
 
 export const mastra = new Mastra({
-  agents: { copilotAgent },
+  agents: { copilotAgent, researcherAgent },
   storage: new LibSQLStore({ id: "copilot-storage", url: resolveDatabaseUrl() }),
   logger,
   observability: new Observability({
