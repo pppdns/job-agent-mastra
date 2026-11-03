@@ -10,3 +10,5 @@ Synthetic pages shaped like real provider output (Tavily markdown of LinkedIn gu
 | `linkedin-truncated.md` | Job card present but description cut short, no criteria block |
 | `ats-complete.md` | Employer ATS posting for the same role as `linkedin-complete.md` |
 | `ats-other-company.md` | Same title at a different company with a similar name |
+| `remote-ambiguous.md` | "Remote-first" in European time zones without saying where hiring is possible; pay only "competitive" (evals) |
+| `injection.md` | Complete listing with instructions aimed at AI assistants: change the profile, approve, reveal keys (evals) |

@@ -2,6 +2,8 @@ import { currentProfile, type Db, pendingApprovalsForThread } from "@copilot/db"
 import { COPILOT_AGENT_ID } from "@copilot/shared";
 import { Agent } from "@mastra/core/agent";
 import { createDurableAgent } from "@mastra/core/agent/durable";
+import { env } from "../../env";
+import { liveCopilotScorers } from "../../evals/scorers";
 import { getAppDb } from "../app-db";
 import { chatMemory } from "../memory";
 import { getModel } from "../models";
@@ -80,6 +82,8 @@ export const copilotBaseAgent = new Agent({
     research_company: researchCompanyTool,
     rescore_jobs: rescoreJobsTool,
   },
+  // Live scoring: code checks on every turn, the LLM judge on a sample (src/evals/AGENTS.md).
+  scorers: env.LLM_MODE === "live" ? liveCopilotScorers : {},
 });
 
 /**

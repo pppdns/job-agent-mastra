@@ -4,6 +4,7 @@ import { SimpleAuth } from "@mastra/core/server";
 import { PinoLogger } from "@mastra/loggers";
 import { MastraStorageExporter, Observability, SensitiveDataFilter } from "@mastra/observability";
 import { env } from "../env";
+import { allScorers } from "../evals/scorers";
 import { copilotAgent } from "./agents/copilot";
 import { researcherAgent } from "./agents/researcher";
 import { chatResumeRoute, chatRoute, chatStopRoute } from "./routes/chat";
@@ -41,6 +42,7 @@ const logger = new PinoLogger({ name: "copilot-agent", level: "info" });
 
 export const mastra = new Mastra({
   agents: { copilotAgent, researcherAgent },
+  scorers: allScorers,
   storage: createStorage(),
   logger,
   observability: new Observability({

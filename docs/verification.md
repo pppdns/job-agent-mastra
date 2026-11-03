@@ -37,6 +37,7 @@ Offline (mock/fixture) results and live results are kept separate. A live integr
 | 2026-11-03 | M8 | DuckDB observability store: web chat turn → Studio APIs | ✅ Trace `7ae6ae…` (the panel's link) has 17 spans incl. nested title generation; `log list` returns runtime logs; `metric breakdown` gives tokens and est. cost per model; `mastra dev` hot restart reopens the DuckDB file without a lock error; e2e 16/16 with its own `e2e.duckdb`. ⚠️ Traces from before the switch stay in libSQL and their Studio links show nothing |
 | 2026-11-03 | Ops | `pnpm ngrok` next to `pnpm dev` | ✅ Tunnel to :3000 only; a request without the login gets 401 |
 | 2026-11-03 | M1 | Gateway free tier → Sonnet 5.5 | ❌ 403 `RestrictedModelsError` (resolved by funding the account). Client received only the sanitized summary; full error stayed in server log and trace |
+| 2026-11-03 | M9 | `pnpm eval`: 12 copilot cases, Sonnet 5.5 agent + `openai/gpt-6.1-sol` judges, web fixtures, `data/eval.db` | ✅ Pipeline works; scores persisted with trace ids. Final run 13/14 checks passed; 1 real finding (see Evals) |
 
 ## Offline checks (M1)
 
@@ -89,3 +90,12 @@ Offline (mock/fixture) results and live results are kept separate. A live integr
 - `pnpm check`: `latestListingSource` skips research pages; `saveDraft` rejects a draft made against an older profile version; `approveDrafts` (approved / changed / not_found, retry approves nothing twice); `runRescore` with the mock model (only stale jobs, one draft each, profile no longer stale, missing listing fails without stopping the batch, stopped run saves nothing).
 - `pnpm e2e` (18 tests): adds paste → profile change on `/profile` → "Profile changed" → Re-score button → batch in a new chat (progress, results list) → Approve all → jobs row "Approved v1", no longer stale. Runs in its own Playwright project after the other specs.
 - Live (2026-11-03): `runRescore` on a throwaway database with the synthetic `ats-complete.md` listing and a new "fully remote within the EU" hard requirement. Sonnet 5.5 via AI Gateway returned a valid structured assessment in ~15 s: verdict pass, fit poor, hard conflict "3 office days in Lisbon" citing the listing source. Not exercised live: the button and chat flow end to end, batches of several jobs, token cost per job.
+
+## Evals (M9)
+
+Live models, offline web (fixtures). Judge scores are evidence, not truth. Details: [apps/agent/src/evals/AGENTS.md](../apps/agent/src/evals/AGENTS.md).
+
+- Run 1 found eval bugs, fixed before run 2: both new fixtures were under the 150-word minimum (flagged incomplete); `draft-after-listing` fired on incomplete pasted text; the judge saw Mastra's working-memory instructions as "profile" data and penalized saved drafts as unapproved. Working-memory notes during assessments (current job, open questions) were allowed after reading them.
+- Final run (2026-11-03): all gates pass except **role strengths vs personal fit** (seeded profile): the saved strengths mix role positives with profile matches. Earlier run also flagged the research reply calling an anonymously reported reorg a fact (passed on rerun: flaky). Lowest quality scores: research (0.50: treats a two-review sample as exhaustive, long reply), hypothetical (0.50: implies a London conflict with an empty profile).
+- Per case ~4–60 s; whole run ≈ 3 min. Token cost per run not measured yet (visible per trace in `pnpm eval:studio`).
+- Not covered yet: multi-chat memory, compaction, stale comparisons; live scoring on real chats was wired but not yet observed on a live dev turn.

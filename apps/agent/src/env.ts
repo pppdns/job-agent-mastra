@@ -9,6 +9,8 @@ const envSchema = z.object({
   // Vercel AI Gateway model ids (provider/model)
   COPILOT_MODEL: z.string().min(1).default("anthropic/claude-sonnet-5.5"),
   COPILOT_FAST_MODEL: z.string().min(1).default("anthropic/claude-haiku-5.5"),
+  // LLM judge for scorers (live sampling and `pnpm eval`): another provider than the copilot.
+  EVAL_JUDGE_MODEL: z.string().min(1).default("openai/gpt-6.1-sol"),
   AGENT_SHARED_SECRET: z.string().min(24, "must be at least 24 characters"),
   // Observational Memory: unobserved message tokens that trigger compaction (Mastra default 30k).
   // Tests force a tiny value to exercise compaction offline.

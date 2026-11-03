@@ -12,4 +12,5 @@
 - Only one `mastra dev` can run per project; `mastra build` is blocked while it runs. `mastra build` also fails at its install step: the Mastra deployer can't parse pnpm 12's two-document `pnpm-lock.yaml`. Builds aren't used (local dev only). `mastra dev` loads `.env`, so the e2e config blanks provider keys to stay offline.
 - Usage accounting: [src/usage/AGENTS.md](src/usage/AGENTS.md). Any new model call outside an agent's steps must be metered (`meteredModel` or a hook), or the panel will undercount.
 - Provider calls retry via `withRetry` (`src/web/retry.ts`): only `RetryableError` (network, timeout, 429, 5xx), max 2.
+- Scorers, datasets and `pnpm eval`: [src/evals/AGENTS.md](src/evals/AGENTS.md). Copilot turns are scored live only with `LLM_MODE=live`.
 - Look up APIs in `node_modules/@mastra/*/dist/docs/` (see the `mastra` skill) before writing Mastra code.

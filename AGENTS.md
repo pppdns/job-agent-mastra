@@ -51,9 +51,11 @@ Simple, polished, functional: shadcn/ui (Radix Nova preset) defaults. Clear visu
 | `pnpm check` | Biome + typecheck + unit tests (pre-commit and Claude Stop hook run this) |
 | `pnpm ngrok` | ngrok tunnel to the web app (basic auth required; login in `apps/web/.env.local` as `NGROK_BASIC_AUTH`, optional `NGROK_DOMAIN`). Run next to `pnpm dev` |
 | `pnpm e2e` | Playwright on an isolated mock stack; stop `pnpm dev` first |
+| `pnpm eval` | Live eval suite (real copilot + LLM judge, web fixtures, own `data/eval.db`); costs money. Report in `data/eval-report.md` |
+| `pnpm eval:studio` | Studio on the eval DB to browse experiments and scores; stop `pnpm dev` first |
 | `pnpm agent:api …` | `mastra api` against the local agent with auth, e.g. `agent run copilot '{"messages":"hi"}'`, `trace list` |
 
-Later: `pnpm eval`, `pnpm smoke:live`. Details: [docs/PLAN.md#verification-loops](docs/PLAN.md#verification-loops).
+Later: `pnpm smoke:live`. Evals: [apps/agent/src/evals/AGENTS.md](apps/agent/src/evals/AGENTS.md). Details: [docs/PLAN.md#verification-loops](docs/PLAN.md#verification-loops).
 
 ## Database
 

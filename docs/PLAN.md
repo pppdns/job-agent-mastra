@@ -143,7 +143,8 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 
 ### M9 — Security pass, eval suite, docs
 - Prompt-injection fixtures (memory change, credential reveal, approval bypass); SSRF/redirect tests; confirm web content can never create an approved state.
-- 15–20 scenarios from the brief: deterministic Vitest checks + Mastra datasets/experiments with LLM-judge scorers (judge model/version reported, trace ids linked).
+- [x] Scorers registered in Studio; live scoring on copilot turns (code checks always, LLM judge on 10%); `pnpm eval`: 12 behaviour cases as Mastra datasets/experiments on fixtures with code gates + `openai/gpt-6.1-sol` judges, own eval DB, report with judge model; traces via `pnpm eval:studio` ([apps/agent/src/evals/AGENTS.md](../apps/agent/src/evals/AGENTS.md)).
+- [ ] Remaining multi-chat scenarios: memory across sessions without leakage, compaction keeps preferences/pending actions, comparisons with stale assessments (deterministic Vitest covers parts already).
 - `docs/verification.md`: offline vs live results, latency, usage, cost.
 - README (setup, keys, commands, architecture, limitations, tested integrations) + `docs/lessons.md`.
 
