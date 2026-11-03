@@ -30,16 +30,8 @@
       "Bash(git add *)",
       "Bash(git commit *)"
     ],
-    "deny": [
-      "Read(./.env)",
-      "Read(./.env.*)",
-      "Read(./**/.env)",
-      "Read(./**/.env.*)"
-    ],
-    "ask": [
-      "Bash(pnpm smoke:live *)",
-      "Bash(git push *)"
-    ]
+    "deny": ["Read(./.env)", "Read(./.env.*)", "Read(./**/.env)", "Read(./**/.env.*)"],
+    "ask": ["Bash(pnpm smoke:live *)", "Bash(git push *)"]
   },
   "hooks": {}
 }
