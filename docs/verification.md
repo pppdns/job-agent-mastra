@@ -34,6 +34,8 @@ Offline (mock/fixture) results and live results are kept separate. A live integr
 | 2026-11-03 | M8 | New-chat turn vs Studio trace `f088e7…` | ✅ All 7 model calls (5 copilot, observer, title) match one-to-one with equal input/output tokens; no extra or missing rows |
 | 2026-11-03 | M8 | Prompt caching | ⚠️ Every model call reports 0 cached input tokens: caching isn't enabled, so each step pays full input (6k–30k tokens) |
 | 2026-11-03 | UI | Reassess saved Flex job against the profile (new chat, foreground Chrome) | ✅ Draft v4 had a headline and `fitLevel` weak; chat showed the assessment card (verdict, 2/5 fit meter, signal chips, top points). ⚠️ Reply after the card was ~140 words, longer than the 2–4 sentences asked for |
+| 2026-11-03 | M8 | DuckDB observability store: web chat turn → Studio APIs | ✅ Trace `7ae6ae…` (the panel's link) has 17 spans incl. nested title generation; `log list` returns runtime logs; `metric breakdown` gives tokens and est. cost per model; `mastra dev` hot restart reopens the DuckDB file without a lock error; e2e 16/16 with its own `e2e.duckdb`. ⚠️ Traces from before the switch stay in libSQL and their Studio links show nothing |
+| 2026-11-03 | Ops | `pnpm ngrok` next to `pnpm dev` | ✅ Tunnel to :3000 only; a request without the login gets 401 |
 | 2026-11-03 | M1 | Gateway free tier → Sonnet 5.5 | ❌ 403 `RestrictedModelsError` (resolved by funding the account). Client received only the sanitized summary; full error stayed in server log and trace |
 
 ## Offline checks (M1)
