@@ -14,6 +14,8 @@ const evalDb = resolve(import.meta.dirname, "../../data/eval.db");
 export default defineConfig({
   test: {
     include: ["src/evals/**/*.eval.ts"],
+    // Every eval file resets the same database: run them one at a time.
+    fileParallelism: false,
     testTimeout: 30 * 60_000,
     hookTimeout: 30 * 60_000,
     env: {
