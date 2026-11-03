@@ -6,7 +6,7 @@ import { LibSQLStore } from "@mastra/libsql";
 import { MockLanguageModelV4 } from "ai/test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createChatMemory } from "./memory";
-import { loadThreadUIMessages } from "./routes/thread-messages";
+import { loadThreadUIMessages, mergeAssistantRuns } from "./routes/thread-messages";
 
 /** Model that records every prompt it receives, so tests can inspect the context. */
 function recordingModel(prompts: LanguageModelV4Prompt[]) {
@@ -94,5 +94,25 @@ describe("chat memory", () => {
     expect(JSON.stringify(prompts.at(-1))).toContain("include London roles");
     await run("Any local notes?", "thread-b");
     expect(JSON.stringify(prompts.at(-1))).not.toContain("include London roles");
+  });
+
+  it("shows one assistant message per turn when storage split a reply", () => {
+    const m = (id: string, role: string, ...parts: string[]) => ({
+      id,
+      role,
+      parts: parts.map((text) => ({ type: "text", text })),
+    });
+    expect(
+      mergeAssistantRuns([
+        m("u1", "user", "q"),
+        m("a1", "assistant", "tools"),
+        m("a2", "assistant", "answer"),
+        m("u2", "user", "next"),
+      ]),
+    ).toEqual([
+      m("u1", "user", "q"),
+      m("a1", "assistant", "tools", "answer"),
+      m("u2", "user", "next"),
+    ]);
   });
 });

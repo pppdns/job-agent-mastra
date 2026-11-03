@@ -76,6 +76,11 @@ export class ResearchBudget {
     if (this.spent() > this.limits.maxUsd) this.stop("spend");
   }
 
+  /** Provider calls still allowed (recording claims is free). */
+  remainingCalls(): number {
+    return Math.max(0, this.limits.maxToolCalls - this.toolCalls);
+  }
+
   stop(reason: LimitReason) {
     this.limitedBy ??= reason;
     clearTimeout(this.timer);

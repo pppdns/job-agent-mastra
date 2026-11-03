@@ -16,7 +16,26 @@ export async function loadThreadUIMessages(
   const thread = await memory.getThreadById({ threadId });
   if (!thread || thread.resourceId !== resourceId) return null;
   const { messages } = await memory.recall({ threadId, resourceId, perPage: false });
-  return toAISdkMessages(messages, { version: "v7" });
+  return mergeAssistantRuns(toAISdkMessages(messages, { version: "v7" }));
+}
+
+/**
+ * One assistant bubble per turn: Mastra can store a multi-step reply as several assistant
+ * messages (e.g. around memory buffering); the live stream shows them as one.
+ */
+export function mergeAssistantRuns<T extends { role: string; parts: unknown[] }>(
+  messages: T[],
+): T[] {
+  const merged: T[] = [];
+  for (const message of messages) {
+    const previous = merged.at(-1);
+    if (previous && previous.role === "assistant" && message.role === "assistant") {
+      merged[merged.length - 1] = { ...previous, parts: [...previous.parts, ...message.parts] };
+    } else {
+      merged.push(message);
+    }
+  }
+  return merged;
 }
 
 /** GET /threads/:threadId/ui-messages — history for reopening a chat in `useChat`. */

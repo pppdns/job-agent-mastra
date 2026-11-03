@@ -43,6 +43,17 @@ const retryOptions = (ctx: ResearchContext, what: string) => ({
     ctx.progress({ kind: "retry", what, attempt, reason: error.message }),
 });
 
+/** Shown with every provider result so the researcher records findings before calls run out. */
+const budgetNote = (ctx: ResearchContext) => {
+  const left = ctx.budget.remainingCalls();
+  return {
+    remainingWebCalls: left,
+    ...(left <= 2 && {
+      note: "Almost out of web calls: record your findings with record_claim now (it is free).",
+    }),
+  };
+};
+
 /** Tools for one research run; every provider call goes through the run's budget. */
 export function createResearchTools(ctx: ResearchContext) {
   const web_search = createTool({
@@ -64,7 +75,7 @@ export function createResearchTools(ctx: ResearchContext) {
         return { ok: false as const, error: errorText(error) };
       }
       await ctx.progress({ kind: "search", query, results: results.length });
-      return { ok: true as const, results };
+      return { ok: true as const, results, ...budgetNote(ctx) };
     },
   });
 
@@ -115,6 +126,7 @@ export function createResearchTools(ctx: ResearchContext) {
         url: checked.url.href,
         retrievedAt: source.retrievedAt.toISOString(),
         untrustedText: result.text.slice(0, MAX_PAGE_CHARS_FOR_MODEL),
+        ...budgetNote(ctx),
       };
     },
   });
