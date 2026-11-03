@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git fetch *)",
+      "Bash(grep -v '^\\\\s*$')"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "chrome-devtools",
+    "next-devtools",
+    "supabase",
+    "playwright",
+    "better-auth",
+    "trigger",
+    "sentry",
+    "stripe",
+    "langfuse"
+  ],
+  "disabledMcpjsonServers": [
+    "firecrawl",
+    "posthog"
+  ]
+}
