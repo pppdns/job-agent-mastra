@@ -30,5 +30,5 @@ export function resolveDatabaseUrl(env: NodeJS.ProcessEnv = process.env): string
 export function resolveObservabilityPath(env: NodeJS.ProcessEnv = process.env): string {
   const url = resolveDatabaseUrl(env);
   if (!url.startsWith("file:")) return ":memory:";
-  return url.slice("file:".length).replace(/\.db$/, "") + ".duckdb";
+  return `${url.slice("file:".length).replace(/\.db$/, "")}.duckdb`;
 }
