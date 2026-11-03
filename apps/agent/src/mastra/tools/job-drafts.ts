@@ -71,7 +71,10 @@ export const proposeJobSnapshotTool = createTool({
           company: payload.job.company,
           recommendation: RECOMMENDATION_LABELS[payload.assessment.recommendation.verdict],
         },
-        note: "Waiting for the user's decision in the app.",
+        note:
+          approval.status === "approved"
+            ? "This draft is already approved; nothing to decide."
+            : "Waiting for the user's decision in the app.",
       };
     }),
 });

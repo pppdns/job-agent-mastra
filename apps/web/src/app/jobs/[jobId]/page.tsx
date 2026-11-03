@@ -3,6 +3,7 @@ import {
   BriefcaseIcon,
   Building2Icon,
   CheckIcon,
+  ChevronDownIcon,
   ClipboardPasteIcon,
   GlobeIcon,
   type LucideIcon,
@@ -18,6 +19,7 @@ import { VerdictBadge } from "@/components/assessment-visuals";
 import { EvidenceList } from "@/components/evidence-list";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { appDb } from "@/server/db";
@@ -116,37 +118,46 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
         </Card>
       )}
 
-      <section className="flex flex-col gap-3" aria-label="Approved snapshots">
-        <h2 className="font-semibold">Approved snapshots</h2>
-        {snapshots.length === 0 && (
-          <p className="text-sm text-muted-foreground">Nothing approved yet.</p>
-        )}
-        {snapshots.map((s, index) => (
-          <Card key={s.id}>
-            <Collapsible defaultOpen={index === 0}>
-              <CardHeader>
-                <CollapsibleTrigger className="flex flex-wrap items-center gap-2 text-left">
-                  <Badge>
-                    <CheckIcon />
-                    Approved v{s.version}
-                  </Badge>
-                  <VerdictBadge verdict={s.payload.assessment.recommendation.verdict} size="sm" />
-                  <span className="text-sm text-muted-foreground">
-                    {formatDate(s.createdAt)} · from draft v{s.payload.draftVersion}
-                    {s.payload.profileVersion !== undefined &&
-                      ` · profile v${s.payload.profileVersion}`}
-                  </span>
-                </CollapsibleTrigger>
-              </CardHeader>
-              <CollapsibleContent>
-                <CardContent>
-                  <AssessmentView assessment={s.payload.assessment} />
-                </CardContent>
-              </CollapsibleContent>
-            </Collapsible>
-          </Card>
-        ))}
-      </section>
+      {snapshots.length > 0 && (
+        <Collapsible aria-label="Version history">
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="sm" className="group -ml-2 text-muted-foreground">
+              <ChevronDownIcon className="transition-transform group-data-[state=open]:rotate-180" />
+              Version history · {snapshots.length} approved
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="flex flex-col gap-3 pt-3">
+            {snapshots.map((s) => (
+              <Card key={s.id}>
+                <Collapsible>
+                  <CardHeader>
+                    <CollapsibleTrigger className="flex flex-wrap items-center gap-2 text-left">
+                      <Badge>
+                        <CheckIcon />
+                        Approved v{s.version}
+                      </Badge>
+                      <VerdictBadge
+                        verdict={s.payload.assessment.recommendation.verdict}
+                        size="sm"
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        {formatDate(s.createdAt)} · from draft v{s.payload.draftVersion}
+                        {s.payload.profileVersion !== undefined &&
+                          ` · profile v${s.payload.profileVersion}`}
+                      </span>
+                    </CollapsibleTrigger>
+                  </CardHeader>
+                  <CollapsibleContent>
+                    <CardContent>
+                      <AssessmentView assessment={s.payload.assessment} />
+                    </CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
+              </Card>
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
+      )}
 
       {claims.length > 0 && (
         <section className="flex flex-col gap-2" aria-label="Evidence">

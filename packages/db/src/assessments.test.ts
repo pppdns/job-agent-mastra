@@ -18,7 +18,7 @@ import { AssessmentError, hashPayload } from "./hash";
 import { createDb, type Db, migrateDb } from "./index";
 import { addSource, upsertJob } from "./jobs";
 import { currentProfile, proposeProfileChange } from "./profile";
-import { jobSnapshots } from "./schema";
+import { approvals, jobSnapshots } from "./schema";
 
 let db: Db;
 let jobId: string;
@@ -383,6 +383,25 @@ describe("approveDrafts", () => {
     const [result] = await approveDrafts(db, { threadId: "job-page", draftIds: [shown.id] });
     expect(result?.outcome).toBe("changed");
     expect(await getApproval(db, chat.id)).toMatchObject({ status: "pending" });
+  });
+
+  it("does not re-propose a draft that is already approved", async () => {
+    const draft = await saveDraft(db, { jobId, assessment: assessment() });
+    await approveDrafts(db, { threadId: "job-page", draftIds: [draft.id] });
+    const again = await proposeSnapshot(db, { jobId, threadId: "chat-a" });
+    expect(again).toMatchObject({ created: false, approval: { status: "approved" } });
+  });
+
+  it("goes stale instead of snapshotting an already approved draft twice", async () => {
+    const draft = await saveDraft(db, { jobId, assessment: assessment() });
+    const chat = (await proposeSnapshot(db, { jobId, threadId: "chat-a" })).approval;
+    await approveDrafts(db, { threadId: "job-page", draftIds: [draft.id] });
+    // A proposal older code left pending for the now-approved draft:
+    await db.update(approvals).set({ status: "pending" }).where(eq(approvals.id, chat.id));
+    expect((await getJobDetail(db, jobId))?.pending).toEqual([]);
+    expect((await listJobs(db))[0]?.pendingApproval).toBe(false);
+    expect(await approve(chat, "chat-a")).toMatchObject({ ok: false, error: "stale" });
+    expect(await snapshots()).toHaveLength(1);
   });
 
   it("approves again after a chat superseded this page's earlier proposal", async () => {

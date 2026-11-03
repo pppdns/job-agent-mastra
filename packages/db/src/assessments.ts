@@ -152,7 +152,8 @@ export async function latestDraft(db: Db, jobId: string): Promise<JobDraft | und
 
 /**
  * Proposes the job's latest draft as an approved snapshot. Idempotent per draft and chat;
- * older pending proposals for the job are superseded. Never approves anything itself.
+ * older pending proposals for the job are superseded. A draft that is already approved (in
+ * any chat) returns that approval instead. Never approves anything itself.
  */
 export function proposeSnapshot(
   db: Db,
@@ -169,6 +170,9 @@ async function proposeSnapshotUnlocked(
   if (!job) throw new AssessmentError(`unknown job id ${input.jobId}`);
   const draft = await latestDraft(db, job.id);
   if (!draft) throw new AssessmentError("this job has no draft yet; call save_job_draft first");
+
+  const approved = await approvalOfApprovedDraft(db, draft.id);
+  if (approved) return { approval: approved, created: false };
 
   // Idempotent per draft and chat, unless another proposal superseded the last one: then
   // proposing the same draft again is a new request (e.g. a job-page approve after a chat's).
@@ -282,6 +286,11 @@ async function decideApprovalUnlocked(db: Db, input: DecisionInput): Promise<Dec
     const updated = await transition(db, approval.id, { status: "stale" });
     return { ok: false, error: "stale", approval: updated ?? approval };
   }
+  if (await approvalOfApprovedDraft(db, approval.draftId)) {
+    // Approved meanwhile through another proposal: never snapshot the same draft twice.
+    const updated = await transition(db, approval.id, { status: "stale" });
+    return { ok: false, error: "stale", approval: updated ?? approval };
+  }
   const jobId = approval.jobId;
   const draftId = approval.draftId;
 
@@ -360,6 +369,20 @@ async function approveProfileChange(
     return { ok: false, error: "stale", approval: updated ?? approval };
   }
   return { ok: true, approval: result };
+}
+
+/** The approval that made this draft a snapshot, if it is approved. */
+async function approvalOfApprovedDraft(
+  db: Pick<Db, "query">,
+  draftId: string,
+): Promise<Approval | undefined> {
+  const snapshot = await db.query.jobSnapshots.findFirst({
+    where: eq(jobSnapshots.draftId, draftId),
+    columns: { approvalId: true },
+  });
+  return snapshot
+    ? db.query.approvals.findFirst({ where: eq(approvals.id, snapshot.approvalId) })
+    : undefined;
 }
 
 async function transition(
@@ -441,7 +464,7 @@ export async function listJobs(db: Db, ids?: string[]): Promise<JobOverview[]> {
       approvedDraftVersion: sql<
         number | null
       >`(select d.version from app_job_snapshots s join app_job_drafts d on d.id = s.draft_id where s.job_id = "app_jobs"."id" order by s.version desc limit 1)`,
-      pending: sql<number>`(select count(*) from app_approvals a where a.job_id = "app_jobs"."id" and a.status = 'pending')`,
+      pending: sql<number>`(select count(*) from app_approvals a where a.job_id = "app_jobs"."id" and a.status = 'pending' and not exists (select 1 from app_job_snapshots s where s.draft_id = a.draft_id))`,
       draftProfileVersion: sql<
         number | null
       >`(select d.profile_version from app_job_drafts d where d.job_id = "app_jobs"."id" order by d.version desc limit 1)`,
@@ -494,7 +517,7 @@ export async function getJobDetail(db: Db, jobId: string) {
     }),
     db.query.approvals.findMany({
       where: and(eq(approvals.jobId, jobId), eq(approvals.status, "pending")),
-      columns: { id: true, threadId: true, draftVersion: true },
+      columns: { id: true, threadId: true, draftId: true, draftVersion: true },
     }),
   ]);
   const [profileVersion, jobClaims] = await Promise.all([
@@ -507,7 +530,8 @@ export async function getJobDetail(db: Db, jobId: string) {
     sources: jobSources,
     draft,
     snapshots,
-    pending,
+    // A proposal left pending for a draft approved elsewhere is not awaiting anything.
+    pending: pending.filter((p) => !snapshots.some((s) => s.draftId === p.draftId)),
     profileVersion,
     profileStale: draft !== undefined && draft.profileVersion !== profileVersion,
   };
@@ -620,6 +644,10 @@ export async function approveDrafts(
       continue;
     }
     const { approval } = proposal;
+    if (approval.status === "approved") {
+      results.push({ draftId, jobId: draft.jobId, outcome: "approved" as const });
+      continue;
+    }
     const decided = await decideApproval(db, {
       approvalId: approval.id,
       threadId: input.threadId,
