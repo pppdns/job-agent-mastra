@@ -1,6 +1,5 @@
 import { resolveDatabaseUrl } from "@copilot/db";
-import { COPILOT_AGENT_ID, LOCAL_USER_ID } from "@copilot/shared";
-import { chatRoute } from "@mastra/ai-sdk";
+import { LOCAL_USER_ID } from "@copilot/shared";
 import { Mastra } from "@mastra/core/mastra";
 import { SimpleAuth } from "@mastra/core/server";
 import { LibSQLStore } from "@mastra/libsql";
@@ -9,7 +8,7 @@ import { MastraStorageExporter, Observability, SensitiveDataFilter } from "@mast
 import { env } from "../env";
 import { copilotAgent } from "./agents/copilot";
 import { researcherAgent } from "./agents/researcher";
-import { toClientErrorText } from "./errors";
+import { chatRoute } from "./routes/chat";
 import { threadMessagesRoute } from "./routes/thread-messages";
 
 const logger = new PinoLogger({ name: "copilot-agent", level: "info" });
@@ -37,17 +36,6 @@ export const mastra = new Mastra({
       // returns 403 (or a mismatch error on /chat) for threads owned by anyone else.
       mapUserToResourceId: (user) => user.id,
     }),
-    apiRoutes: [
-      chatRoute({
-        path: "/chat",
-        agent: COPILOT_AGENT_ID,
-        version: "v7",
-        onError: (error) => {
-          logger.error("chat stream failed", { error });
-          return toClientErrorText(error);
-        },
-      }),
-      threadMessagesRoute,
-    ],
+    apiRoutes: [chatRoute, threadMessagesRoute],
   },
 });

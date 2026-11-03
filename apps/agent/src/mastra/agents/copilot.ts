@@ -49,6 +49,8 @@ export const copilotAgent = new Agent({
     `${BASE_INSTRUCTIONS}\n\n${formatProfile(await currentProfile(await getAppDb()))}`,
   model: () => getModel("main"),
   memory: chatMemory,
+  // Long assessments are tool arguments: a low provider default would cut them into invalid JSON.
+  defaultOptions: { modelSettings: { maxOutputTokens: 16_000 }, maxSteps: 12 },
   tools: {
     ingest_listing: ingestListingTool,
     save_job_draft: saveJobDraftTool,

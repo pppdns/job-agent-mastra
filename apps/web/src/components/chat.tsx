@@ -101,7 +101,7 @@ export function Chat({
 
         {error && (
           <p role="alert" className="px-4 pb-2 text-sm text-destructive">
-            {error.message || "Something went wrong talking to the agent."}
+            {clientErrorText(error)}
           </p>
         )}
 
@@ -213,4 +213,13 @@ function ChatMessage({
       <MessageContent className="gap-3">{blocks}</MessageContent>
     </Message>
   );
+}
+
+/** Server errors arrive already sanitized and short; client-side parse errors can be huge. */
+function clientErrorText(error: Error): string {
+  const text = error.message?.trim();
+  if (!text || text.length > 300 || text.startsWith("Type validation failed")) {
+    return "Something went wrong talking to the agent. Please try again.";
+  }
+  return text;
 }
