@@ -9,6 +9,7 @@ import { chatMemory } from "../memory";
 import { getModel } from "../models";
 import { formatPendingApprovals, formatProfile } from "../profile-context";
 import { THREAD_CONTEXT_KEY } from "../thread-context";
+import { todayLine } from "../today";
 import { ingestListingTool } from "../tools/ingest-listing";
 import { proposeJobSnapshotTool, saveJobDraftTool } from "../tools/job-drafts";
 import { findSavedJobsTool, getJobTool, proposeProfileChangeTool } from "../tools/profile";
@@ -52,10 +53,18 @@ Saved jobs and comparisons:
 - To re-assess a saved job (e.g. after a profile change), call get_job with includeListing: true, assess the stored listing against the current approved profile and save it with save_job_draft, citing listing.sourceId. Don't ask the user to share the listing again unless get_job returns no listing.
 - To re-score several saved jobs at once (e.g. "re-score my stale jobs"), call rescore_jobs. Each job is re-assessed separately against the current approved profile and saved as a new draft. The app shows every result and an approve-all button, so reply in 1–3 sentences: how many changed verdict or fit, and any that failed. Never say they are approved.`;
 
-/** System prompt for one turn: fixed rules + approved profile + this chat's pending approvals (all from the DB). */
-export async function buildInstructions(db: Db, threadId?: string): Promise<string> {
+/**
+ * System prompt for one turn: fixed rules + approved profile + this chat's pending approvals
+ * (all from the DB) + today's date (last, so the cached prefix stays stable).
+ */
+export async function buildInstructions(
+  db: Db,
+  threadId?: string,
+  now: Date = new Date(),
+): Promise<string> {
   const parts = [BASE_INSTRUCTIONS, formatProfile(await currentProfile(db))];
   if (threadId) parts.push(formatPendingApprovals(await pendingApprovalsForThread(db, threadId)));
+  parts.push(todayLine(now));
   return parts.join("\n\n");
 }
 
