@@ -83,6 +83,7 @@ describe("compaction (Observational Memory, forced low threshold)", () => {
       assessment: {
         overview: "Platform role.",
         fitBasis: "with_profile",
+        fitLevel: "good",
         strengths: [{ text: "Clear scope", evidence: "official", sourceIds: [source.id] }],
         recommendation: { verdict: "consider", rationale: "Remote unclear." },
       },

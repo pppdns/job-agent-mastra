@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assessmentSchema } from "./assessment";
+import { assessmentSchema, assessmentSummary } from "./assessment";
 
 const minimal = {
   overview: "Platform role at a robotics company.",
@@ -28,5 +28,17 @@ describe("assessmentSchema", () => {
       strengths: [{ text: "Great culture", evidence: "vibes" }],
     });
     expect(result.success).toBe(false);
+  });
+
+  it("summarizes with the headline, or the overview's first sentence for older drafts", () => {
+    const parsed = assessmentSchema.parse({ ...minimal, overview: "First. Second." });
+    expect(assessmentSummary(parsed).headline).toBe("First.");
+    const withHeadline = assessmentSchema.parse({ ...minimal, headline: "Gist" });
+    expect(assessmentSummary(withHeadline).headline).toBe("Gist");
+  });
+
+  it("hides a fit level unless the profile informed the assessment", () => {
+    const parsed = assessmentSchema.parse({ ...minimal, fitLevel: "strong" });
+    expect(assessmentSummary(parsed).fitLevel).toBeUndefined();
   });
 });

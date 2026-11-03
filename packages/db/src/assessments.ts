@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { allPoints, assessmentSchema, SOURCED_EVIDENCE_CLASSES } from "@copilot/shared";
+import {
+  type AssessmentSummary,
+  allPoints,
+  assessmentSchema,
+  assessmentSummary,
+  SOURCED_EVIDENCE_CLASSES,
+} from "@copilot/shared";
 import { and, desc, eq, inArray, max, sql, TransactionRollbackError } from "drizzle-orm";
 import { AssessmentError, hashPayload } from "./hash";
 import type { Db } from "./index";
@@ -45,6 +51,12 @@ async function saveDraftUnlocked(
   const parsed = assessmentSchema.safeParse(input.assessment);
   if (!parsed.success) throw new AssessmentError(`invalid assessment: ${parsed.error.message}`);
   const assessment = parsed.data;
+  if (assessment.fitBasis === "role_only" && assessment.fitLevel) {
+    throw new AssessmentError("fitLevel needs fitBasis with_profile; omit it for role_only");
+  }
+  if (assessment.fitBasis === "with_profile" && !assessment.fitLevel) {
+    throw new AssessmentError("fitBasis with_profile needs a fitLevel");
+  }
 
   const job = await db.query.jobs.findFirst({ where: eq(jobs.id, input.jobId) });
   if (!job) throw new AssessmentError(`unknown job id ${input.jobId}`);
@@ -355,6 +367,8 @@ export type JobOverview = {
   draftProfileVersion: number | null;
   /** True when the latest draft was written against an older approved profile. */
   profileStale: boolean;
+  /** Verdict, fit and counts of the latest draft. */
+  summary: AssessmentSummary | null;
 };
 
 /** Jobs with their latest draft and approved versions, newest first (optionally only `ids`). */
@@ -378,18 +392,29 @@ export async function listJobs(db: Db, ids?: string[]): Promise<JobOverview[]> {
       draftProfileVersion: sql<
         number | null
       >`(select d.profile_version from app_job_drafts d where d.job_id = "app_jobs"."id" order by d.version desc limit 1)`,
+      draftAssessment: sql<
+        string | null
+      >`(select d.assessment from app_job_drafts d where d.job_id = "app_jobs"."id" order by d.version desc limit 1)`,
     })
     .from(jobs);
   const rows = await (ids ? query.where(inArray(jobs.id, ids)) : query).orderBy(
     desc(jobs.updatedAt),
   );
-  const overviews = rows.map(({ pending, ...row }) => ({
+  const overviews = rows.map(({ pending, draftAssessment, ...row }) => ({
     ...row,
+    summary: summaryOf(draftAssessment),
     pendingApproval: pending > 0,
     profileStale: row.draftProfileVersion !== null && row.draftProfileVersion !== profileVersion,
   }));
   // Keep search ranking when ids are given.
   return ids ? ids.flatMap((id) => overviews.filter((o) => o.id === id)) : overviews;
+}
+
+/** At-a-glance summary of a stored draft; null when there is none or it no longer parses. */
+function summaryOf(json: string | null): AssessmentSummary | null {
+  if (!json) return null;
+  const parsed = assessmentSchema.safeParse(JSON.parse(json));
+  return parsed.success ? assessmentSummary(parsed.data) : null;
 }
 
 /** A job with its sources (metadata only), latest draft and every approved snapshot. */

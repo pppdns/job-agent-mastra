@@ -1,4 +1,10 @@
-import { AssessmentError, proposeSnapshot, saveDraft, snapshotPayloadOf } from "@copilot/db";
+import {
+  AssessmentError,
+  listJobs,
+  proposeSnapshot,
+  saveDraft,
+  snapshotPayloadOf,
+} from "@copilot/db";
 import { assessmentSchema, RECOMMENDATION_LABELS } from "@copilot/shared";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
@@ -26,12 +32,18 @@ export const saveJobDraftTool = createTool({
   inputSchema: z.object({ jobId: jobIdSchema, assessment: assessmentSchema }),
   execute: async ({ jobId, assessment }, context) =>
     guarded(async () => {
-      const draft = await saveDraft(await getAppDb(), {
+      const db = await getAppDb();
+      const draft = await saveDraft(db, { jobId, assessment, threadId: context?.agent?.threadId });
+      const [job] = await listJobs(db, [jobId]);
+      // title/company label the chat's assessment card
+      return {
+        ok: true as const,
         jobId,
-        assessment,
-        threadId: context?.agent?.threadId,
-      });
-      return { ok: true as const, jobId, draftId: draft.id, version: draft.version };
+        draftId: draft.id,
+        version: draft.version,
+        title: job?.title ?? null,
+        company: job?.company ?? null,
+      };
     }),
 });
 

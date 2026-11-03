@@ -73,6 +73,21 @@ describe("saveDraft", () => {
     );
   });
 
+  it("allows a fit level only when the profile informed the assessment", async () => {
+    await expect(
+      saveDraft(db, { jobId, assessment: { ...assessment(), fitLevel: "good" } }),
+    ).rejects.toThrow(/needs fitBasis with_profile/);
+    await expect(
+      saveDraft(db, { jobId, assessment: { ...assessment(), fitBasis: "with_profile" } }),
+    ).rejects.toThrow(/needs a fitLevel/);
+    await expect(
+      saveDraft(db, {
+        jobId,
+        assessment: { ...assessment(), fitBasis: "with_profile", fitLevel: "good" },
+      }),
+    ).resolves.toMatchObject({ version: 1 });
+  });
+
   it("requires a source for listing/official evidence but not for inference", async () => {
     const unsourced = {
       ...assessment(),

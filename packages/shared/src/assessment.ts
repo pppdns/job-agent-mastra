@@ -55,17 +55,40 @@ export const RECOMMENDATION_LABELS: Record<Recommendation, string> = {
   undecided: "Undecided",
 };
 
+/** Personal fit, best first. Only set with `fitBasis: "with_profile"`. */
+export const FIT_LEVELS = ["strong", "good", "mixed", "weak", "poor"] as const;
+export type FitLevel = (typeof FIT_LEVELS)[number];
+
+export const FIT_LEVEL_LABELS: Record<FitLevel, string> = {
+  strong: "Strong fit",
+  good: "Good fit",
+  mixed: "Mixed fit",
+  weak: "Weak fit",
+  poor: "Poor fit",
+};
+
 const points = (max: number) => z.array(assessmentPointSchema).max(max).default([]);
 
 /**
- * A job assessment. No numeric score: tradeoffs and uncertainty are explained in words.
+ * A job assessment. No numeric score: tradeoffs and uncertainty are explained in words;
+ * `fitLevel` is a coarse 5-step judgement, only once the profile is known.
  * `fitBasis` separates understanding the role from assessing personal fit.
+ * `headline` and `fitLevel` are optional so drafts saved before they existed still parse.
  */
 export const assessmentSchema = z.object({
+  headline: text(140)
+    .optional()
+    .describe(
+      "Always set: one line with the gist, e.g. 'Senior IC backend role; 4 office days conflicts with remote'",
+    ),
   overview: text(1500).describe("Short role and company overview"),
   fitBasis: z
     .enum(["role_only", "with_profile"])
     .describe("role_only until the user's preferences are known"),
+  fitLevel: z
+    .enum(FIT_LEVELS)
+    .optional()
+    .describe("Required with fitBasis with_profile; omit with role_only"),
   strengths: points(10),
   weaknesses: points(10),
   hardConflicts: points(10).describe("Conflicts with the user's stated hard requirements"),
@@ -90,6 +113,29 @@ export const allPoints = (a: Assessment): AssessmentPoint[] => [
   ...a.hardConflicts,
   ...a.softTradeoffs,
 ];
+
+/** At-a-glance numbers for lists and cards. */
+export function assessmentSummary(a: Assessment) {
+  return {
+    headline: a.headline ?? firstSentence(a.overview),
+    verdict: a.recommendation.verdict,
+    fitBasis: a.fitBasis,
+    fitLevel: a.fitBasis === "with_profile" ? a.fitLevel : undefined,
+    counts: {
+      hardConflicts: a.hardConflicts.length,
+      weaknesses: a.weaknesses.length,
+      softTradeoffs: a.softTradeoffs.length,
+      strengths: a.strengths.length,
+      unknowns: a.unknowns.length,
+    },
+  };
+}
+export type AssessmentSummary = ReturnType<typeof assessmentSummary>;
+
+function firstSentence(text: string): string {
+  const sentence = text.match(/^.+?[.!?](\s|$)/)?.[0]?.trim() ?? text;
+  return sentence.length > 140 ? `${sentence.slice(0, 139)}…` : sentence;
+}
 
 export const RESEARCH_TOPICS = [
   "business",

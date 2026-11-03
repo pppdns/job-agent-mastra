@@ -122,11 +122,13 @@ function toolResultValue(part: unknown): ToolResultValue {
 }
 
 const MOCK_ASSESSMENT = (sourceId: string) => ({
+  headline: "Mock headline: listing read, pay unknown",
   overview: "Mock assessment of the pasted listing.",
   fitBasis: "role_only",
   strengths: [
     { text: "The listing text was provided.", evidence: "official", sourceIds: [sourceId] },
   ],
+  weaknesses: [{ text: "Mock weakness: on-call is likely.", evidence: "inference" }],
   unknowns: [{ question: "What is the salary?", whyItMatters: "Not stated." }],
   recommendation: { verdict: "investigate_further", rationale: "Mock rationale." },
 });
