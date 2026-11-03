@@ -1,9 +1,5 @@
 {
   "mcpServers": {
-    "chrome-devtools": {
-      "command": "npx",
-      "args": ["chrome-devtools-mcp@latest"]
-    },
     "next-devtools": {
       "command": "npx",
       "args": ["-y", "next-devtools-mcp@latest"]
@@ -12,17 +8,17 @@
       "command": "npx",
       "args": ["-y", "@playwright/mcp@latest"]
     },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest"]
+    },
     "firecrawl": {
       "type": "http",
       "url": "https://mcp.firecrawl.dev/v2/mcp-oauth"
     },
-    "stripe": {
+    "tavily": {
       "type": "http",
-      "url": "https://mcp.stripe.com"
-    },
-    "posthog": {
-      "type": "http",
-      "url": "https://mcp.posthog.com/mcp"
+      "url": "https://mcp.tavily.com/mcp"
     }
   }
 }
