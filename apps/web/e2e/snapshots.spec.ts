@@ -38,7 +38,10 @@ test("a proposed snapshot is saved only after the user approves it", async ({ pa
 
   // Nothing is approved before the click.
   await page.goto("/jobs");
-  const row = page.getByRole("list", { name: "Jobs" }).locator(`a[href="${jobPath}"]`);
+  const row = page
+    .getByRole("table", { name: "Jobs" })
+    .getByRole("row")
+    .filter({ has: page.locator(`a[href="${jobPath}"]`) });
   await expect(row).toContainText("Draft v1");
   await expect(row).toContainText("Awaiting approval");
   await expect(row).toContainText("Mock headline: listing read, pay unknown");
@@ -57,7 +60,7 @@ test("a proposed snapshot is saved only after the user approves it", async ({ pa
   ).toContainText("Approved · v1");
 
   await page.goto("/jobs");
-  await row.click();
+  await row.getByRole("link").click();
   await expect(page.getByLabel("Current draft")).toContainText("Draft v1 · approved as v1");
   // Past versions stay hidden until asked for.
   const history = page.getByLabel("Version history");

@@ -61,7 +61,7 @@ test("research streams real progress and shows cited findings", async ({ page })
 
   await page.goto("/jobs");
   await page
-    .getByRole("list", { name: "Jobs" })
+    .getByRole("table", { name: "Jobs" })
     .getByRole("link", { name: /^Platform Engineer/ })
     .click();
   const evidence = page.getByLabel("Evidence");

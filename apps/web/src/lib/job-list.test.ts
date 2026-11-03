@@ -1,7 +1,7 @@
 import type { JobOverview } from "@copilot/db";
 import type { AssessmentSummary } from "@copilot/shared";
 import { describe, expect, it } from "vitest";
-import { parseJobSort, sortJobs } from "./job-sort";
+import { inTab, jobListHref, parseJobListParams, sortJobs, tabCounts } from "./job-list";
 
 const counts = { hardConflicts: 0, weaknesses: 0, softTradeoffs: 0, strengths: 0, unknowns: 0 };
 
@@ -73,11 +73,56 @@ describe("sortJobs", () => {
   });
 });
 
-describe("parseJobSort", () => {
-  it("accepts fit and falls back to latest", () => {
-    expect(parseJobSort("fit")).toBe("fit");
-    expect(parseJobSort("latest")).toBe("latest");
-    expect(parseJobSort(undefined)).toBe("latest");
-    expect(parseJobSort(["fit", "x"])).toBe("latest");
+describe("parseJobListParams", () => {
+  it("accepts known values and falls back to defaults", () => {
+    expect(parseJobListParams({ tab: "applied", q: "  acme ", sort: "fit" })).toEqual({
+      tab: "applied",
+      q: "acme",
+      sort: "fit",
+    });
+    expect(parseJobListParams({ tab: "bogus", sort: "x" })).toEqual({
+      tab: "active",
+      q: "",
+      sort: "latest",
+    });
+    expect(parseJobListParams({ tab: ["archived", "new"], sort: ["fit"] })).toMatchObject({
+      tab: "archived",
+      sort: "fit",
+    });
+  });
+
+  it("round-trips through jobListHref without defaults", () => {
+    expect(jobListHref({ tab: "active", q: "", sort: "latest" })).toBe("/jobs");
+    expect(jobListHref({ tab: "applied", q: "acme berlin", sort: "fit" })).toBe(
+      "/jobs?tab=applied&q=acme+berlin&sort=fit",
+    );
+  });
+});
+
+describe("tabs", () => {
+  const at = new Date(0);
+  const jobs = [
+    { status: "new", archivedAt: null },
+    { status: "applied", archivedAt: null },
+    { status: "applied", archivedAt: at }, // archived by hand
+    { status: "dismissed", archivedAt: at },
+  ] as const;
+
+  it("puts archived jobs only on the archived tab", () => {
+    expect(jobs.filter((j) => inTab(j, "applied"))).toHaveLength(1);
+    expect(jobs.filter((j) => inTab(j, "active"))).toHaveLength(2);
+    expect(jobs.filter((j) => inTab(j, "archived"))).toHaveLength(2);
+  });
+
+  it("counts every tab", () => {
+    expect(tabCounts([...jobs])).toEqual({
+      active: 2,
+      new: 1,
+      shortlisted: 0,
+      applied: 1,
+      interviewing: 0,
+      offer: 0,
+      archived: 2,
+    });
   });
 });

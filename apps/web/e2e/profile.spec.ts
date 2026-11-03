@@ -66,7 +66,10 @@ test("approved profile reaches new chats; local notes and drafts behave", async 
   db.close();
   await page.goto("/jobs");
   await expect(
-    page.getByRole("list", { name: "Jobs" }).locator(`a[href="/jobs/${rows[0]?.job_id}"]`),
+    page
+      .getByRole("table", { name: "Jobs" })
+      .getByRole("row")
+      .filter({ has: page.locator(`a[href="/jobs/${rows[0]?.job_id}"]`) }),
   ).toContainText("Profile changed · review");
 
   // Profile page edits are proposals too.
