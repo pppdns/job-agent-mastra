@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   agentRules: false,
-  // `pnpm tunnel` serves the dev app from an ngrok host.
+  // `pnpm ngrok` serves the dev app from an ngrok host.
   allowedDevOrigins: ["*.ngrok-free.app", "*.ngrok-free.dev", "*.ngrok.app", "*.ngrok.dev"],
   turbopack: {
     rules: {
