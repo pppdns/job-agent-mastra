@@ -45,8 +45,15 @@ describe("sortJobs", () => {
     job("good-pursue", { fitLevel: "good", verdict: "pursue" }),
   ];
 
-  it("keeps the given (newest first) order for latest", () => {
-    expect(sortJobs(jobs, "latest")).toBe(jobs);
+  it("keeps equally recent jobs in the given order for latest", () => {
+    expect(ids(sortJobs(jobs, "latest"))).toEqual(ids(jobs));
+  });
+
+  it("orders latest by last update, e.g. search results that arrive by relevance", () => {
+    const at = (id: string, ms: number) => ({ ...job(id), updatedAt: new Date(ms) });
+    const byRelevance = [at("older", 1), at("newest", 3), at("middle", 2)];
+    expect(ids(sortJobs(byRelevance, "latest"))).toEqual(["newest", "middle", "older"]);
+    expect(ids(sortJobs(byRelevance, "fit"))).toEqual(["newest", "middle", "older"]);
   });
 
   it("orders by fit, then verdict, with unscored jobs last", () => {

@@ -44,6 +44,9 @@ export const proposeProfileChangeTool = createTool({
 });
 
 const MAX_STATUS_MATCHES = 30;
+const MAX_TEXT_MATCHES = 5;
+/** FTS candidates read before filtering by status/archive. */
+const MAX_SEARCH_CANDIDATES = 500;
 
 /**
  * Saved jobs by free text (FTS, best 5) and/or pipeline status (newest first). Without
@@ -56,12 +59,16 @@ export async function findSavedJobs(
   const { query, status } = input;
   const includeArchived =
     input.includeArchived ?? (status === "rejected" || status === "dismissed");
-  const jobs = query ? await listJobs(db, await searchJobIds(db, query, 5)) : await listJobs(db);
+  // Filter before limiting, so archived or other-status hits don't crowd out eligible ones.
+  const jobs = query
+    ? await listJobs(db, await searchJobIds(db, query, MAX_SEARCH_CANDIDATES))
+    : await listJobs(db);
+  const limit = query ? MAX_TEXT_MATCHES : MAX_STATUS_MATCHES;
   const matches = jobs.filter(
     (j) => (!status || j.status === status) && (includeArchived || j.archivedAt === null),
   );
   return {
-    matches: matches.slice(0, MAX_STATUS_MATCHES).map((j) => ({
+    matches: matches.slice(0, limit).map((j) => ({
       jobId: j.id,
       title: j.title,
       company: j.company,
@@ -72,7 +79,7 @@ export async function findSavedJobs(
       approvedVersion: j.approvedVersion,
       profileStale: j.profileStale,
     })),
-    ...(matches.length > MAX_STATUS_MATCHES && { more: matches.length - MAX_STATUS_MATCHES }),
+    ...(matches.length > limit && { more: matches.length - limit }),
   };
 }
 

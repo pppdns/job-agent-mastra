@@ -14,13 +14,15 @@ const rank = <T>(list: readonly T[], value: T | undefined) =>
   value === undefined ? list.length : list.indexOf(value);
 
 /**
- * Jobs in the chosen order. `jobs` arrive newest first, so latest keeps them as they are.
+ * Jobs in the chosen order, newest (last updated) first for latest, also after a search,
+ * whose results arrive in relevance order.
  * Best fit: fit level, then verdict, then fewer hard conflicts; unassessed and role-only
  * jobs go last. The sort is stable, so ties stay newest first.
  */
 export function sortJobs(jobs: JobOverview[], sort: JobSort): JobOverview[] {
-  if (sort === "latest") return jobs;
-  return jobs.toSorted((a, b) => {
+  const newest = jobs.toSorted((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+  if (sort === "latest") return newest;
+  return newest.toSorted((a, b) => {
     const [x, y] = [a.summary, b.summary];
     return (
       rank(FIT_LEVELS, x?.fitLevel) - rank(FIT_LEVELS, y?.fitLevel) ||
