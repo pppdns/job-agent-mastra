@@ -8,8 +8,8 @@ import {
 } from "@copilot/shared";
 import { ArrowRightIcon, CheckIcon, CircleAlertIcon, RefreshCwIcon } from "lucide-react";
 import Link from "next/link";
-import { useState, useTransition } from "react";
-import { approveDraftsAction } from "@/app/actions";
+import { useEffect, useState, useTransition } from "react";
+import { approveDraftsAction, approvedDraftIdsAction } from "@/app/actions";
 import { FitMeter, VerdictBadge } from "@/components/assessment-visuals";
 import type { ToolPart } from "@/components/tool-trace";
 import { Badge } from "@/components/ui/badge";
@@ -115,17 +115,35 @@ const OUTCOME_TEXT: Record<string, string> = {
 export function RescoreResult({ part, threadId }: { part: ToolPart; threadId: string }) {
   const results = ((part.output ?? {}) as { results?: JobResult[] }).results ?? [];
   const saved = results.flatMap((r) => (r.status === "saved" ? [r] : []));
+  const draftIds = saved.map((r) => r.draftId);
+  const draftIdsKey = draftIds.join(",");
   const [outcomes, setOutcomes] = useState<Outcome>();
+  // Approvals made earlier (this card before a reload, a job page, another chat).
+  const [approvedIds, setApprovedIds] = useState<string[]>([]);
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
+  useEffect(() => {
+    if (!draftIdsKey) return;
+    let active = true;
+    approvedDraftIdsAction(draftIdsKey.split(","))
+      .then((ids) => active && setApprovedIds(ids))
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [draftIdsKey]);
   if (saved.length === 0) return null;
 
-  const outcomeOf = (draftId: string) => outcomes?.find((o) => o.draftId === draftId)?.outcome;
+  const outcomeOf = (draftId: string) =>
+    outcomes?.find((o) => o.draftId === draftId)?.outcome ??
+    (approvedIds.includes(draftId) ? "approved" : undefined);
+  const allApproved = draftIds.every((id) => outcomeOf(id) === "approved");
   const approveAll = () =>
     startTransition(async () => {
       const response = await approveDraftsAction({
         threadId,
-        draftIds: saved.map((r) => r.draftId),
+        // Drafts approved since (e.g. on a job page) are not sent again.
+        draftIds: draftIds.filter((id) => outcomeOf(id) !== "approved"),
       });
       if (response.error) setError("Couldn't approve these drafts. Try again.");
       else setOutcomes(response.results);
@@ -166,7 +184,7 @@ export function RescoreResult({ part, threadId }: { part: ToolPart; threadId: st
           );
         })}
       </ul>
-      {!outcomes && (
+      {!outcomes && !allApproved && (
         <div className="flex flex-wrap items-center gap-3">
           <Button size="sm" onClick={approveAll} disabled={pending}>
             <CheckIcon />

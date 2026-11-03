@@ -29,7 +29,10 @@ const LISTINGS = [
   { file: "injection.md", title: "Senior Data Engineer", company: "Brightfield Analytics" },
 ];
 
-describe("rescorer (live)", () => {
+// EVAL_ONLY targets cases by name; skip this billable suite unless it matches "rescorer".
+const ONLY = process.env.EVAL_ONLY?.trim().toLowerCase();
+
+describe.skipIf(ONLY && !"rescorer".includes(ONLY))("rescorer (live)", () => {
   let result: Awaited<ReturnType<typeof runRescore>>;
 
   beforeAll(async () => {

@@ -42,8 +42,13 @@ test("re-score stale jobs from /jobs and approve them all", async ({ page }) => 
   await expect(job).toContainText("Draft v2 · not approved");
   await results.getByRole("button", { name: /^Approve all \d+$/ }).click();
   await expect(job).toContainText("Approved");
+  // Approval state comes from the database after a reload.
+  await page.reload();
+  await expect(job).toContainText("Approved");
+  await expect(results.getByRole("button", { name: /^Approve all/ })).toHaveCount(0);
 
   await page.goto("/jobs");
   await expect(row).toContainText("Approved v1");
+  await expect(row).not.toContainText("not approved");
   await expect(row).not.toContainText("Profile changed · review");
 });

@@ -12,6 +12,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { ApproveDraftButton } from "@/components/approve-draft-button";
 import { AssessmentView } from "@/components/assessment-view";
 import { VerdictBadge } from "@/components/assessment-visuals";
 import { EvidenceList } from "@/components/evidence-list";
@@ -63,6 +64,7 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
   const { job, sources, draft, snapshots, pending, profileVersion, profileStale, claims } = detail;
   const latestApproved = snapshots[0];
   const draftAhead = draft && latestApproved && latestApproved.payload.draftVersion < draft.version;
+  const draftApproved = draft && latestApproved?.draftId === draft.id;
 
   return (
     <div className="flex flex-col gap-6">
@@ -85,10 +87,18 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
       </div>
 
       {draft && (
-        <Card className="border-dashed" aria-label="Current draft">
+        <Card className={draftApproved ? undefined : "border-dashed"} aria-label="Current draft">
           <CardHeader>
             <CardTitle className="flex flex-wrap items-center gap-2">
-              Current draft <Badge variant="outline">Draft v{draft.version} · not approved</Badge>
+              Current draft{" "}
+              {draftApproved ? (
+                <Badge>
+                  <CheckIcon />
+                  Draft v{draft.version} · approved as v{latestApproved.version}
+                </Badge>
+              ) : (
+                <Badge variant="outline">Draft v{draft.version} · not approved</Badge>
+              )}
               {pending.length > 0 && <Badge variant="secondary">Awaiting approval</Badge>}
               {profileStale && <Badge variant="destructive">Profile changed · review</Badge>}
             </CardTitle>
@@ -98,6 +108,7 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
               {profileStale ? ` (current profile is v${profileVersion})` : ""}.
               {draftAhead && ` Changed since approved v${latestApproved.version}.`}
             </CardDescription>
+            {!draftApproved && <ApproveDraftButton draftId={draft.id} version={draft.version} />}
           </CardHeader>
           <CardContent>
             <AssessmentView assessment={draft.assessment} />
