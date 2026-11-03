@@ -59,7 +59,11 @@ test("a proposed snapshot is saved only after the user approves it", async ({ pa
   await page.goto("/jobs");
   await row.click();
   await expect(page.getByLabel("Current draft")).toContainText("Draft v1 · approved as v1");
-  await expect(page.getByLabel("Approved snapshots")).toContainText("Approved v1");
+  // Past versions stay hidden until asked for.
+  const history = page.getByLabel("Version history");
+  await expect(history).not.toContainText("Approved v1");
+  await history.getByRole("button", { name: /Version history/ }).click();
+  await expect(history).toContainText("Approved v1");
   await expect(page.getByLabel("Sources")).toContainText("Pasted text");
 
   // The approval is visible from its own chat only.
