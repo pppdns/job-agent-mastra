@@ -32,6 +32,9 @@ export default defineConfig({
         AGENT_PORT: String(agentPort),
         AGENT_SHARED_SECRET: secret,
         DATABASE_URL: e2eDb,
+        // Blank the web provider keys `mastra dev` would load from .env: no live calls in e2e.
+        TAVILY_API_KEY: "",
+        FIRECRAWL_API_KEY: "",
       },
     },
     {

@@ -4,7 +4,9 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { ArrowUpIcon, SquareIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type FormEvent, type KeyboardEvent, useState } from "react";
+import { type FormEvent, type KeyboardEvent, type ReactNode, useState } from "react";
+import { Streamdown } from "streamdown";
+import { isToolPart, type ToolPart, ToolTrace } from "@/components/tool-trace";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
 import { Message, MessageContent } from "@/components/ui/message";
@@ -79,7 +81,10 @@ export function Chat({
                     messageId={message.id}
                     scrollAnchor={message.role === "user"}
                   >
-                    <ChatMessage message={message} />
+                    <ChatMessage
+                      message={message}
+                      streaming={status === "streaming" && message.id === messages.at(-1)?.id}
+                    />
                   </MessageScrollerItem>
                 ))}
               </MessageScrollerContent>
@@ -119,16 +124,51 @@ export function Chat({
   );
 }
 
-function ChatMessage({ message }: { message: UIMessage }) {
-  const isUser = message.role === "user";
-  const text = message.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("");
+function ChatMessage({ message, streaming }: { message: UIMessage; streaming: boolean }) {
+  if (message.role === "user") {
+    const text = message.parts.flatMap((p) => (p.type === "text" ? [p.text] : [])).join("");
+    return (
+      <Message align="end" data-role="user">
+        <MessageContent>
+          <Bubble align="end">
+            <BubbleContent className="whitespace-pre-wrap">{text}</BubbleContent>
+          </Bubble>
+        </MessageContent>
+      </Message>
+    );
+  }
+
+  // Consecutive tool parts share one Trace; text parts render as Markdown.
+  const blocks: ReactNode[] = [];
+  let tools: ToolPart[] = [];
+  const flushTools = () => {
+    if (tools.length > 0) blocks.push(<ToolTrace key={tools[0]?.toolCallId} parts={tools} />);
+    tools = [];
+  };
+  message.parts.forEach((part, index) => {
+    if (isToolPart(part)) {
+      tools.push(part);
+    } else if (part.type === "text" && part.text) {
+      flushTools();
+      blocks.push(
+        <Streamdown
+          // biome-ignore lint/suspicious/noArrayIndexKey: text parts have no id; order is stable
+          key={index}
+          isAnimating={streaming}
+          // No images or raw HTML: a prompt-injected reply must not make the browser fetch URLs.
+          disallowedElements={["img"]}
+          skipHtml
+        >
+          {part.text}
+        </Streamdown>,
+      );
+    }
+  });
+  flushTools();
+
   return (
-    <Message align={isUser ? "end" : "start"} data-role={message.role}>
-      <MessageContent>
-        <Bubble variant={isUser ? "default" : "ghost"} align={isUser ? "end" : "start"}>
-          <BubbleContent className="whitespace-pre-wrap">{text}</BubbleContent>
-        </Bubble>
-      </MessageContent>
+    <Message align="start" data-role="assistant">
+      <MessageContent className="gap-3">{blocks}</MessageContent>
     </Message>
   );
 }

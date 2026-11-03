@@ -23,4 +23,9 @@ describe("loadEnv", () => {
     expect(error?.message).toMatch(/AGENT_SHARED_SECRET/);
     expect(error?.message).not.toContain("short-secret-value");
   });
+
+  it("treats empty provider keys as unset", () => {
+    const env = loadEnv({ LLM_MODE: "mock", AGENT_SHARED_SECRET: secret, TAVILY_API_KEY: "" });
+    expect(env.TAVILY_API_KEY).toBeUndefined();
+  });
 });

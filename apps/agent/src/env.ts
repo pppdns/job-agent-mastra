@@ -1,15 +1,18 @@
 import { z } from "zod";
 
+/** Optional secret; an empty string counts as unset (e2e blanks keys that `mastra dev` would load from .env). */
+const optionalKey = z.preprocess((v) => (v === "" ? undefined : v), z.string().min(1).optional());
+
 const envSchema = z.object({
   LLM_MODE: z.enum(["live", "mock"]).default("live"),
-  AI_GATEWAY_API_KEY: z.string().min(1).optional(),
+  AI_GATEWAY_API_KEY: optionalKey,
   // Vercel AI Gateway model ids (provider/model)
   COPILOT_MODEL: z.string().min(1).default("anthropic/claude-sonnet-5.5"),
   COPILOT_FAST_MODEL: z.string().min(1).default("anthropic/claude-haiku-5.5"),
   AGENT_SHARED_SECRET: z.string().min(24, "must be at least 24 characters"),
   // Web providers. Without them, URL ingestion asks the user to paste the listing.
-  TAVILY_API_KEY: z.string().min(1).optional(),
-  FIRECRAWL_API_KEY: z.string().min(1).optional(),
+  TAVILY_API_KEY: optionalKey,
+  FIRECRAWL_API_KEY: optionalKey,
 });
 
 export type Env = z.infer<typeof envSchema>;
