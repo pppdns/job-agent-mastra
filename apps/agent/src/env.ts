@@ -10,6 +10,9 @@ const envSchema = z.object({
   COPILOT_MODEL: z.string().min(1).default("anthropic/claude-sonnet-5.5"),
   COPILOT_FAST_MODEL: z.string().min(1).default("anthropic/claude-haiku-5.5"),
   AGENT_SHARED_SECRET: z.string().min(24, "must be at least 24 characters"),
+  // Observational Memory: unobserved message tokens that trigger compaction (Mastra default 30k).
+  // Tests force a tiny value to exercise compaction offline.
+  OM_MESSAGE_TOKENS: z.coerce.number().int().min(100).default(30_000),
   // Web providers. Without them, URL ingestion asks the user to paste the listing.
   // "fixture" serves fixtures/web instead of Tavily (offline e2e/evals); never in normal use.
   WEB_MODE: z.enum(["live", "fixture"]).default("live"),

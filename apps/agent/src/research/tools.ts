@@ -4,6 +4,7 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { checkUrl, MAX_URL_LENGTH, type Resolver } from "../ingest/url-guard";
 import type { WebProviders } from "../web/providers";
+import { withRetry } from "../web/retry";
 import type { ResearchBudget } from "./budget";
 
 export const MAX_PAGE_CHARS_FOR_MODEL = 12_000;
@@ -13,6 +14,7 @@ export type ProgressEvent =
   | { kind: "search"; query: string; results: number }
   | { kind: "read"; url: string; ok: boolean; note?: string }
   | { kind: "claim"; topic: string; evidence: string; text: string }
+  | { kind: "retry"; what: string; attempt: number; reason: string }
   | { kind: "budget_limited"; reason: string }
   | { kind: "done"; status: string; claims: number };
 
@@ -32,6 +34,15 @@ const stopped = (reason: string) => ({
   error: `Research budget exhausted (${reason}). Stop calling tools and summarize what you recorded.`,
 });
 
+const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+/** Retries inside one budget reservation: failed provider calls are typically not billed. */
+const retryOptions = (ctx: ResearchContext, what: string) => ({
+  signal: ctx.budget.signal,
+  onRetry: (attempt: number, error: Error) =>
+    ctx.progress({ kind: "retry", what, attempt, reason: error.message }),
+});
+
 /** Tools for one research run; every provider call goes through the run's budget. */
 export function createResearchTools(ctx: ResearchContext) {
   const web_search = createTool({
@@ -41,7 +52,17 @@ export function createResearchTools(ctx: ResearchContext) {
     execute: async ({ query }) => {
       const reserved = ctx.budget.reserve("search");
       if (!reserved.ok) return stopped(reserved.reason);
-      const results = await ctx.web.search(query, { maxResults: 5 }, ctx.budget.signal);
+      let results: Awaited<ReturnType<WebProviders["search"]>>;
+      try {
+        results = await withRetry(
+          () => ctx.web.search(query, { maxResults: 5 }, ctx.budget.signal),
+          retryOptions(ctx, `search “${query}”`),
+        );
+      } catch (error) {
+        if (ctx.budget.signal.aborted) throw error;
+        await ctx.progress({ kind: "search", query, results: 0 });
+        return { ok: false as const, error: errorText(error) };
+      }
       await ctx.progress({ kind: "search", query, results: results.length });
       return { ok: true as const, results };
     },
@@ -61,7 +82,13 @@ export function createResearchTools(ctx: ResearchContext) {
       }
       const reserved = ctx.budget.reserve("extract");
       if (!reserved.ok) return stopped(reserved.reason);
-      const result = await ctx.web.extract(checked.url.href, "basic", ctx.budget.signal);
+      const result = await withRetry(
+        () => ctx.web.extract(checked.url.href, "basic", ctx.budget.signal),
+        retryOptions(ctx, `read ${checked.url.href}`),
+      ).catch((error: unknown) => {
+        if (ctx.budget.signal.aborted) throw error;
+        return { ok: false as const, error: errorText(error) };
+      });
       if (result.ok && result.finalUrl) {
         const final = await checkUrl(result.finalUrl, ctx.resolve);
         if (!final.ok) {

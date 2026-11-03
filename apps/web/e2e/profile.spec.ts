@@ -23,6 +23,8 @@ async function newChat(page: Page): Promise<string> {
 }
 
 test("approved profile reaches new chats; local notes and drafts behave", async ({ page }) => {
+  // About a dozen turns plus the profile page: slower when the suite runs in parallel.
+  test.setTimeout(60_000);
   const chatA = await newChat(page);
   const threadA = chatA.split("/").pop();
 

@@ -5,6 +5,7 @@ import { createDb, type Db, migrateDb, upsertJob } from "@copilot/db";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Resolver } from "../ingest/url-guard";
 import { createFixtureWebProviders } from "../web/fixture-providers";
+import { RetryableError } from "../web/retry";
 import { runResearch } from "./run";
 import type { ProgressEvent } from "./tools";
 
@@ -71,5 +72,30 @@ describe("runResearch", () => {
     ).toMatchObject({
       status: "unavailable",
     });
+  });
+
+  it("retries a transient read failure and reports the retry as progress", async () => {
+    const web = createFixtureWebProviders();
+    let failures = 1;
+    const flaky = {
+      ...web,
+      extract: async (...args: Parameters<typeof web.extract>) => {
+        if (failures-- > 0) throw new RetryableError("tavily extract failed with 503");
+        return web.extract(...args);
+      },
+    };
+    const result = await runResearch(
+      { jobId, topics: ["business"], questions: [] },
+      deps({ web: flaky }),
+    );
+    expect(result).toMatchObject({ status: "completed" });
+    expect(events.map((e) => e.kind)).toEqual([
+      "start",
+      "search",
+      "retry",
+      "read",
+      "claim",
+      "done",
+    ]);
   });
 });

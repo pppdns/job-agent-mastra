@@ -1,5 +1,6 @@
 import { addSource, type Db, type SourceKind, type SourceProvider, upsertJob } from "@copilot/db";
 import type { PageResult, WebProviders } from "../web/providers";
+import { withRetry } from "../web/retry";
 import {
   canonicalLinkedInUrl,
   isLinkedInHost,
@@ -128,7 +129,7 @@ async function ingestLinkedIn(
   let partial: ParsedPage | undefined;
 
   for (const depth of ["basic", "advanced"] as const) {
-    const result = await web.extract(canonical, depth, deps.signal);
+    const result = await safeExtract(web, canonical, depth, deps.signal);
     if (!result.ok) {
       attempts.push({ step: `linkedin:${depth}`, url: canonical, outcome: result.error });
       continue;
@@ -182,10 +183,14 @@ async function findEmployerListing(
 ): Promise<Found | null> {
   let hits: Awaited<ReturnType<WebProviders["search"]>>;
   try {
-    hits = await web.search(
-      `"${expected.title}" "${expected.company}"`,
-      { maxResults: 5, includeDomains: ATS_DOMAINS },
-      deps.signal,
+    hits = await withRetry(
+      () =>
+        web.search(
+          `"${expected.title}" "${expected.company}"`,
+          { maxResults: 5, includeDomains: ATS_DOMAINS },
+          deps.signal,
+        ),
+      { signal: deps.signal },
     );
   } catch (error) {
     attempts.push({ step: "ats:search", outcome: errorText(error) });
@@ -199,7 +204,7 @@ async function findEmployerListing(
       attempts.push({ step: "ats:candidate", url: hit.url, outcome: checked.reason });
       continue;
     }
-    const result = await web.extract(checked.url.href, "basic", deps.signal);
+    const result = await safeExtract(web, checked.url.href, "basic", deps.signal);
     if (!result.ok) {
       attempts.push({ step: "ats:candidate", url: hit.url, outcome: result.error });
       continue;
@@ -227,7 +232,7 @@ async function readPage(
   const kind: SourceKind = isAtsUrl(url) ? "ats" : "web";
   const scrape = web.scrape;
   const readers: { provider: SourceProvider; read: () => Promise<PageResult> }[] = [
-    { provider: "tavily", read: () => web.extract(url, "basic", deps.signal) },
+    { provider: "tavily", read: () => safeExtract(web, url, "basic", deps.signal) },
   ];
   if (scrape) readers.push({ provider: "firecrawl", read: () => scrape(url, deps.signal) });
 
@@ -345,6 +350,21 @@ export function canonicalWebUrl(url: URL): string {
     if (/^(utm_|gh_src$|ref$|source$|trk$|lever-source)/i.test(key)) copy.searchParams.delete(key);
   }
   return copy.href;
+}
+
+/** Provider read with bounded retries; a final failure becomes an `ok: false` result. */
+async function safeExtract(
+  web: WebProviders,
+  url: string,
+  depth: "basic" | "advanced",
+  signal?: AbortSignal,
+): Promise<PageResult> {
+  try {
+    return await withRetry(() => web.extract(url, depth, signal), { signal });
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return { ok: false, error: errorText(error) };
+  }
 }
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));

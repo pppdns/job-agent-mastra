@@ -5,7 +5,7 @@ import { Mastra } from "@mastra/core/mastra";
 import { LibSQLStore } from "@mastra/libsql";
 import { MockLanguageModelV4 } from "ai/test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { chatMemory } from "./memory";
+import { createChatMemory } from "./memory";
 import { loadThreadUIMessages } from "./routes/thread-messages";
 
 /** Model that records every prompt it receives, so tests can inspect the context. */
@@ -37,7 +37,7 @@ describe("chat memory", () => {
       name: "Memory test",
       instructions: "Test agent.",
       model: recordingModel(prompts),
-      memory: chatMemory,
+      memory: createChatMemory(),
     });
     new Mastra({
       agents: { agent },

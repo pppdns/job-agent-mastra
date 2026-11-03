@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, type KeyboardEvent, type ReactNode, useState } from "react";
 import { Streamdown } from "streamdown";
 import { ApprovalCard } from "@/components/approval-card";
+import { CompactionLine, isCompactionPart, isHiddenMemoryPart } from "@/components/compaction-line";
 import { PageHeader } from "@/components/page-header";
 import {
   isProgressPart,
@@ -183,7 +184,13 @@ function ChatMessage({
 
   message.parts.forEach((part, index) => {
     const approvalId = isToolPart(part) ? proposedApprovalId(part) : undefined;
-    if (isProgressPart(part)) return;
+    if (isProgressPart(part) || isHiddenMemoryPart(part)) return;
+    if (isCompactionPart(part)) {
+      flushTools();
+      // biome-ignore lint/suspicious/noArrayIndexKey: message parts are append-only
+      blocks.push(<CompactionLine key={`om-${index}`} part={part} />);
+      return;
+    }
     if (isToolPart(part) && part.type === "tool-research_company") {
       flushTools();
       const done = part.state === "output-available" || part.state === "output-error";

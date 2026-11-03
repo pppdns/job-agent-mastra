@@ -189,6 +189,13 @@ function mockTurn({
     return { kind: "text", text: `Mock reply: ${name} ${outcome}` };
   }
 
+  // Observational Memory's Observer/Reflector: reply in the format OM parses.
+  if (systemText(prompt).startsWith("You are the memory consciousness")) {
+    return {
+      kind: "text",
+      text: "<observations>\n* 🔴 (mock) The user and assistant discussed earlier messages in this chat.\n</observations>",
+    };
+  }
   const text = lastUserText(prompt);
   if (offered("ingest_listing") && /^https?:\/\/\S+$/.test(text)) {
     return call("ingest_listing", { url: text });

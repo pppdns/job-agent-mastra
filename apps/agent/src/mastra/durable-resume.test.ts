@@ -9,7 +9,7 @@ import { LibSQLStore } from "@mastra/libsql";
 import { readUIMessageStream, simulateReadableStream, type UIMessage } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { describe, expect, it } from "vitest";
-import { chatMemory } from "./memory";
+import { createChatMemory } from "./memory";
 
 const WORDS = Array.from({ length: 30 }, (_, i) => `w${i}`);
 const FULL_REPLY = WORDS.join(" ");
@@ -56,7 +56,7 @@ describe("durable agent resume (spike)", () => {
       name: "Durable spike",
       instructions: "Test agent.",
       model: slowModel(),
-      memory: chatMemory,
+      memory: createChatMemory(),
     });
     const durable = createDurableAgent({ agent });
     new Mastra({

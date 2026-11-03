@@ -2,6 +2,7 @@ import {
   CircleAlertIcon,
   FileTextIcon,
   NotebookPenIcon,
+  RotateCcwIcon,
   SearchIcon,
   SparklesIcon,
 } from "lucide-react";
@@ -19,6 +20,7 @@ export type ProgressPart = {
     | { kind: "search"; query: string; results: number }
     | { kind: "read"; url: string; ok: boolean; note?: string }
     | { kind: "claim"; topic: string; evidence: string; text: string }
+    | { kind: "retry"; what: string; attempt: number; reason: string }
     | { kind: "budget_limited"; reason: string }
     | { kind: "done"; status: string; claims: number };
 };
@@ -68,6 +70,15 @@ export function ResearchProgress({ parts, running }: { parts: ProgressPart[]; ru
                 icon={<NotebookPenIcon />}
                 title="Recorded a finding"
                 description={e.text}
+              />
+            );
+          case "retry":
+            return (
+              <Line
+                key={key}
+                icon={<RotateCcwIcon />}
+                title={`Retrying ${e.what}`}
+                description={`attempt ${e.attempt + 1}: ${e.reason}`}
               />
             );
           case "budget_limited":

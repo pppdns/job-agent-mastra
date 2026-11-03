@@ -1,4 +1,4 @@
-import { currentProfile, pendingApprovalsForThread } from "@copilot/db";
+import { currentProfile, type Db, pendingApprovalsForThread } from "@copilot/db";
 import { COPILOT_AGENT_ID } from "@copilot/shared";
 import { Agent } from "@mastra/core/agent";
 import { createDurableAgent } from "@mastra/core/agent/durable";
@@ -45,19 +45,22 @@ Saved jobs and comparisons:
 - To compare with or recall saved jobs, use find_saved_jobs and get_job; don't guess. If a reference could match several jobs, ask which one.
 - Explain criteria, tradeoffs, evidence quality and missing data. If get_job says profileStale, say that assessment predates the current profile and may need review.`;
 
+/** System prompt for one turn: fixed rules + approved profile + this chat's pending approvals (all from the DB). */
+export async function buildInstructions(db: Db, threadId?: string): Promise<string> {
+  const parts = [BASE_INSTRUCTIONS, formatProfile(await currentProfile(db))];
+  if (threadId) parts.push(formatPendingApprovals(await pendingApprovalsForThread(db, threadId)));
+  return parts.join("\n\n");
+}
+
 export const copilotBaseAgent = new Agent({
   id: COPILOT_AGENT_ID,
   name: "Job Research Copilot",
   description: "Assesses job listings and researches the companies behind them.",
   instructions: async ({ requestContext }) => {
-    const db = await getAppDb();
     const threadId = requestContext.get(THREAD_CONTEXT_KEY);
-    const parts = [BASE_INSTRUCTIONS, formatProfile(await currentProfile(db))];
-    if (typeof threadId === "string") {
-      parts.push(formatPendingApprovals(await pendingApprovalsForThread(db, threadId)));
-    }
-    return parts.join("\n\n");
+    return buildInstructions(await getAppDb(), typeof threadId === "string" ? threadId : undefined);
   },
+
   model: () => getModel("main"),
   memory: chatMemory,
   // Long assessments are tool arguments: a low provider default would cut them into invalid JSON.

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RetryableError } from "./retry";
 
 // Thin, schema-validated clients for Tavily and Firecrawl (docs/spikes/extraction.md).
 // Errors carry status codes only: never request bodies, headers or keys.
@@ -53,15 +54,23 @@ async function postJson(
   name: string,
 ): Promise<{ status: number; json: unknown }> {
   const timeout = AbortSignal.timeout(PROVIDER_TIMEOUT_MS);
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-    body: JSON.stringify(body),
-    signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+    });
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    // Network failure or our timeout: worth a retry (callers bound it with withRetry).
+    throw new RetryableError(`${name} could not be reached`);
+  }
   const json = await response.json().catch(() => null);
-  if (!response.ok && response.status >= 500)
-    throw new Error(`${name} failed with ${response.status}`);
+  if (response.status === 429 || response.status >= 500) {
+    throw new RetryableError(`${name} failed with ${response.status}`);
+  }
   return { status: response.status, json };
 }
 
