@@ -6,13 +6,13 @@ import { getAppDb } from "../app-db";
 import { chatMemory } from "../memory";
 import { getModel } from "../models";
 import { formatPendingApprovals, formatProfile } from "../profile-context";
+import { THREAD_CONTEXT_KEY } from "../thread-context";
 import { ingestListingTool } from "../tools/ingest-listing";
 import { proposeJobSnapshotTool, saveJobDraftTool } from "../tools/job-drafts";
 import { findSavedJobsTool, getJobTool, proposeProfileChangeTool } from "../tools/profile";
 import { researchCompanyTool } from "../tools/research-company";
 
-/** Request context key the /chat route sets to the chat thread id (JSON-serializable for durable runs). */
-export const THREAD_CONTEXT_KEY = "copilot.threadId";
+export { THREAD_CONTEXT_KEY } from "../thread-context";
 
 const BASE_INSTRUCTIONS = `You are Job Research Copilot, a private assistant that helps one person evaluate job opportunities.
 

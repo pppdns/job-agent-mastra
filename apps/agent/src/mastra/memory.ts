@@ -1,7 +1,9 @@
 import { Memory } from "@mastra/memory";
 import { env } from "../env";
 import { recordMemoryCall } from "../usage/memory-usage";
+import { meteredModel } from "../usage/metered-model";
 import { getModel } from "./models";
+import { THREAD_CONTEXT_KEY } from "./thread-context";
 
 /**
  * Chat memory: one thread per chat, all under the single local resource.
@@ -45,7 +47,13 @@ export const createChatMemory = ({ messageTokens = env.OM_MESSAGE_TOKENS } = {})
 `,
       },
       generateTitle: {
-        model: () => getModel("fast"),
+        // Metered: title calls are outside the agent's steps, so the run recorder can't see them.
+        model: ({ requestContext }) => {
+          const threadId = requestContext.get(THREAD_CONTEXT_KEY);
+          return meteredModel(getModel("fast"), (usage) =>
+            recordMemoryCall("title", typeof threadId === "string" ? threadId : undefined, usage),
+          );
+        },
         instructions:
           "Write a short title (at most 6 words) for this chat, based on the user's first message. " +
           "Name the company or role when one is mentioned. Reply with the title only, without quotes.",

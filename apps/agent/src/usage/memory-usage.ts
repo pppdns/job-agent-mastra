@@ -4,11 +4,12 @@ import { getAppDb } from "../mastra/app-db";
 import { estimateLlmUsd } from "./prices";
 
 /**
- * One event per Observational Memory model call. OM runs in the background, so the call is
+ * One event per background model call (Observational Memory, chat titles). These run
+ * outside the agent's steps, so the call is
  * attached to the chat's active run, or its latest one. Failures never affect the chat.
  */
 export async function recordMemoryCall(
-  kind: "observation" | "reflection",
+  kind: "observation" | "reflection" | "title",
   threadId: string | undefined,
   usage: { inputTokens?: number; outputTokens?: number } | undefined,
   error?: Error,
@@ -22,9 +23,9 @@ export async function recordMemoryCall(
       {
         runId: run.id,
         type: "llm",
-        category: "memory",
+        category: kind === "title" ? "llm" : "memory",
         name: env.COPILOT_FAST_MODEL,
-        actor: kind === "observation" ? "observer" : "reflector",
+        actor: kind === "observation" ? "observer" : kind === "reflection" ? "reflector" : "title",
         status: error ? "error" : "ok",
         at: new Date(),
         inputTokens: usage?.inputTokens ?? 0,

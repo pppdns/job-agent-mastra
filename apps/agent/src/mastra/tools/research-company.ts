@@ -22,6 +22,7 @@ export const researchCompanyTool = createTool({
       db: await getAppDb(),
       web: meterWeb(webProviders(), recorderFor(context?.agent?.threadId), "researcher"),
       recorder: recorderFor(context?.agent?.threadId),
+      tracingContext: context?.tracingContext,
       resolve: webResolver(),
       threadId: context?.agent?.threadId,
       signal: context?.abortSignal,

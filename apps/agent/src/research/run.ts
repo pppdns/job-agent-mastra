@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { type Db, getJobDetail, listClaims } from "@copilot/db";
 import { RESEARCH_TOPIC_LABELS, type ResearchTopic } from "@copilot/shared";
+import type { TracingContext } from "@mastra/core/observability";
 import { env } from "../env";
 import type { Resolver } from "../ingest/url-guard";
 import { researcherAgent } from "../mastra/agents/researcher";
@@ -18,6 +19,8 @@ export type ResearchDeps = {
   /** Streams a progress event to the chat (data-research-progress). */
   emit: (data: ProgressEvent & { runId: string }) => Promise<void> | undefined;
   limits?: BudgetLimits;
+  /** The research tool's tracing context, so the researcher's spans nest in the chat run's trace. */
+  tracingContext?: TracingContext;
   /** Records the researcher's own model calls and retries in the chat run's usage. */
   recorder?: RunRecorder;
   resolve?: Resolver;
@@ -72,6 +75,7 @@ export async function runResearch(
       toolsets: { research: tools },
       maxSteps: limits.maxToolCalls + 4,
       abortSignal: budget.signal,
+      tracingContext: deps.tracingContext,
       onStepFinish: ({ usage }) => {
         budget.addLlmUsage(env.COPILOT_MODEL, usage ?? {});
         deps.recorder?.llm("researcher", env.COPILOT_MODEL, usage ?? {});
