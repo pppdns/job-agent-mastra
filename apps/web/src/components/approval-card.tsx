@@ -73,38 +73,31 @@ export function ApprovalCard({ approvalId, threadId }: { approvalId: string; thr
     });
 
   return (
-    <Item variant="outline" className="flex-col items-stretch" aria-label="Snapshot approval">
-      <div className="flex items-start gap-3">
-        <ItemContent>
-          <ItemTitle>Save approved snapshot?</ItemTitle>
-          <ItemDescription>
-            {[job.title, job.company].filter(Boolean).join(" · ") || "Untitled job"} — draft v
-            {view.draftVersion}. Recommendation:{" "}
-            {RECOMMENDATION_LABELS[assessment.recommendation.verdict]}.
-          </ItemDescription>
-        </ItemContent>
-        <ItemActions>
-          {view.status === "pending" ? (
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={pending}
-                onClick={() => decide("reject")}
-              >
-                Reject
-              </Button>
-              <Button size="sm" disabled={pending} onClick={() => decide("approve")}>
-                Approve
-              </Button>
-            </>
-          ) : (
-            <StatusBadge view={view} />
-          )}
-        </ItemActions>
-      </div>
+    <Item variant="outline" aria-label="Snapshot approval">
+      <ItemContent>
+        <ItemTitle>Save approved snapshot?</ItemTitle>
+        <ItemDescription>
+          {[job.title, job.company].filter(Boolean).join(" · ") || "Untitled job"} — draft v
+          {view.draftVersion}. Recommendation:{" "}
+          {RECOMMENDATION_LABELS[assessment.recommendation.verdict]}.
+        </ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        {view.status === "pending" ? (
+          <>
+            <Button size="sm" variant="outline" disabled={pending} onClick={() => decide("reject")}>
+              Reject
+            </Button>
+            <Button size="sm" disabled={pending} onClick={() => decide("approve")}>
+              Approve
+            </Button>
+          </>
+        ) : (
+          <StatusBadge view={view} />
+        )}
+      </ItemActions>
       {error && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="basis-full text-sm text-destructive">
           {error}
         </p>
       )}

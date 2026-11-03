@@ -7,10 +7,13 @@ import { e2eDb } from "../playwright.config";
 
 const visible = (page: Page, selector: string) => page.locator(selector).filter({ visible: true });
 
+/** Sends a message and waits until the reply has finished streaming. */
 async function send(page: Page, text: string) {
   const input = page.getByRole("textbox", { name: "Message" }).filter({ visible: true });
   await input.fill(text);
   await input.press("Enter");
+  await expect(page.getByRole("button", { name: "Stop" })).toHaveCount(0);
+  await expect(input).toHaveValue("");
 }
 
 test("a proposed snapshot is saved only after the user approves it", async ({ page, request }) => {
@@ -20,11 +23,12 @@ test("a proposed snapshot is saved only after the user approves it", async ({ pa
 
   await send(page, "Listing: Staff Data Engineer at Globex Analytics, remote within the EU.");
   await expect(visible(page, '[data-role="assistant"]').last()).toContainText("Saved draft v1");
+  await expect(visible(page, '[data-role="assistant"]').last()).toContainText(
+    "Mock reply: save_job_draft v1",
+  );
 
   await send(page, "Propose snapshot");
-  const card = page
-    .getByRole("group", { name: "Snapshot approval" })
-    .or(page.locator('[aria-label="Snapshot approval"]').filter({ visible: true }));
+  const card = page.locator('[aria-label="Snapshot approval"]').filter({ visible: true });
   await expect(card).toContainText("Save approved snapshot?");
   await expect(card).toContainText("draft v1");
 
