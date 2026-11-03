@@ -49,11 +49,21 @@ export function Chat({
     id: threadId,
     messages: initialMessages,
     transport,
-    // Picks up the new chat and its generated title in the sidebar.
-    onFinish: () => router.refresh(),
+    // Reconnects to a reply that is still running after a refresh (GET /api/chat/<id>/stream).
+    resume: true,
+    // Picks up the new chat in the sidebar; the title is generated after the run, so look again.
+    onFinish: () => {
+      router.refresh();
+      setTimeout(() => router.refresh(), 4000);
+    },
   });
   const [input, setInput] = useState("");
   const busy = status === "submitted" || status === "streaming";
+
+  /** Stops the run on the server (research included), then closes the stream. */
+  function stopRun() {
+    void fetch(`/api/chat/${encodeURIComponent(threadId)}/stop`, { method: "POST" }).finally(stop);
+  }
 
   function submit(event?: FormEvent) {
     event?.preventDefault();
@@ -116,7 +126,7 @@ export function Chat({
             className="max-h-48 min-h-12 resize-none"
           />
           {busy ? (
-            <Button type="button" size="icon" variant="outline" onClick={stop} aria-label="Stop">
+            <Button type="button" size="icon" variant="outline" onClick={stopRun} aria-label="Stop">
               <SquareIcon />
             </Button>
           ) : (

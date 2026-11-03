@@ -1,14 +1,18 @@
-import { currentProfile } from "@copilot/db";
+import { currentProfile, pendingApprovalsForThread } from "@copilot/db";
 import { COPILOT_AGENT_ID } from "@copilot/shared";
 import { Agent } from "@mastra/core/agent";
+import { createDurableAgent } from "@mastra/core/agent/durable";
 import { getAppDb } from "../app-db";
 import { chatMemory } from "../memory";
 import { getModel } from "../models";
-import { formatProfile } from "../profile-context";
+import { formatPendingApprovals, formatProfile } from "../profile-context";
 import { ingestListingTool } from "../tools/ingest-listing";
 import { proposeJobSnapshotTool, saveJobDraftTool } from "../tools/job-drafts";
 import { findSavedJobsTool, getJobTool, proposeProfileChangeTool } from "../tools/profile";
 import { researchCompanyTool } from "../tools/research-company";
+
+/** Request context key the /chat route sets to the chat thread id (JSON-serializable for durable runs). */
+export const THREAD_CONTEXT_KEY = "copilot.threadId";
 
 const BASE_INSTRUCTIONS = `You are Job Research Copilot, a private assistant that helps one person evaluate job opportunities.
 
@@ -41,12 +45,19 @@ Saved jobs and comparisons:
 - To compare with or recall saved jobs, use find_saved_jobs and get_job; don't guess. If a reference could match several jobs, ask which one.
 - Explain criteria, tradeoffs, evidence quality and missing data. If get_job says profileStale, say that assessment predates the current profile and may need review.`;
 
-export const copilotAgent = new Agent({
+export const copilotBaseAgent = new Agent({
   id: COPILOT_AGENT_ID,
   name: "Job Research Copilot",
   description: "Assesses job listings and researches the companies behind them.",
-  instructions: async () =>
-    `${BASE_INSTRUCTIONS}\n\n${formatProfile(await currentProfile(await getAppDb()))}`,
+  instructions: async ({ requestContext }) => {
+    const db = await getAppDb();
+    const threadId = requestContext.get(THREAD_CONTEXT_KEY);
+    const parts = [BASE_INSTRUCTIONS, formatProfile(await currentProfile(db))];
+    if (typeof threadId === "string") {
+      parts.push(formatPendingApprovals(await pendingApprovalsForThread(db, threadId)));
+    }
+    return parts.join("\n\n");
+  },
   model: () => getModel("main"),
   memory: chatMemory,
   // Long assessments are tool arguments: a low provider default would cut them into invalid JSON.
@@ -60,4 +71,14 @@ export const copilotAgent = new Agent({
     get_job: getJobTool,
     research_company: researchCompanyTool,
   },
+});
+
+/**
+ * Chat runs are durable: they outlive the HTTP request, can be re-observed after a refresh
+ * (in-process replay cache, see docs/spikes/durable-resume.md) and stopped by run id.
+ */
+export const copilotAgent = createDurableAgent({
+  agent: copilotBaseAgent,
+  // Keep replay available briefly after a run ends, for a refresh right at the end.
+  cleanupTimeoutMs: 60_000,
 });

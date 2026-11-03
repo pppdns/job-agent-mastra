@@ -203,6 +203,23 @@ export const claims = sqliteTable(
   (t) => [index("app_claims_job_idx").on(t.jobId)],
 );
 
+export const RUN_STATUSES = ["running", "completed", "cancelled", "failed", "interrupted"] as const;
+export type RunStatus = (typeof RUN_STATUSES)[number];
+
+/** Chat runs (one per user turn). Maps a thread to its active durable run for reconnect/stop. */
+export const runs = sqliteTable(
+  "app_runs",
+  {
+    id: text("id").primaryKey(),
+    threadId: text("thread_id").notNull(),
+    status: text("status", { enum: RUN_STATUSES }).notNull(),
+    error: text("error"),
+    startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
+    endedAt: integer("ended_at", { mode: "timestamp_ms" }),
+  },
+  (t) => [index("app_runs_thread_idx").on(t.threadId, t.status)],
+);
+
 export type Job = typeof jobs.$inferSelect;
 export type JobDraft = typeof jobDrafts.$inferSelect;
 export type JobSnapshot = typeof jobSnapshots.$inferSelect;
@@ -210,6 +227,7 @@ export type Approval = typeof approvals.$inferSelect;
 export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
 export type ProfileFact = typeof profileFacts.$inferSelect;
 export type Claim = typeof claims.$inferSelect;
+export type Run = typeof runs.$inferSelect;
 export type Source = typeof sources.$inferSelect;
 export type SourceKind = (typeof SOURCE_KINDS)[number];
 export type SourceProvider = (typeof SOURCE_PROVIDERS)[number];

@@ -470,3 +470,26 @@ export async function getApprovalView(db: Db, id: string) {
 }
 
 export type ApprovalView = NonNullable<Awaited<ReturnType<typeof getApprovalView>>>;
+
+/** Pending approvals proposed in one chat, as the agent sees them each turn. */
+export async function pendingApprovalsForThread(db: Db, threadId: string) {
+  const rows = await db.query.approvals.findMany({
+    where: and(eq(approvals.threadId, threadId), eq(approvals.status, "pending")),
+    orderBy: desc(approvals.createdAt),
+  });
+  return rows.map((a) =>
+    a.kind === "job_snapshot"
+      ? {
+          id: a.id,
+          kind: a.kind,
+          summary: `snapshot of ${[snapshotPayloadOf(a).job.title, snapshotPayloadOf(a).job.company].filter(Boolean).join(" at ") || "a job"} (draft v${a.draftVersion}, jobId ${a.jobId})`,
+        }
+      : {
+          id: a.id,
+          kind: a.kind,
+          summary: `profile change: ${(a.payload as ProfileChangePayload).changes
+            .map((c) => (c.op === "remove" ? `remove "${c.before.text}"` : `${c.op} "${c.text}"`))
+            .join("; ")}`,
+        },
+  );
+}

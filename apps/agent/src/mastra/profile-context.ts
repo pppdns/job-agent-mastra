@@ -23,3 +23,12 @@ export function formatProfile({
   });
   return [`Approved profile (version ${version}):`, ...sections].join("\n");
 }
+
+/** Pending approvals of this chat, from the database (they survive compaction and restarts). */
+export function formatPendingApprovals(pending: { id: string; summary: string }[]): string {
+  if (pending.length === 0) return "Pending approvals in this chat: none.";
+  return [
+    "Pending approvals in this chat (waiting for the user in the app; not applied yet):",
+    ...pending.map((p) => `- [approval:${p.id}] ${p.summary}`),
+  ].join("\n");
+}

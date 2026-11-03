@@ -11,6 +11,7 @@ export { AssessmentError, hashPayload } from "./hash";
 export * from "./jobs";
 export { findWorkspaceRoot, resolveDatabaseUrl } from "./paths";
 export * from "./profile";
+export * from "./runs";
 export type {
   Approval,
   ApprovalPayload,
@@ -21,6 +22,7 @@ export type {
   JobSnapshot,
   ProfileChangePayload,
   ProfileFact,
+  Run,
   SnapshotPayload,
   Source,
   SourceKind,

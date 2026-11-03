@@ -74,6 +74,8 @@ export function createMockModel(modelId = "mock"): LanguageModelV4 {
         };
       }
       const words = turn.text.split(/(?<= )/);
+      // "Slow:" replies take ~4.5 s, so e2e can refresh or stop mid-stream.
+      const slow = turn.text.startsWith("Mock reply: Slow:");
       return {
         stream: simulateReadableStream({
           chunks: [
@@ -87,7 +89,7 @@ export function createMockModel(modelId = "mock"): LanguageModelV4 {
               usage: usage(words.length),
             },
           ],
-          chunkDelayInMs: 5,
+          chunkDelayInMs: slow ? 150 : 5,
         }),
       };
     },
@@ -236,6 +238,10 @@ function mockTurn({
   if (offered("propose_job_snapshot") && text === "Propose snapshot") {
     const jobId = latestJobId(prompt);
     if (jobId) return call("propose_job_snapshot", { jobId });
+  }
+  if (text.startsWith("Slow:")) {
+    const words = Array.from({ length: 30 }, (_, i) => `w${i + 1}`).join(" ");
+    return { kind: "text", text: `Mock reply: Slow: ${words} end.` };
   }
   return { kind: "text", text: `Mock reply: ${text}` };
 }

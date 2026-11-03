@@ -1,4 +1,4 @@
-import { createDb, type Db, migrateDb } from "@copilot/db";
+import { createDb, type Db, interruptStaleRuns, migrateDb } from "@copilot/db";
 
 let ready: Promise<Db> | undefined;
 
@@ -7,6 +7,8 @@ export function getAppDb(): Promise<Db> {
   ready ??= (async () => {
     const db = createDb();
     await migrateDb(db);
+    // This process is the only one running chat runs: earlier "running" rows are orphans.
+    await interruptStaleRuns(db);
     return db;
   })().catch((error) => {
     ready = undefined;

@@ -1,8 +1,14 @@
+import { activeRun, endRun, startRun } from "@copilot/db";
 import { COPILOT_AGENT_ID } from "@copilot/shared";
-import { handleChatStream } from "@mastra/ai-sdk";
-import { registerApiRoute } from "@mastra/core/server";
+import { toAISdkStream } from "@mastra/ai-sdk";
+import type { DurableAgent } from "@mastra/core/agent/durable";
+import { MASTRA_RESOURCE_ID_KEY } from "@mastra/core/request-context";
+import { type ContextWithMastra, registerApiRoute } from "@mastra/core/server";
+import type { MastraModelOutput } from "@mastra/core/stream";
 import { createUIMessageStreamResponse, type UIMessageChunk } from "ai";
 import { z } from "zod";
+import { THREAD_CONTEXT_KEY } from "../agents/copilot";
+import { getAppDb } from "../app-db";
 import { toClientErrorText } from "../errors";
 
 /** The only body the web proxy sends (see apps/web/src/server/chat-body.ts). */
@@ -29,34 +35,102 @@ export function sanitizeChunk(chunk: UIMessageChunk): UIMessageChunk {
   return chunk;
 }
 
-/** POST /chat — AI SDK v7 UI message stream for one new user message in one thread. */
+const durable = (c: ContextWithMastra) =>
+  c.get("mastra").getAgentById(COPILOT_AGENT_ID) as unknown as DurableAgent;
+
+/** Streams a durable run's output as AI SDK v7 UI chunks. Closing it never stops the run. */
+function uiResponse(c: ContextWithMastra, output: MastraModelOutput) {
+  const logger = c.get("mastra").getLogger();
+  const stream = toAISdkStream(output, {
+    from: "agent",
+    version: "v7",
+    onError: (error) => {
+      logger?.error("chat stream failed", { error });
+      return toClientErrorText(error);
+    },
+  });
+  return createUIMessageStreamResponse({
+    stream: stream.pipeThrough(
+      new TransformStream<UIMessageChunk, UIMessageChunk>({
+        transform: (chunk, controller) => controller.enqueue(sanitizeChunk(chunk)),
+      }),
+    ),
+  });
+}
+
+/** Thread id from the path, after checking it belongs to the authenticated resource. */
+async function ownedThread(c: ContextWithMastra): Promise<string | null> {
+  const threadId = c.req.param("threadId");
+  const resourceId = c.get("requestContext").get(MASTRA_RESOURCE_ID_KEY);
+  if (!threadId || typeof resourceId !== "string") return null;
+  const memory = await durable(c).getMemory();
+  const thread = await memory?.getThreadById({ threadId });
+  return thread && thread.resourceId === resourceId ? threadId : null;
+}
+
+/** POST /chat — start a durable run for one new user message in one thread. */
 export const chatRoute = registerApiRoute("/chat", {
   method: "POST",
   handler: async (c) => {
     const body = chatBodySchema.safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "Invalid chat request" }, 400);
-    const mastra = c.get("mastra");
-    const stream = await handleChatStream({
-      mastra,
-      agentId: COPILOT_AGENT_ID,
-      version: "v7",
-      params: {
-        messages: body.data.messages as never,
-        memory: body.data.memory,
-        requestContext: c.get("requestContext"),
-        abortSignal: c.req.raw.signal,
-      },
-      onError: (error) => {
-        mastra.getLogger()?.error("chat stream failed", { error });
-        return toClientErrorText(error);
-      },
+    const { thread } = body.data.memory;
+    const db = await getAppDb();
+    if (await activeRun(db, thread)) {
+      return c.json({ error: "A reply is still running in this chat." }, 409);
+    }
+    const requestContext = c.get("requestContext");
+    requestContext.set(THREAD_CONTEXT_KEY, thread);
+    const logger = c.get("mastra").getLogger();
+
+    let runId = "";
+    const ended = async (status: "completed" | "cancelled" | "failed", error?: unknown) => {
+      if (!runId) return;
+      await endRun(db, runId, status, error ? String(error) : undefined).catch((e) =>
+        logger?.error("could not record run end", { e }),
+      );
+    };
+
+    const result = await durable(c).stream(body.data.messages as never, {
+      memory: body.data.memory,
+      requestContext,
+      maxSteps: 12,
+      modelSettings: { maxOutputTokens: 16_000 },
+      // No abort on client disconnect: the run continues and can be observed again.
+      onFinish: () => ended("completed"),
+      onAbort: () => ended("cancelled"),
+      onError: ({ error }) => ended("failed", error),
     });
-    return createUIMessageStreamResponse({
-      stream: stream.pipeThrough(
-        new TransformStream<UIMessageChunk, UIMessageChunk>({
-          transform: (chunk, controller) => controller.enqueue(sanitizeChunk(chunk)),
-        }),
-      ),
-    });
+    runId = result.runId;
+    await startRun(db, { id: runId, threadId: thread });
+    return uiResponse(c, result.output);
+  },
+});
+
+/** GET /chat/:threadId/stream — re-observe the thread's active run (AI SDK `resume`), or 204. */
+export const chatResumeRoute = registerApiRoute("/chat/:threadId/stream", {
+  method: "GET",
+  handler: async (c) => {
+    const threadId = await ownedThread(c);
+    if (!threadId) return c.json({ error: "Thread not found" }, 404);
+    const run = await activeRun(await getAppDb(), threadId);
+    if (!run) return c.body(null, 204);
+    const { output } = await durable(c).observe(run.id);
+    return uiResponse(c, output);
+  },
+});
+
+/** POST /chat/:threadId/stop — stop the thread's active run (research included). */
+export const chatStopRoute = registerApiRoute("/chat/:threadId/stop", {
+  method: "POST",
+  handler: async (c) => {
+    const threadId = await ownedThread(c);
+    if (!threadId) return c.json({ error: "Thread not found" }, 404);
+    const db = await getAppDb();
+    const run = await activeRun(db, threadId);
+    if (!run) return c.json({ stopped: false });
+    durable(c).abortRunStream(run.id);
+    await endRun(db, run.id, "cancelled");
+    return c.json({ stopped: true, runId: run.id });
   },
 });

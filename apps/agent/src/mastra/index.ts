@@ -8,7 +8,7 @@ import { MastraStorageExporter, Observability, SensitiveDataFilter } from "@mast
 import { env } from "../env";
 import { copilotAgent } from "./agents/copilot";
 import { researcherAgent } from "./agents/researcher";
-import { chatRoute } from "./routes/chat";
+import { chatResumeRoute, chatRoute, chatStopRoute } from "./routes/chat";
 import { threadMessagesRoute } from "./routes/thread-messages";
 
 const logger = new PinoLogger({ name: "copilot-agent", level: "info" });
@@ -36,6 +36,6 @@ export const mastra = new Mastra({
       // returns 403 (or a mismatch error on /chat) for threads owned by anyone else.
       mapUserToResourceId: (user) => user.id,
     }),
-    apiRoutes: [chatRoute, threadMessagesRoute],
+    apiRoutes: [chatRoute, chatResumeRoute, chatStopRoute, threadMessagesRoute],
   },
 });
