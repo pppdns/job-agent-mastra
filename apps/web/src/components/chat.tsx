@@ -11,6 +11,12 @@ import { AssessmentCard, savedDraft } from "@/components/assessment-card";
 import { CompactionLine, isCompactionPart, isHiddenMemoryPart } from "@/components/compaction-line";
 import { PageHeader } from "@/components/page-header";
 import {
+  isRescorePart,
+  type RescorePart,
+  RescoreProgress,
+  RescoreResult,
+} from "@/components/rescore-trace";
+import {
   isProgressPart,
   type ProgressPart,
   ResearchProgress,
@@ -185,11 +191,21 @@ function ChatMessage({
     runs[runIndex.get(runId) ?? 0]?.push(part);
   }
   let researchCalls = 0;
+  // Same for re-score batches and rescore_jobs calls.
+  const batches: RescorePart[][] = [];
+  const batchIndex = new Map<string, number>();
+  for (const part of message.parts) {
+    if (!isRescorePart(part)) continue;
+    const runId = (part.data as { runId?: string }).runId ?? "";
+    if (!batchIndex.has(runId)) batchIndex.set(runId, batches.push([]) - 1);
+    batches[batchIndex.get(runId) ?? 0]?.push(part);
+  }
+  let rescoreCalls = 0;
 
   message.parts.forEach((part, index) => {
     const approvalId = isToolPart(part) ? proposedApprovalId(part) : undefined;
     const draft = isToolPart(part) ? savedDraft(part) : undefined;
-    if (isProgressPart(part) || isHiddenMemoryPart(part)) return;
+    if (isProgressPart(part) || isRescorePart(part) || isHiddenMemoryPart(part)) return;
     if (isCompactionPart(part)) {
       flushTools();
       // biome-ignore lint/suspicious/noArrayIndexKey: message parts are append-only
@@ -206,6 +222,16 @@ function ChatMessage({
         </div>,
       );
       researchCalls += 1;
+    } else if (isToolPart(part) && part.type === "tool-rescore_jobs") {
+      flushTools();
+      const done = part.state === "output-available" || part.state === "output-error";
+      blocks.push(
+        <div key={part.toolCallId} className="flex flex-col gap-2">
+          <RescoreProgress parts={batches[rescoreCalls] ?? []} running={!done && streaming} />
+          {part.state === "output-available" && <RescoreResult part={part} threadId={threadId} />}
+        </div>,
+      );
+      rescoreCalls += 1;
     } else if (approvalId) {
       // A pending approval is a prompt, not a trace row.
       flushTools();

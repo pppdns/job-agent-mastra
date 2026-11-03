@@ -1,7 +1,7 @@
 import {
   AssessmentError,
   getJobDetail,
-  latestSource,
+  latestListingSource,
   listJobs,
   proposeProfileChange,
   searchJobIds,
@@ -84,7 +84,7 @@ export const getJobTool = createTool({
     const detail = await getJobDetail(db, jobId);
     if (!detail) return { ok: false as const, error: `no saved job with id ${jobId}` };
     const latest = detail.snapshots[0];
-    const source = includeListing ? await latestSource(db, jobId) : undefined;
+    const source = includeListing ? await latestListingSource(db, jobId) : undefined;
     return {
       ok: true as const,
       job: {

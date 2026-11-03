@@ -1,16 +1,22 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import {
   type ApprovalView,
   AssessmentError,
+  approveDrafts,
+  type BatchApprovalOutcome,
   type DecisionError,
   decideApproval,
   getApprovalView,
   proposeProfileChange,
 } from "@copilot/db";
 import { refresh } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { PROFILE_PAGE_THREAD, threadIdSchema, threadTitleSchema } from "@/lib/chat-schema";
+import { agentFetch } from "@/server/agent";
+import { toAgentChatBody } from "@/server/chat-body";
 import { appDb } from "@/server/db";
 import { deleteThread, renameThread, setThreadArchived } from "@/server/threads";
 
@@ -66,4 +72,48 @@ export async function proposeProfileEdit(proposal: unknown): Promise<{ error?: s
   }
   refresh();
   return {};
+}
+
+// "use server" files may only export async functions.
+/** The fixed message the "Re-score" button sends; the copilot answers it with rescore_jobs. */
+const RESCORE_MESSAGE = "Re-score my jobs that were assessed with an older profile.";
+
+/**
+ * "Re-score stale jobs" on /jobs: starts the run in a new chat, then opens it. The run is
+ * durable, so the chat page reconnects to it; closing our copy of the stream doesn't stop it.
+ */
+export async function startRescoreAction(): Promise<{ error?: string }> {
+  const threadId = randomUUID();
+  const message = {
+    id: randomUUID(),
+    role: "user" as const,
+    parts: [{ type: "text" as const, text: RESCORE_MESSAGE }],
+  };
+  const upstream = await agentFetch("/chat", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(toAgentChatBody({ threadId, message })),
+  });
+  await upstream.body?.cancel();
+  if (!upstream.ok) return { error: "The agent server is unavailable." };
+  redirect(`/c/${threadId}`);
+}
+
+const approveAllSchema = z.object({
+  threadId: threadIdSchema,
+  draftIds: z.array(z.string().min(1).max(64)).min(1).max(50),
+});
+
+/**
+ * "Approve all" on a re-score result: approves exactly the drafts that card showed. A job
+ * whose draft changed since is skipped (`changed`), never approved with other content.
+ */
+export async function approveDraftsAction(
+  input: z.infer<typeof approveAllSchema>,
+): Promise<{ error?: "invalid"; results?: { draftId: string; outcome: BatchApprovalOutcome }[] }> {
+  const parsed = approveAllSchema.safeParse(input);
+  if (!parsed.success) return { error: "invalid" };
+  const results = await approveDrafts(await appDb(), parsed.data);
+  refresh();
+  return { results: results.map(({ draftId, outcome }) => ({ draftId, outcome })) };
 }

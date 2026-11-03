@@ -3,7 +3,7 @@ import type { WebProviders } from "../web/providers";
 import { estimateLlmUsd, estimateProviderUsd, type TokenUsage } from "./prices";
 import { sanitizeForEvent } from "./sanitize";
 
-export type Actor = "copilot" | "researcher" | "observer" | "ingest";
+export type Actor = "copilot" | "researcher" | "rescorer" | "observer" | "ingest";
 
 /**
  * Collects one run's events (one row per model call or provider call) and writes them in

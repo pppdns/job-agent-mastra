@@ -37,17 +37,19 @@ export function snapshotPayloadOf(approval: Approval): SnapshotPayload {
  * Saves the next draft version for a job. Evidence must cite sources stored for that job,
  * and sourced evidence classes must cite at least one.
  */
-export function saveDraft(
-  db: Db,
-  input: { jobId: string; assessment: unknown; threadId?: string | null },
-): Promise<JobDraft> {
+export function saveDraft(db: Db, input: DraftInput): Promise<JobDraft> {
   return serializeWrites(db, () => saveDraftUnlocked(db, input));
 }
 
-async function saveDraftUnlocked(
-  db: Db,
-  input: { jobId: string; assessment: unknown; threadId?: string | null },
-): Promise<JobDraft> {
+export type DraftInput = {
+  jobId: string;
+  assessment: unknown;
+  threadId?: string | null;
+  /** The profile version the assessment was made against; rejected if the profile moved since. */
+  profileVersion?: number;
+};
+
+async function saveDraftUnlocked(db: Db, input: DraftInput): Promise<JobDraft> {
   const parsed = assessmentSchema.safeParse(input.assessment);
   if (!parsed.success) throw new AssessmentError(`invalid assessment: ${parsed.error.message}`);
   const assessment = parsed.data;
@@ -82,6 +84,12 @@ async function saveDraftUnlocked(
   }
 
   return db.transaction(async (tx) => {
+    const profileVersion = await currentProfileVersion(tx);
+    if (input.profileVersion !== undefined && input.profileVersion !== profileVersion) {
+      throw new AssessmentError(
+        `the profile changed (v${input.profileVersion} → v${profileVersion}) during the assessment`,
+      );
+    }
     const [row] = await tx
       .select({ latest: max(jobDrafts.version) })
       .from(jobDrafts)
@@ -94,7 +102,7 @@ async function saveDraftUnlocked(
         version: (row?.latest ?? 0) + 1,
         assessment,
         // Recorded by app code, not the model: the approved profile at save time.
-        profileVersion: await currentProfileVersion(tx),
+        profileVersion,
         threadId: input.threadId ?? null,
       })
       .returning();
@@ -526,4 +534,45 @@ export async function approvalsForThread(db: Db, threadId: string) {
     columns: { id: true, kind: true, status: true, createdAt: true, resolvedAt: true },
     orderBy: desc(approvals.createdAt),
   });
+}
+
+export type BatchApprovalOutcome = "approved" | "changed" | "not_found" | DecisionError;
+
+/**
+ * The user's "approve all" click on drafts they were shown (e.g. a re-score batch). Each one
+ * goes through the normal propose → approve path in that chat; a draft that is no longer its
+ * job's latest is skipped as `changed`, never approved in place of what was shown.
+ */
+export async function approveDrafts(
+  db: Db,
+  input: { threadId: string; draftIds: string[] },
+): Promise<{ draftId: string; jobId?: string; outcome: BatchApprovalOutcome }[]> {
+  const results = [];
+  for (const draftId of input.draftIds) {
+    const draft = await db.query.jobDrafts.findFirst({ where: eq(jobDrafts.id, draftId) });
+    if (!draft) {
+      results.push({ draftId, outcome: "not_found" as const });
+      continue;
+    }
+    const { approval } = await proposeSnapshot(db, {
+      jobId: draft.jobId,
+      threadId: input.threadId,
+    });
+    if (approval.draftId !== draftId) {
+      results.push({ draftId, jobId: draft.jobId, outcome: "changed" as const });
+      continue;
+    }
+    const decided = await decideApproval(db, {
+      approvalId: approval.id,
+      threadId: input.threadId,
+      decision: "approve",
+      payloadHash: approval.payloadHash,
+    });
+    results.push({
+      draftId,
+      jobId: draft.jobId,
+      outcome: decided.ok ? ("approved" as const) : decided.error,
+    });
+  }
+  return results;
 }

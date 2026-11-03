@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  approveDrafts,
   decideApproval,
   getJobDetail,
   listJobs,
@@ -14,6 +15,7 @@ import {
 import { AssessmentError, hashPayload } from "./hash";
 import { createDb, type Db, migrateDb } from "./index";
 import { addSource, upsertJob } from "./jobs";
+import { proposeProfileChange } from "./profile";
 import { jobSnapshots } from "./schema";
 
 let db: Db;
@@ -239,5 +241,59 @@ describe("read models", () => {
       snapshots: [],
       sources: [{ kind: "pasted" }],
     });
+  });
+});
+
+describe("saveDraft profile check", () => {
+  it("rejects an assessment made against an older profile version", async () => {
+    await expect(
+      saveDraft(db, { jobId, assessment: assessment(), profileVersion: 0 }),
+    ).resolves.toMatchObject({ profileVersion: 0 });
+    const { approval } = await proposeProfileChange(db, {
+      threadId: "chat-a",
+      proposal: {
+        changes: [{ op: "add", kind: "soft_preference", text: "Remote" }],
+        reason: "User said so",
+      },
+    });
+    await decideApproval(db, {
+      approvalId: approval.id,
+      threadId: "chat-a",
+      decision: "approve",
+      payloadHash: approval.payloadHash,
+    });
+    await expect(
+      saveDraft(db, { jobId, assessment: assessment(), profileVersion: 0 }),
+    ).rejects.toThrow(/profile changed/);
+  });
+});
+
+describe("approveDrafts", () => {
+  it("approves the shown drafts and skips one that changed since", async () => {
+    const other = (await upsertJob(db, { company: "Contoso", title: "SRE" })).job.id;
+    const otherSource = (
+      await addSource(db, { jobId: other, kind: "pasted", provider: "user", content: "sre" })
+    ).source.id;
+    const shown = await saveDraft(db, { jobId, assessment: assessment() });
+    const outdated = await saveDraft(db, {
+      jobId: other,
+      assessment: assessment("a", otherSource),
+    });
+    await saveDraft(db, { jobId: other, assessment: assessment("newer", otherSource) });
+
+    const results = await approveDrafts(db, {
+      threadId: "chat-a",
+      draftIds: [shown.id, outdated.id, "missing"],
+    });
+    expect(results.map((r) => r.outcome)).toEqual(["approved", "changed", "not_found"]);
+    expect((await getJobDetail(db, jobId))?.snapshots).toHaveLength(1);
+    expect((await getJobDetail(db, other))?.snapshots).toHaveLength(0);
+    // A retried click approves nothing twice.
+    expect(
+      (await approveDrafts(db, { threadId: "chat-a", draftIds: [shown.id] }))[0],
+    ).toMatchObject({
+      outcome: "approved",
+    });
+    expect((await getJobDetail(db, jobId))?.snapshots).toHaveLength(1);
   });
 });

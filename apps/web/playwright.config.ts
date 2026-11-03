@@ -22,6 +22,11 @@ export default defineConfig({
     channel: "chrome",
     trace: "retain-on-failure",
   },
+  projects: [
+    { name: "main", testIgnore: /rescore\.spec\.ts/ },
+    // Re-scores every stale job in the shared database: runs after the other specs.
+    { name: "rescore", testMatch: /rescore\.spec\.ts/, dependencies: ["main"] },
+  ],
   webServer: [
     {
       // Fresh database per run, so tests never see leftovers.

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createDb, type Db, migrateDb } from "./index";
-import { addSource, dedupeKey, latestSource, MAX_SNAPSHOT_CHARS, upsertJob } from "./jobs";
+import { addSource, dedupeKey, latestListingSource, MAX_SNAPSHOT_CHARS, upsertJob } from "./jobs";
 
 let db: Db;
 
@@ -85,14 +85,36 @@ describe("addSource", () => {
   });
 });
 
-describe("latestSource", () => {
-  it("returns the most recently read source with its content", async () => {
-    const { job } = await upsertJob(db, northwind);
-    const base = { jobId: job.id, kind: "pasted", provider: "user" } as const;
-    await addSource(db, { ...base, content: "old", retrievedAt: new Date(1_000) });
-    await addSource(db, { ...base, content: "new", retrievedAt: new Date(2_000) });
-    expect((await latestSource(db, job.id))?.content).toBe("new");
-    expect(await latestSource(db, "missing")).toBeUndefined();
+describe("latestListingSource", () => {
+  it("returns the newest listing, not a research page", async () => {
+    const url = "https://jobs.example/northwind/1";
+    const { job } = await upsertJob(db, { ...northwind, canonicalUrl: url });
+    const at = (ms: number) => new Date(ms);
+    await addSource(db, {
+      jobId: job.id,
+      kind: "pasted",
+      provider: "user",
+      content: "old",
+      retrievedAt: at(1),
+    });
+    await addSource(db, {
+      jobId: job.id,
+      kind: "web",
+      provider: "tavily",
+      url,
+      content: "listing",
+      retrievedAt: at(2),
+    });
+    await addSource(db, {
+      jobId: job.id,
+      kind: "web",
+      provider: "tavily",
+      url: "https://news.example/northwind",
+      content: "research page",
+      retrievedAt: at(3),
+    });
+    expect((await latestListingSource(db, job.id))?.content).toBe("listing");
+    expect(await latestListingSource(db, "missing")).toBeUndefined();
   });
 });
 

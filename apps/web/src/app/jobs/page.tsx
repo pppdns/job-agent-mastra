@@ -13,6 +13,7 @@ import {
   VerdictBadge,
 } from "@/components/assessment-visuals";
 import { PageHeader } from "@/components/page-header";
+import { RescoreButton } from "@/components/rescore-button";
 import { Badge } from "@/components/ui/badge";
 import { appDb } from "@/server/db";
 
@@ -41,8 +42,10 @@ async function JobList() {
       </p>
     );
   }
+  const stale = jobs.filter((j) => j.profileStale).length;
   return (
     <div className="flex flex-col gap-4">
+      {stale > 0 && <RescoreButton count={stale} />}
       <VerdictTally jobs={jobs} />
       <ul className="flex flex-col gap-3" aria-label="Jobs">
         {jobs.map((job) => (

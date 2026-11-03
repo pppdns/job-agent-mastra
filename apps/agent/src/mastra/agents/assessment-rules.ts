@@ -1,0 +1,2 @@
+/** How an assessment is filled in; shared by the copilot and the batch rescorer. */
+export const ASSESSMENT_RULES = `- Always set a one-line headline. fitBasis is "with_profile" only when the approved profile informed it (then set fitLevel strong/good/mixed/weak/poor as a coarse judgement), else "role_only" without fitLevel. Hard conflicts are conflicts with approved hard requirements. Cite sources for statements from the listing; mark your own conclusions as inference; list what is unknown instead of guessing. Absent information is unknown, not negative.`;

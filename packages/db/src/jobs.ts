@@ -160,12 +160,18 @@ async function addSourceUnlocked(
   return { source: existing, created: false };
 }
 
-/** The most recently read source of a job, with its stored content. */
-export async function latestSource(db: Db, jobId: string): Promise<Source | undefined> {
-  return db.query.sources.findFirst({
+/**
+ * The most recently read listing of a job, with its stored content. Research also stores the
+ * pages it reads as `web` sources, so a `web` source only counts when it is the job's own URL.
+ */
+export async function latestListingSource(db: Db, jobId: string): Promise<Source | undefined> {
+  const job = await db.query.jobs.findFirst({ where: eq(jobs.id, jobId) });
+  if (!job) return undefined;
+  const rows = await db.query.sources.findMany({
     where: eq(sources.jobId, jobId),
     orderBy: desc(sources.retrievedAt),
   });
+  return rows.find((s) => s.kind !== "web" || (s.url !== null && s.url === job.canonicalUrl));
 }
 
 type Writer = Pick<Db, "run">;

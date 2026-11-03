@@ -136,9 +136,11 @@ const MOCK_ASSESSMENT = (sourceId: string) => ({
 function mockTurn({
   prompt,
   tools,
+  responseFormat,
 }: {
   prompt: LanguageModelV4Prompt;
   tools?: { name: string }[];
+  responseFormat?: { type: string };
 }): MockTurn {
   const offered = (name: string) => tools?.some((t) => t.name === name) ?? false;
   const call = (toolName: string, input: unknown): MockTurn => ({
@@ -148,6 +150,21 @@ function mockTurn({
     // Unique per turn: AI SDK matches tool results to calls by id.
     toolCallId: `mock-${toolName}-${prompt.length}`,
   });
+
+  // Rescorer (structured output): a with_profile assessment citing the listing source.
+  if (responseFormat?.type === "json") {
+    const sourceId = lastUserText(prompt).match(/Listing \(source id ([^,)]+)/)?.[1] ?? "";
+    return {
+      kind: "text",
+      text: JSON.stringify({
+        ...MOCK_ASSESSMENT(sourceId),
+        headline: "Mock re-score against the current profile",
+        fitBasis: "with_profile",
+        fitLevel: "good",
+        recommendation: { verdict: "pursue", rationale: "Mock re-score rationale." },
+      }),
+    };
+  }
 
   const last = prompt.at(-1);
   if (last?.role === "tool") {
@@ -178,6 +195,11 @@ function mockTurn({
         kind: "text",
         text: `Mock research summary (${name} ${value.ok === false ? "failed" : "done"})`,
       };
+    }
+    if (name === "rescore_jobs") {
+      const results = (value as { results?: { status: string }[] }).results ?? [];
+      const saved = results.filter((r) => r.status === "saved").length;
+      return { kind: "text", text: `Mock reply: rescore_jobs ${saved} saved` };
     }
     if (name === "research_company") {
       return {
@@ -243,6 +265,9 @@ function mockTurn({
       /Local assumptions and exceptions:[ \t]*(\S[^\n]*)/,
     )?.[1];
     return { kind: "text", text: `Mock reply: local ${local?.trim() || "none"}` };
+  }
+  if (offered("rescore_jobs") && text.startsWith("Re-score")) {
+    return call("rescore_jobs", {});
   }
   if (offered("propose_job_snapshot") && text === "Propose snapshot") {
     const jobId = latestJobId(prompt);

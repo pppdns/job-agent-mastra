@@ -83,3 +83,9 @@ Offline (mock/fixture) results and live results are kept separate. A live integr
 
 - `pnpm check`: assessment summary (headline fallback to the overview's first sentence, fit level hidden for role-only), `saveDraft` fit-level rule (only with `with_profile`, required there).
 - `pnpm e2e` (16 tests): the saved draft renders as a card with headline, verdict, fit state and signal counts (also after reload); approval card and jobs row show the verdict and headline.
+
+## Batch re-score and approve all
+
+- `pnpm check`: `latestListingSource` skips research pages; `saveDraft` rejects a draft made against an older profile version; `approveDrafts` (approved / changed / not_found, retry approves nothing twice); `runRescore` with the mock model (only stale jobs, one draft each, profile no longer stale, missing listing fails without stopping the batch, stopped run saves nothing).
+- `pnpm e2e` (18 tests): adds paste → profile change on `/profile` → "Profile changed" → Re-score button → batch in a new chat (progress, results list) → Approve all → jobs row "Approved v1", no longer stale. Runs in its own Playwright project after the other specs.
+- Live (2026-11-03): `runRescore` on a throwaway database with the synthetic `ats-complete.md` listing and a new "fully remote within the EU" hard requirement. Sonnet 5.5 via AI Gateway returned a valid structured assessment in ~15 s: verdict pass, fit poor, hard conflict "3 office days in Lisbon" citing the listing source. Not exercised live: the button and chat flow end to end, batches of several jobs, token cost per job.

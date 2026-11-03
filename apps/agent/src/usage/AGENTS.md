@@ -6,6 +6,7 @@ One `app_run_events` row per model call and per provider call; totals are sums o
 | --- | --- | --- |
 | Copilot model steps | `step-finish` chunks in `/chat` (`recordChunk`) | `copilot` |
 | Researcher model steps | `onStepFinish` in `runResearch` | `researcher` |
+| Rescorer model calls | `onStepFinish` in `runRescore` | `rescorer` |
 | Observational Memory calls | OM `hooks.onObservationEnd/onReflectionEnd` → `recordMemoryCall` | `observer` / `reflector` |
 | Chat title | `meteredModel` middleware on the title model | `title` |
 | Tavily / Firecrawl calls | `meterWeb` wrapper (each retry attempt is its own row) | `ingest` / `researcher` |

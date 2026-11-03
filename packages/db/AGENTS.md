@@ -2,8 +2,8 @@
 
 Drizzle schema (`src/schema.ts`, `app_*` tables), migrations in `drizzle/` (generate with `pnpm --filter @copilot/db generate`; apps apply them via `migrateDb()` on first use). Agents and the web app call the functions exported from `src/index.ts`; no raw SQL outside this package.
 
-- `jobs.ts`: `upsertJob` (dedupe: LinkedIn id → canonical URL → normalized company+title without conflicting ids), `addSource` (bounded snapshot, idempotent per job + content hash).
-- `assessments.ts`: versioned drafts (with the profile version at save time), snapshot proposals, the approval decision, read models (incl. `profileStale`).
+- `jobs.ts`: `upsertJob` (dedupe: LinkedIn id → canonical URL → normalized company+title without conflicting ids), `addSource` (bounded snapshot, idempotent per job + content hash), `latestListingSource` (research pages are `web` sources too; only the job's own URL counts).
+- `assessments.ts`: versioned drafts (with the profile version at save time; an optional expected `profileVersion` rejects a draft if the profile moved), snapshot proposals, the approval decision, `approveDrafts` ("approve all": propose + approve each shown draft, skip `changed` ones), read models (incl. `profileStale`).
 - `profile.ts`: current profile/version, profile change proposals, applying an approved change, history.
 - `claims.ts`: research claims (`recordClaim` enforces sources of the same job for sourced evidence classes), `listClaims`.
 - `runs.ts`: chat runs (`startRun`, `endRun` keeps the first final status, `activeRun`, `interruptStaleRuns` at startup), run events (`recordRunEvents`, `totalsOf`, `threadUsage`).

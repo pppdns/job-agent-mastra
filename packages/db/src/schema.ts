@@ -250,7 +250,7 @@ export const runEvents = sqliteTable(
     category: text("category", { enum: RUN_EVENT_CATEGORIES }).notNull(),
     /** Tool name, model id or provider operation. */
     name: text("name").notNull(),
-    /** Who made the call: copilot, researcher, observer, ingest. */
+    /** Who made the call: copilot, researcher, rescorer, observer, ingest. */
     actor: text("actor"),
     status: text("status", { enum: ["ok", "error"] }).notNull(),
     at: integer("at", { mode: "timestamp_ms" }).notNull(),
