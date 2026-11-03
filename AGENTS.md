@@ -15,7 +15,7 @@ pnpm workspaces + Turborepo, TypeScript, Mastra (agent server + Studio), Next.js
 - `packages/shared` — constants, Zod schemas and types shared by both apps
 - `packages/db` — Drizzle schema, migrations, data-access functions
 - `scripts/` — `agent-api.sh` (authenticated `mastra api`), `setup-env.sh`
-- `fixtures/` (later) — offline listings/pages for tests and evals
+- `fixtures/` — synthetic listings/pages for tests and evals (no third-party text)
 - `docs/` — plan, spikes, verification results
 
 Internal packages export TypeScript source directly (no build step); Next and Mastra transpile them.

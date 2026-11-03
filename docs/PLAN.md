@@ -93,12 +93,12 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - [x] Spike: durable agent resume works on the Mastra side; `chatRoute` can't be reused for it ([spikes/durable-resume.md](spikes/durable-resume.md)).
 - [x] Verified (mock): unit tests for recall, no cross-thread leak, resource mismatch, history scoping, proxy body; e2e for separate histories, reopen after reload, rename/delete, foreign threads hidden and inaccessible.
 
-### M3 — Listing ingestion (spike + tools)
-- Spike script over 3–5 real public LinkedIn URLs: Tavily extract (advanced) vs Firecrawl scrape (+ ATS lookup). Results in `docs/spikes/extraction.md`; choose provider split.
-- `ingest_listing` tool: URL or pasted text; URL guard (scheme allowlist, DNS → block private/loopback/link-local, redirect re-checks); login-wall/snippet/incomplete detection; ATS fallback with identity check; ask-to-paste fallback; states which source was read.
-- Tables: `jobs` (dedupe by LinkedIn job id / canonical URL / normalized company+title), `sources` (bounded snapshot, provenance, retrieved_at).
-- **You provide:** `TAVILY_API_KEY`, `FIRECRAWL_API_KEY`.
-- **Done when:** URL and pasted text both work; login-wall fixture yields honest fallback; unit tests for URL guard, dedupe, wall detection.
+### M3 — Listing ingestion ✅ (2026-11-03)
+- [x] Spike on 5 live LinkedIn URLs ([spikes/extraction.md](spikes/extraction.md)): Tavily extract `basic` reads full guest pages (advanced as retry); Firecrawl refuses LinkedIn (kept as second extractor for other pages); ATS search needs an identity check.
+- [x] `ingest_listing`: URL or pasted text (read from the latest user message, not copied by the model); URL guard incl. DNS and final-URL re-check; sign-in/search/truncated detection; ATS fallback with identity check; ask-to-paste fallback; result names the source actually read. Overview: [apps/agent/src/ingest/AGENTS.md](../apps/agent/src/ingest/AGENTS.md).
+- [x] Tables `app_jobs` (dedupe: LinkedIn id → canonical URL → normalized company+title without conflicting ids) and `app_sources` (bounded snapshot, provider, URL, thread, retrieved_at; idempotent per job+content).
+- [x] UI: Markdown replies (Streamdown, no images/HTML), tool Trace rows.
+- [x] Verified: unit tests (guard, parser, dedupe, orchestrator with fixtures), offline e2e for fallback/blocked/pasted paths, live runs ([verification.md](verification.md)).
 
 ### M4 — Vertical slice: assessment → draft → approved snapshot
 - Assessment shape in `packages/shared` (overview, strengths/weaknesses, hard conflicts vs soft tradeoffs, unknowns, evidence refs with evidence class, recruiter questions, qualified recommendation; no numeric score).
@@ -152,4 +152,4 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 
 ## Risks to verify early
 - Durable agent + AI SDK UI resume interplay: Mastra side verified in the M2 spike; browser reload resume still to test in M7.
-- LinkedIn extraction reliability (M3 spike decides; pasted text is always supported).
+- LinkedIn extraction reliability: Tavily read 5/5 sample listings (M3); layout changes degrade to ATS lookup or paste, never to assessing a partial page.

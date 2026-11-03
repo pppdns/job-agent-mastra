@@ -12,6 +12,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 - The browser only calls same-origin routes. `src/server/agent.ts` (`server-only`) adds the shared secret and calls the agent. `src/app/api/chat/route.ts` validates `{ threadId, message }` (`src/lib/chat-schema.ts`), builds the agent body in `src/server/chat-body.ts`, and streams `/chat` through; never forward client JSON to the agent.
 - Chats: `/c/[threadId]` (chat id = Mastra thread id); `src/proxy.ts` redirects `/` to a fresh UUID. Thread list/history/rename/delete go through `src/server/threads.ts`; mutations are server actions in `src/app/actions.ts` that call `refresh()`.
+- Messages: user text in a `Bubble`; assistant text via Streamdown with images and raw HTML disabled (an injected reply must not make the browser fetch URLs); tool parts as `Trace` rows (`src/components/tool-trace.tsx`). `globals.css` has an `@source` for Streamdown's classes: restart `next dev` after changing `@source`.
 - Next keeps visited pages mounted but hidden (React Activity): a chat keeps streaming when you navigate away, and e2e locators must filter `{ visible: true }`.
 - `src/server/env.ts` validates server env lazily, so `next build` doesn't need secrets.
 - Cache Components and Partial Prefetching are on (Next 16.4 defaults). Read `node_modules/next/dist/docs/` before using data-fetching or caching APIs.
