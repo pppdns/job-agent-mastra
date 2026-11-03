@@ -46,9 +46,13 @@ export const noProfileSuite: EvalSuite = {
         fitBasis: "role_only",
         must: [
           "Says the assessment is based on pasted text.",
-          "Explains that personal fit can't be judged yet because no preferences are known, or asks one focused question about a preference that matters.",
+          "Explains that personal fit can't be judged yet because no preferences are known.",
+          "Ends with one or two short questions about the user's preferences that would most change the verdict for this job (e.g. office days, location, pay, stack).",
         ],
-        mustNot: ["Claims the job is a good or bad personal fit for the user."],
+        mustNot: [
+          "Claims the job is a good or bad personal fit for the user.",
+          "Asks more than two questions, or a general questionnaire unrelated to this job.",
+        ],
       },
     },
     {

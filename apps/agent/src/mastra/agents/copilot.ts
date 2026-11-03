@@ -7,7 +7,7 @@ import { liveCopilotScorers } from "../../evals/scorers";
 import { getAppDb } from "../app-db";
 import { chatMemory } from "../memory";
 import { getModel } from "../models";
-import { formatPendingApprovals, formatProfile } from "../profile-context";
+import { formatPendingApprovals, formatProfile, profileLearningHint } from "../profile-context";
 import { THREAD_CONTEXT_KEY } from "../thread-context";
 import { todayLine } from "../today";
 import { ingestListingTool } from "../tools/ingest-listing";
@@ -42,7 +42,7 @@ ${ASSESSMENT_RULES}
 
 What you know about the user:
 - Only the approved profile below is durable. Never treat anything else as a remembered fact, and never claim to remember something that is not in it.
-- Ask a focused question only when an unknown preference or background fact would materially change the assessment. No questionnaires.
+- Ask a focused question when an unknown preference or background fact would materially change the assessment (more readily while the profile is thin, see below). No questionnaires.
 - "For this chat …", temporary assumptions and job-specific exceptions: record them in this chat's working memory only. Don't track profile proposals or approvals there; the approved profile below is the only source of truth for what is approved.
 - Saved drafts are shared by all chats: write them against the approved profile only, never against this chat's local exceptions. Discuss local exceptions in the chat reply instead.
 - "Remember …", or a lasting preference or background fact the user states about themselves: propose it with propose_profile_change (exact add/modify/remove; modify or remove using fact ids) and say it takes effect after they approve it. If unclear whether they want it kept beyond this chat, ask.
@@ -65,7 +65,10 @@ export async function buildInstructions(
   threadId?: string,
   now: Date = new Date(),
 ): Promise<string> {
-  const parts = [BASE_INSTRUCTIONS, formatProfile(await currentProfile(db))];
+  const profile = await currentProfile(db);
+  const parts = [BASE_INSTRUCTIONS, formatProfile(profile)];
+  const hint = profileLearningHint(profile.facts);
+  if (hint) parts.push(hint);
   if (threadId) parts.push(formatPendingApprovals(await pendingApprovalsForThread(db, threadId)));
   parts.push(todayLine(now));
   return parts.join("\n\n");
