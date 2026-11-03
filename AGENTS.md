@@ -69,7 +69,7 @@ Single local libSQL file under `data/` (gitignored), shared by Mastra storage an
 
 ## Worktrees
 
-New Claude Code worktrees branch from local `HEAD` (`worktree.baseRef` in `.claude/settings.json`) and get the env files plus a snapshot of `data/copilot.db` copied in via [.worktreeinclude](.worktreeinclude); the `SessionStart` hook runs `pnpm install` when `node_modules` is missing. Hooks resolve the session's checkout from their input `cwd`, because desktop worktree sessions run them from the main checkout. Ports are fixed (4111/3000), so run `pnpm dev` in one checkout at a time; run `pnpm db:migrate` if the branch adds migrations.
+CLI worktrees (`claude -w`) branch from local `HEAD` (`worktree.baseRef` in `.claude/settings.json`); desktop-app worktrees ignore that and branch from `origin/main`, so push `main` first (or pick the local branch when starting the session). Every worktree gets the env files plus a snapshot of `data/copilot.db` copied in via [.worktreeinclude](.worktreeinclude); the `SessionStart` hook runs `pnpm install` when `node_modules` is missing. Hooks resolve the session's checkout from their input `cwd`, because desktop worktree sessions run them from the main checkout. Ports are fixed (4111/3000), so run `pnpm dev` in one checkout at a time; run `pnpm db:migrate` if the branch adds migrations.
 
 ## Skills
 
