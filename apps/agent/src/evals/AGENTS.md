@@ -12,6 +12,7 @@ Mastra scorers, datasets and experiments for the copilot.
 - `rescore.eval.ts` (also `pnpm eval`): the live batch rescorer on three fixture listings against the seeded profile; every job must save a `with_profile` draft whose fit points are inference (the rescorer retries once with the rejection), and the remote-first job must state remote fit conditionally (keyword heuristic, not a judge). Eval files run one at a time (`fileParallelism: false`): each resets the eval DB.
 - Flaky behaviour: `EVAL_ONLY=<case name substring> EVAL_REPEAT=<n> pnpm eval` runs matching cases n times into separate `<suite>-adhoc` datasets (main datasets keep their history). `EVAL_ONLY=rescorer` runs only the rescorer suite; any other `EVAL_ONLY` skips it.
 - Browse results: stop `pnpm dev`, run `pnpm eval:studio` (Studio on the eval DB), then Datasets → Experiments (per-item output, scores, reasons, traces; compare runs).
+- Quick look from plain `pnpm dev`: when `data/eval.db` exists, `storage.ts` reads the datasets and experiments domains from it, so Studio lists datasets, items and per-item results. Scores and traces stay in the eval DB, so they are missing there. Datasets created or edited in the dev Studio are written to the eval DB.
 
 ```mermaid
 flowchart LR
