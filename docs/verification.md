@@ -38,6 +38,7 @@ Offline (mock/fixture) results and live results are kept separate. A live integr
 | 2026-11-03 | Ops | `pnpm ngrok` next to `pnpm dev` | ✅ Tunnel to :3000 only; a request without the login gets 401 |
 | 2026-11-03 | M1 | Gateway free tier → Sonnet 5.5 | ❌ 403 `RestrictedModelsError` (resolved by funding the account). Client received only the sanitized summary; full error stayed in server log and trace |
 | 2026-11-03 | M9 | `pnpm eval`: 12 copilot cases, Sonnet 5.5 agent + `openai/gpt-6.1-sol` judges, web fixtures, `data/eval.db` | ✅ Pipeline works; scores persisted with trace ids. Final run 13/14 checks passed; 1 real finding (see Evals) |
+| 2026-11-04 | M9 | `scenarios.eval.ts` (`EVAL_ONLY=scenario pnpm eval`): memory across chats, compaction at a 1.5k-token OM threshold, comparison of stale assessments; Sonnet 5.5 + `openai/gpt-6.1-sol` judge, fixtures | ✅ 9/9 checks (code + judge), ≈3 min. First run failed 2 code checks that were too broad (listing text matched the leak regex); behaviour was correct |
 
 ## Offline checks (M1)
 

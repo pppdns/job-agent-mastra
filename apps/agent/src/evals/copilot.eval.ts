@@ -101,6 +101,9 @@ async function syncDataset(suite: EvalSuite, runs: CaseRun[]) {
 const scoreOf = (item: ItemWithScores, id: string) => item.scores.find((s) => s.scorerId === id);
 const fmt = (n: number | null | undefined) => (n === null || n === undefined ? "–" : n.toFixed(2));
 
+// Vitest fails a file without tests: keep one placeholder when EVAL_ONLY matches no case here.
+if (SUITES.length === 0) it.skip("no copilot case matches EVAL_ONLY", () => {});
+
 describe.each(SUITES)("$suite.name", ({ suite, runs }) => {
   const results = new Map<string, ItemWithScores>();
 
