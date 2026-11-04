@@ -1,13 +1,20 @@
 import {
   AssessmentError,
   type Db,
+  factHandlesById,
   getJobDetail,
   latestListingSource,
   listJobs,
   proposeProfileChange,
   searchJobIds,
 } from "@copilot/db";
-import { JOB_STATUSES, type JobStatus, profileProposalSchema } from "@copilot/shared";
+import {
+  type Assessment,
+  allPoints,
+  JOB_STATUSES,
+  type JobStatus,
+  profileProposalSchema,
+} from "@copilot/shared";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { parseStoredListing } from "../../ingest/listing";
@@ -18,7 +25,7 @@ export const proposeProfileChangeTool = createTool({
   id: "propose_profile_change",
   description:
     "Propose an exact change to the user's approved global profile (add, modify or remove " +
-    "facts; use fact ids from the profile in your instructions). Only for things the user wants " +
+    "facts; use fact handles like f7 from the profile in your instructions). Only for things the user wants " +
     "remembered beyond this chat. The user approves it in the app; nothing changes before that.",
   inputSchema: profileProposalSchema,
   execute: async (proposal, context) => {
@@ -101,6 +108,15 @@ export const findSavedJobsTool = createTool({
   execute: async (input) => findSavedJobs(await getAppDb(), input),
 });
 
+/** Stored drafts cite full fact ids; show the model the handles it cites with (f7). */
+function withFactHandles(assessment: Assessment, handles: Map<string, string>): Assessment {
+  const copy = structuredClone(assessment);
+  for (const point of allPoints(copy)) {
+    point.profileFactIds = point.profileFactIds.map((id) => handles.get(id) ?? id);
+  }
+  return copy;
+}
+
 export const getJobTool = createTool({
   id: "get_job",
   description:
@@ -136,7 +152,7 @@ export const getJobTool = createTool({
       current: detail.draft && {
         version: detail.draft.version,
         profileVersion: detail.draft.profileVersion,
-        assessment: detail.draft.assessment,
+        assessment: withFactHandles(detail.draft.assessment, await factHandlesById(db)),
       },
       ...(source && {
         listing: {

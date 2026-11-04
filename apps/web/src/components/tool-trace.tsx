@@ -1,6 +1,7 @@
 import { JOB_STATUS_LABELS, type JobStatus } from "@copilot/shared";
 import { FileTextIcon } from "lucide-react";
 import { Trace, TraceDescription, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
+import { toolFailure } from "@/lib/tool-output";
 
 /** A tool part from a UI message (`tool-<name>`), as streamed or reloaded from history. */
 export type ToolPart = {
@@ -66,21 +67,33 @@ function ToolLine({ part }: { part: ToolPart }) {
   if (part.state !== "output-available") {
     return <Line status="running" title={running[name] ?? `Running ${name}`} />;
   }
-  if (name === "save_job_draft") {
-    const output = (part.output ?? {}) as { ok?: boolean; version?: number; error?: string };
-    return output.ok === false ? (
-      <Line status="error" title="Assessment not saved" description={output.error} />
-    ) : (
-      <Line title={`Saved assessment v${output.version}`} />
+  const failure = toolFailure(part.output);
+  if (failure !== undefined) {
+    const failed: Record<string, string> = {
+      save_job_draft: "Assessment not saved",
+      propose_profile_change: "Profile change not proposed",
+      set_job_status: "Status not changed",
+      get_job: "Couldn't load the saved job",
+    };
+    return (
+      <Line status="error" title={failed[name] ?? `Failed to run ${name}`} description={failure} />
     );
+  }
+  if (name === "save_job_draft") {
+    const output = (part.output ?? {}) as { version?: number };
+    return <Line title={`Saved assessment v${output.version}`} />;
+  }
+  if (name === "propose_job_snapshot") {
+    // Older chats: snapshots no longer exist, every saved assessment is current.
+    return <Line title="Proposed a snapshot" description="no longer needed" />;
   }
   if (name === "propose_job_snapshot") {
     // Older chats: snapshots no longer exist, every saved assessment is current.
     return <Line title="Proposed a snapshot" description="no longer needed" />;
   }
   if (name === "propose_profile_change") {
-    const output = (part.output ?? {}) as { error?: string };
-    return <Line status="error" title="Profile change not proposed" description={output.error} />;
+    // A successful proposal renders as an approval card (proposedApprovalId), not here.
+    return <Line title="Proposed a profile change" />;
   }
   if (name === "updateWorkingMemory") {
     return <Line title="Noted for this chat only" description="not added to your profile" />;
@@ -106,16 +119,11 @@ function ToolLine({ part }: { part: ToolPart }) {
   }
   if (name === "set_job_status") {
     const output = (part.output ?? {}) as {
-      ok?: boolean;
-      error?: string;
       title?: string;
       company?: string;
       status?: JobStatus;
       archived?: boolean;
     };
-    if (output.ok === false) {
-      return <Line status="error" title="Status not changed" description={output.error} />;
-    }
     const what = [output.title, output.company].filter(Boolean).join(" · ");
     const label = output.status ? JOB_STATUS_LABELS[output.status] : "updated";
     return (

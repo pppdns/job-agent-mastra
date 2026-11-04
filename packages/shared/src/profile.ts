@@ -10,7 +10,7 @@ export const PROFILE_FACT_LABELS: Record<ProfileFactKind, string> = {
 };
 
 const factText = z.string().trim().min(3).max(400);
-const factId = z.string().min(1).max(64);
+const factId = z.string().min(1).max(64).describe("The fact's handle, e.g. f7");
 
 /** One exact change to the approved profile, as proposed by the agent or the profile page. */
 export const profileChangeSchema = z.discriminatedUnion("op", [

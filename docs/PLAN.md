@@ -162,7 +162,7 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - [x] Verified: shared unit tests, e2e `research.spec.ts` (card button, job-page button).
 
 ### M12 — Drop job snapshot approvals (2026-11-04)
-- [x] Approving drafts added clicks without value: every `save_job_draft` is now the job's current assessment, earlier versions stay as history on the job page. Removed `app_job_snapshots`, `propose_job_snapshot`, the approve buttons and "Approve all" (migration `0009` drops snapshot rows and their approvals). This supersedes the brief's snapshot-approval requirement.
+- [x] Approving drafts added clicks without value: every `save_job_draft` is now the job's current assessment, earlier versions stay as history on the job page. Removed `app_job_snapshots`, `propose_job_snapshot`, the approve buttons and "Approve all" (migration `0010` drops snapshot rows and their approvals). This supersedes the brief's snapshot-approval requirement.
 - [x] `/profile` edits apply right away (`editProfile`, checked against the version the page showed). Profile changes the copilot proposes in a chat still need approval (guards against injected memory changes).
 - [x] Verified: db tests (history, direct edits, stale edit refused, edit makes an older chat proposal stale), migration on a copy of the dev DB, e2e `assessments.spec.ts` (v1 → v2 with history, no approve controls), updated profile/rescore/listing/research specs.
 

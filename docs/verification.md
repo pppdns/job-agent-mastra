@@ -120,6 +120,6 @@ Live models, offline web (fixtures). Judge scores are evidence, not truth. Detai
 ## No approval for assessments; direct profile edits (M12)
 
 - Offline: `pnpm check` (db: assessment history read model, `editProfile` applies at once, refuses a stale base version, makes an older chat proposal stale; compaction test now keeps a pending profile change). `pnpm e2e` 19/19 incl. new `assessments.spec.ts` (v1 → v2, history toggle, no approve controls) and the cross-chat approval 404 check moved into `profile.spec.ts`.
-- Migration `0009` on a copy of the dev DB: 23 snapshot approvals and 20 snapshots dropped; 8 profile versions, their approvals and 37 assessment versions kept.
+- Migration `0010` on a copy of the dev DB: 23 snapshot approvals and 20 snapshots dropped; 8 profile versions, their approvals and 37 assessment versions kept.
 - Browser (worktree DB): job page shows "Assessment v10" and "Version history · 9 earlier"; `/profile` edits without an approval step.
 - Not exercised live: the copilot's wording with the new prompt (no `propose_job_snapshot`), `pnpm eval`.

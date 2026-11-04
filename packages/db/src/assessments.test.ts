@@ -121,10 +121,23 @@ describe("saveDraft", () => {
     await expect(
       saveDraft(db, { jobId, assessment: withProfile([fitPoint("not-a-fact")]) }),
     ).rejects.toThrow(/not in the approved profile/);
+    // An unknown reference lists the current handles, so the retry can pick the right one.
+    await expect(
+      saveDraft(db, { jobId, assessment: withProfile([fitPoint("f99")]) }),
+    ).rejects.toThrow('current facts: f1 ("At most one office day a week")');
+    // Empty references never count as a citation.
+    for (const empty of ["", "fact:"]) {
+      await expect(
+        saveDraft(db, { jobId, assessment: withProfile([fitPoint(empty)]) }),
+      ).rejects.toThrow(/not in the approved profile/);
+    }
+    // Models cite handles ("f1", also as "fact:f1"); the full id is stored.
+    const byHandle = await saveDraft(db, { jobId, assessment: withProfile([fitPoint("fact:f1")]) });
+    expect(byHandle.assessment.strengths[0]?.profileFactIds).toEqual([factId]);
     await expect(
       saveDraft(db, { jobId, assessment: { ...assessment(), strengths: [fitPoint(factId)] } }),
     ).rejects.toThrow(/role_only drafts can't cite profileFactIds/);
-    // The prompt's "[fact:<id>]" form is accepted and stored as the bare id.
+    // Full ids still work (the web app sends them), with or without the prefix.
     const prefixed = await saveDraft(db, {
       jobId,
       assessment: withProfile([fitPoint(`fact:${factId}`)]),
@@ -133,7 +146,7 @@ describe("saveDraft", () => {
     // Listing sources and quotes stay allowed on a fit point.
     await expect(
       saveDraft(db, { jobId, assessment: withProfile([fitPoint(factId)]) }),
-    ).resolves.toMatchObject({ version: 2 });
+    ).resolves.toMatchObject({ version: 3 });
   });
 
   it("requires a source for listing/official evidence but not for inference", async () => {

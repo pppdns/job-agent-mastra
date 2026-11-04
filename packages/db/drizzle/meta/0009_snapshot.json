@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "6a74b480-5726-481f-851f-69261f647f29",
+  "id": "414cc9e9-df9f-418c-99ce-4cd1303631ab",
   "prevId": "08da48fd-86d5-4578-a20a-028c1cfd32f9",
   "tables": {
     "app_approvals": {
@@ -35,6 +35,27 @@
           "notNull": true,
           "autoincrement": false
         },
+        "job_id": {
+          "name": "job_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "draft_id": {
+          "name": "draft_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "draft_version": {
+          "name": "draft_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "payload": {
           "name": "payload",
           "type": "text",
@@ -54,6 +75,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "snapshot_id": {
+          "name": "snapshot_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "profile_version": {
@@ -86,7 +114,26 @@
           "isUnique": true
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "app_approvals_job_id_app_jobs_id_fk": {
+          "name": "app_approvals_job_id_app_jobs_id_fk",
+          "tableFrom": "app_approvals",
+          "tableTo": "app_jobs",
+          "columnsFrom": ["job_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "app_approvals_draft_id_app_job_drafts_id_fk": {
+          "name": "app_approvals_draft_id_app_job_drafts_id_fk",
+          "tableFrom": "app_approvals",
+          "tableTo": "app_job_drafts",
+          "columnsFrom": ["draft_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -279,6 +326,103 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "app_job_snapshots": {
+      "name": "app_job_snapshots",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "job_id": {
+          "name": "job_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "draft_id": {
+          "name": "draft_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "payload_hash": {
+          "name": "payload_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "approval_id": {
+          "name": "approval_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "app_job_snapshots_approval_id_unique": {
+          "name": "app_job_snapshots_approval_id_unique",
+          "columns": ["approval_id"],
+          "isUnique": true
+        },
+        "app_job_snapshots_job_version_uq": {
+          "name": "app_job_snapshots_job_version_uq",
+          "columns": ["job_id", "version"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "app_job_snapshots_job_id_app_jobs_id_fk": {
+          "name": "app_job_snapshots_job_id_app_jobs_id_fk",
+          "tableFrom": "app_job_snapshots",
+          "tableTo": "app_jobs",
+          "columnsFrom": ["job_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "app_job_snapshots_draft_id_app_job_drafts_id_fk": {
+          "name": "app_job_snapshots_draft_id_app_job_drafts_id_fk",
+          "tableFrom": "app_job_snapshots",
+          "tableTo": "app_job_drafts",
+          "columnsFrom": ["draft_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "app_jobs": {
       "name": "app_jobs",
       "columns": {
@@ -406,6 +550,14 @@
           "notNull": true,
           "autoincrement": false
         },
+        "handle": {
+          "name": "handle",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
         "kind": {
           "name": "kind",
           "type": "text",
@@ -455,6 +607,11 @@
           "name": "app_profile_facts_current_idx",
           "columns": ["superseded_in_version"],
           "isUnique": false
+        },
+        "app_profile_facts_handle_idx": {
+          "name": "app_profile_facts_handle_idx",
+          "columns": ["handle"],
+          "isUnique": true
         }
       },
       "foreignKeys": {},
