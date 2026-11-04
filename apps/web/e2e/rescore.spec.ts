@@ -51,7 +51,7 @@ test("re-score stale jobs from /jobs and approve them all", async ({ page }) => 
   await expect(results.getByRole("button", { name: /^Approve all/ })).toHaveCount(0);
 
   await page.goto("/jobs");
-  await expect(row).toContainText("Approved v1");
-  await expect(row).not.toContainText("not approved");
+  // Approved jobs carry no badge: only states that need attention do.
+  await expect(row).not.toContainText("Draft v");
   await expect(row).not.toContainText("Profile changed · review");
 });

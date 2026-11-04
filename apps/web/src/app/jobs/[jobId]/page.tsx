@@ -136,21 +136,22 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
           <CardHeader>
             <CardTitle className="flex flex-wrap items-center gap-2">
               Current draft{" "}
-              {draftApproved ? (
-                <Badge>
-                  <CheckIcon />
-                  Draft v{draft.version} · approved as v{latestApproved.version}
+              {!draftApproved && (
+                <Badge
+                  variant={pending.length > 0 ? "secondary" : "outline"}
+                  className={pending.length > 0 ? undefined : "border-dashed"}
+                >
+                  Draft v{draft.version} ·{" "}
+                  {pending.length > 0 ? "awaiting approval" : "not approved"}
                 </Badge>
-              ) : (
-                <Badge variant="outline">Draft v{draft.version} · not approved</Badge>
               )}
-              {pending.length > 0 && <Badge variant="secondary">Awaiting approval</Badge>}
               {profileStale && <Badge variant="destructive">Profile changed · review</Badge>}
             </CardTitle>
             <CardDescription>
               Saved automatically {formatDate(draft.createdAt)} using profile v
               {draft.profileVersion}
               {profileStale ? ` (current profile is v${profileVersion})` : ""}.
+              {draftApproved && ` Approved as v${latestApproved.version}.`}
               {draftAhead && ` Changed since approved v${latestApproved.version}.`}
             </CardDescription>
             {!draftApproved && <ApproveDraftButton draftId={draft.id} version={draft.version} />}
@@ -176,10 +177,10 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
                 <Collapsible>
                   <CardHeader>
                     <CollapsibleTrigger className="flex flex-wrap items-center gap-2 text-left">
-                      <Badge>
-                        <CheckIcon />
+                      <span className="inline-flex items-center gap-1 text-sm font-medium">
+                        <CheckIcon className="size-4 text-muted-foreground" />
                         Approved v{s.version}
-                      </Badge>
+                      </span>
                       <VerdictBadge
                         verdict={s.payload.assessment.recommendation.verdict}
                         size="sm"
