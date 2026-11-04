@@ -1,9 +1,9 @@
-import type { ProfileFact } from "@copilot/db";
+import { factHandle, type ProfileFact } from "@copilot/db";
 import { PROFILE_FACT_KINDS, PROFILE_FACT_LABELS } from "@copilot/shared";
 
 /**
  * The approved profile as injected into the system prompt each turn. It comes from the
- * database, never from conversation summaries; fact ids let the agent propose exact changes.
+ * database, never from conversation summaries; fact handles (f7) let the agent cite facts and propose exact changes.
  */
 export function formatProfile({
   version,
@@ -19,7 +19,10 @@ export function formatProfile({
     const items = facts.filter((f) => f.kind === kind);
     return items.length === 0
       ? []
-      : [`${PROFILE_FACT_LABELS[kind]}s:`, ...items.map((f) => `- [fact:${f.id}] ${f.text}`)];
+      : [
+          `${PROFILE_FACT_LABELS[kind]}s:`,
+          ...items.map((f) => `- [fact:${factHandle(f)}] ${f.text}`),
+        ];
   });
   return [`Approved profile (version ${version}):`, ...sections].join("\n");
 }

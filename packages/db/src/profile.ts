@@ -54,7 +54,7 @@ async function proposeProfileChangeUnlocked(
   const parsed = profileProposalSchema.safeParse(input.proposal);
   if (!parsed.success) throw new AssessmentError(`invalid profile change: ${parsed.error.message}`);
   const { version, facts } = await currentProfile(db);
-  const payload = resolveChanges(parsed.data, version, new Map(facts.map((f) => [f.id, f])));
+  const payload = resolveChanges(parsed.data, version, facts);
   const payloadHash = hashPayload(payload);
   const idempotencyKey = `profile_change:${input.threadId}:${payloadHash}`;
 
@@ -79,18 +79,50 @@ async function proposeProfileChangeUnlocked(
   return { approval, created: true };
 }
 
+/** The short id models see and cite for a fact: `f<handle>`, permanent and never reused. */
+export function factHandle(fact: Pick<ProfileFact, "handle">): string {
+  return `f${fact.handle}`;
+}
+
+/**
+ * Resolves a fact reference from a model or the web app: a handle (`f7`), a full id, either
+ * with the prompt's `fact:` prefix. Only the given facts match; anything else is undefined.
+ */
+export function resolveFactRef<F extends Pick<ProfileFact, "id" | "handle">>(
+  ref: string,
+  facts: F[],
+): F | undefined {
+  const bare = ref.trim().replace(/^fact:/, "");
+  const handle = bare.match(/^f(\d+)$/i)?.[1];
+  return facts.find((f) => (handle ? f.handle === Number(handle) : f.id === bare));
+}
+
+/** Retry hint for an unknown fact reference: the current facts' handles with their text. */
+export function unknownFactHint(facts: Pick<ProfileFact, "handle" | "text">[]): string {
+  if (facts.length === 0) return "; the approved profile is empty";
+  return `; current facts: ${facts.map((f) => `${factHandle(f)} ("${f.text.slice(0, 40)}")`).join(", ")}`;
+}
+
+/** Handle of every fact ever approved (current and superseded), by fact id. */
+export async function factHandlesById(db: Reader): Promise<Map<string, string>> {
+  const rows = await db
+    .select({ id: profileFacts.id, handle: profileFacts.handle })
+    .from(profileFacts);
+  return new Map(rows.map((r) => [r.id, factHandle(r)]));
+}
+
 function resolveChanges(
   proposal: ProfileProposal,
   baseVersion: number,
-  current: Map<string, ProfileFact>,
+  current: ProfileFact[],
 ): ProfileChangePayload {
   const touched = new Set<string>();
   const changes = proposal.changes.map((change): ProfileChangePayload["changes"][number] => {
     if (change.op === "add") return change;
-    const fact = current.get(change.factId);
+    const fact = resolveFactRef(change.factId, current);
     if (!fact) {
       throw new AssessmentError(
-        `fact ${change.factId} is not in the current profile; use ids from the profile shown to you`,
+        `fact ${change.factId} is not in the current profile${unknownFactHint(current)}`,
       );
     }
     if (touched.has(fact.id)) throw new AssessmentError(`fact ${fact.id} is changed twice`);
@@ -124,6 +156,8 @@ export async function applyProfileChange(
   if (current !== payload.baseVersion) return null;
   const version = current + 1;
   await tx.insert(profileVersions).values({ version, approvalId: approval.id });
+  const [last] = await tx.select({ handle: max(profileFacts.handle) }).from(profileFacts);
+  let nextHandle = (last?.handle ?? 0) + 1;
   for (const change of payload.changes) {
     if (change.op !== "add") {
       await tx
@@ -134,6 +168,7 @@ export async function applyProfileChange(
     if (change.op !== "remove") {
       await tx.insert(profileFacts).values({
         id: randomUUID(),
+        handle: nextHandle++,
         kind: change.kind,
         text: change.text,
         createdInVersion: version,

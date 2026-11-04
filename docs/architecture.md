@@ -93,7 +93,7 @@ sequenceDiagram
   A->>DB: endRun
 ```
 
-The system prompt is rebuilt every turn from the database: fixed rules, the **approved profile** (with version and fact ids), this chat's **pending approvals**, and today's date last so the cached prefix stays stable (`buildInstructions` in [copilot.ts](../apps/agent/src/mastra/agents/copilot.ts)).
+The system prompt is rebuilt every turn from the database: fixed rules, the **approved profile** (with version and short fact handles like `f7`), this chat's **pending approvals**, and today's date last so the cached prefix stays stable (`buildInstructions` in [copilot.ts](../apps/agent/src/mastra/agents/copilot.ts)).
 
 ## The copilot agent
 
@@ -118,7 +118,7 @@ flowchart TD
 
 Key behaviours, all from the prompt in [copilot.ts](../apps/agent/src/mastra/agents/copilot.ts) and [assessment-rules.ts](../apps/agent/src/mastra/agents/assessment-rules.ts):
 
-- **Role vs fit.** Without a profile, a draft is `role_only`; with one, it is `with_profile` and personal fit points must be `inference` citing current profile fact ids.
+- **Role vs fit.** Without a profile, a draft is `role_only`; with one, it is `with_profile` and personal fit points must be `inference` citing current profile facts by handle.
 - **Evidence classes.** Every point is `official`, `independent`, `anonymous`, `inference` or `unknown_conflicting`. Sourced classes must cite sources of the same job (checked in `@copilot/db`, not by the model).
 - **Research on request.** Each draft names 1–3 `researchTopics`; the chat card and the job page show them as "Research next" buttons that send a request naming the job id (`researchRequestText`). The copilot never researches by default.
 - **Never claims success early.** Snapshots and profile changes are "proposed" until the user approves them.
