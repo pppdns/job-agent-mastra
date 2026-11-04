@@ -11,7 +11,14 @@ import { THREAD_CONTEXT_KEY } from "./thread-context";
  * semantic recall, nothing resource-scoped), so chats never see each other's context.
  * Durable facts about the user live in the approved profile (app tables), not here.
  */
-export const createChatMemory = ({ messageTokens = env.OM_MESSAGE_TOKENS } = {}) =>
+export const createChatMemory = ({
+  messageTokens = env.OM_MESSAGE_TOKENS,
+  bufferTokens,
+}: {
+  messageTokens?: number;
+  /** `false` observes synchronously at the threshold (evals); unset keeps Mastra's async buffering. */
+  bufferTokens?: number | false;
+} = {}) =>
   new Memory({
     options: {
       semanticRecall: false,
@@ -31,6 +38,7 @@ export const createChatMemory = ({ messageTokens = env.OM_MESSAGE_TOKENS } = {})
         },
         observation: {
           messageTokens,
+          ...(bufferTokens === undefined ? {} : { bufferTokens }),
           // These are re-injected from the database every turn; a copy here would go stale.
           instruction:
             "Do not record the user's approved profile, profile changes, or approval statuses: " +
