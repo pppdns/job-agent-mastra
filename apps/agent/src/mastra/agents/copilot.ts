@@ -2,6 +2,7 @@ import { currentProfile, type Db, pendingApprovalsForThread } from "@copilot/db"
 import { COPILOT_AGENT_ID } from "@copilot/shared";
 import { Agent } from "@mastra/core/agent";
 import { createDurableAgent } from "@mastra/core/agent/durable";
+import type { Memory } from "@mastra/memory";
 import { env } from "../../env";
 import { liveCopilotScorers } from "../../evals/scorers";
 import { getAppDb } from "../app-db";
@@ -75,33 +76,40 @@ export async function buildInstructions(
   return parts.join("\n\n");
 }
 
-export const copilotBaseAgent = new Agent({
-  id: COPILOT_AGENT_ID,
-  name: "Job Research Copilot",
-  description: "Assesses job listings and researches the companies behind them.",
-  instructions: async ({ requestContext }) => {
-    const threadId = requestContext.get(THREAD_CONTEXT_KEY);
-    return buildInstructions(await getAppDb(), typeof threadId === "string" ? threadId : undefined);
-  },
+/** The copilot; evals pass their own memory (e.g. a low compaction threshold). */
+export const createCopilotBaseAgent = ({ memory = chatMemory }: { memory?: Memory } = {}) =>
+  new Agent({
+    id: COPILOT_AGENT_ID,
+    name: "Job Research Copilot",
+    description: "Assesses job listings and researches the companies behind them.",
+    instructions: async ({ requestContext }) => {
+      const threadId = requestContext.get(THREAD_CONTEXT_KEY);
+      return buildInstructions(
+        await getAppDb(),
+        typeof threadId === "string" ? threadId : undefined,
+      );
+    },
 
-  model: () => getModel("main"),
-  memory: chatMemory,
-  // Long assessments are tool arguments: a low provider default would cut them into invalid JSON.
-  defaultOptions: { modelSettings: { maxOutputTokens: 16_000 }, maxSteps: 12 },
-  tools: {
-    ingest_listing: ingestListingTool,
-    save_job_draft: saveJobDraftTool,
-    propose_job_snapshot: proposeJobSnapshotTool,
-    propose_profile_change: proposeProfileChangeTool,
-    find_saved_jobs: findSavedJobsTool,
-    get_job: getJobTool,
-    set_job_status: setJobStatusTool,
-    research_company: researchCompanyTool,
-    rescore_jobs: rescoreJobsTool,
-  },
-  // Live scoring: code checks on every turn, the LLM judge on a sample (src/evals/AGENTS.md).
-  scorers: env.LLM_MODE === "live" ? liveCopilotScorers : {},
-});
+    model: () => getModel("main"),
+    memory,
+    // Long assessments are tool arguments: a low provider default would cut them into invalid JSON.
+    defaultOptions: { modelSettings: { maxOutputTokens: 16_000 }, maxSteps: 12 },
+    tools: {
+      ingest_listing: ingestListingTool,
+      save_job_draft: saveJobDraftTool,
+      propose_job_snapshot: proposeJobSnapshotTool,
+      propose_profile_change: proposeProfileChangeTool,
+      find_saved_jobs: findSavedJobsTool,
+      get_job: getJobTool,
+      set_job_status: setJobStatusTool,
+      research_company: researchCompanyTool,
+      rescore_jobs: rescoreJobsTool,
+    },
+    // Live scoring: code checks on every turn, the LLM judge on a sample (src/evals/AGENTS.md).
+    scorers: env.LLM_MODE === "live" ? liveCopilotScorers : {},
+  });
+
+export const copilotBaseAgent = createCopilotBaseAgent();
 
 /**
  * Chat runs are durable: they outlive the HTTP request, can be re-observed after a refresh
