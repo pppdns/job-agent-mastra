@@ -28,9 +28,12 @@ export function createStorage(env: NodeJS.ProcessEnv = process.env): MastraCompo
  * eval DB / eval DuckDB, so Studio shows experiments without them. Eval, e2e and tests set
  * DATABASE_URL and keep everything in their own database.
  */
-function evalDatasetDomains(env: NodeJS.ProcessEnv): Partial<StorageDomains> {
+export function evalDatasetDomains(
+  env: NodeJS.ProcessEnv,
+  root: string = findWorkspaceRoot(),
+): Partial<StorageDomains> {
   if (env.DATABASE_URL) return {};
-  const evalDb = join(findWorkspaceRoot(), "data", "eval.db");
+  const evalDb = join(root, "data", "eval.db");
   if (!existsSync(evalDb)) return {};
   const { datasets, experiments } = new LibSQLStore({
     id: "copilot-eval-libsql",
