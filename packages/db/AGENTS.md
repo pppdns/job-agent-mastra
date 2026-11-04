@@ -4,7 +4,7 @@ Drizzle schema (`src/schema.ts`, `app_*` tables), migrations in `drizzle/` (gene
 
 - `jobs.ts`: `upsertJob` (dedupe: LinkedIn id → canonical URL → normalized company+title without conflicting ids; never touches status), `setJobStatus` / `setJobArchived` (the user's pipeline: `new → shortlisted → applied → interviewing → offer`, plus `rejected` / `dismissed`, which archive the job; any other status unarchives it; archiving by hand keeps the status; drafts, snapshots and approvals are untouched; re-score skips archived jobs), `addSource` (bounded snapshot, idempotent per job + content hash), `latestListingSource` (research pages are `web` sources too; only the job's own URL counts).
 - `assessments.ts`: versioned drafts (with the profile version at save time; an optional expected `profileVersion` rejects a draft if the profile moved), snapshot proposals, the approval decision, `approveDrafts` ("approve all": propose + approve each shown draft, skip `changed` ones; also used by the job page's single-draft approve), `approvedDraftIds`, read models (incl. `profileStale`).
-- `profile.ts`: current profile/version, profile change proposals, applying an approved change, history.
+- `profile.ts`: current profile/version, profile change proposals, applying an approved change, history. Every fact has a permanent `handle` (next free number, never reused; modify creates a new one); models see and cite it as `f<handle>` (`factHandle`), never the UUID, because they miscopy UUIDs.
 - `claims.ts`: research claims (`recordClaim` enforces sources of the same job for sourced evidence classes), `listClaims`.
 - `runs.ts`: chat runs (`startRun`, `endRun` keeps the first final status, `activeRun`, `interruptStaleRuns` at startup), run events (`recordRunEvents`, `totalsOf`, `threadUsage`).
 - `jobs.ts` also maintains `app_jobs_fts` (FTS5) via `reindexJob`; `searchJobIds` only builds quoted prefix terms.
@@ -25,7 +25,7 @@ stateDiagram-v2
 - Only `decideApproval` changes status, and only the web app's server action calls it (user click). No tool can approve.
 - A decision from another chat returns `wrong_thread`; a changed payload returns `stale`; repeating a decision that already happened returns the same result (lost-response retry), and concurrent approvals create one snapshot.
 - Proposals are idempotent per draft + chat (`idempotency_key`). `payload` is exactly what gets stored; `payload_hash` is `hashPayload(payload)` (sorted-key JSON, SHA-256).
-- Drafts must cite only sources of the same job; `official`/`independent`/`anonymous` evidence needs at least one source id. Fit points (`profileFactIds` set) must be `inference` and cite current profile facts (a `fact:` prefix is stripped; an unknown id errors with the near-match fact from `factIdHint`, never auto-corrected); `with_profile` drafts need at least one, `role_only` drafts none. `resetAppTables` (index.ts) empties every app table, for the eval DB only.
+- Drafts must cite only sources of the same job; `official`/`independent`/`anonymous` evidence needs at least one source id. Fit points (`profileFactIds` set) must be `inference` and cite current profile facts by handle or full id (`resolveFactRef`; the full id is stored; an unknown one errors with the current handles); `with_profile` drafts need at least one, `role_only` drafts none. `resetAppTables` (index.ts) empties every app table, for the eval DB only.
 
 ## Profile change approvals
 

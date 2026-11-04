@@ -86,6 +86,22 @@ describe("profile changes", () => {
     expect((await currentProfile(db)).facts).toEqual([]);
   });
 
+  it("gives every new fact the next handle, never reusing one, and accepts handles", async () => {
+    const first = await approvedFact("Prefers Budapest");
+    expect(first.handle).toBe(1);
+    // Modify by handle (as models cite it): the new fact gets handle 2, f1 stays history.
+    await decide(
+      (await propose([{ op: "modify", factId: "fact:f1", text: "Prefers Vienna" }])).approval,
+    );
+    const [modified] = (await currentProfile(db)).facts;
+    expect(modified).toMatchObject({ handle: 2, text: "Prefers Vienna", supersedesId: first.id });
+    await expect(propose([{ op: "remove", factId: "f1" }])).rejects.toThrow(
+      'current facts: f2 ("Prefers Vienna")',
+    );
+    await decide((await propose([{ op: "remove", factId: "f2" }])).approval);
+    expect((await approvedFact("Small teams")).handle).toBe(3);
+  });
+
   it("rejects changes to facts that are not current", async () => {
     await expect(propose([{ op: "remove", factId: "invented" }])).rejects.toThrow(AssessmentError);
   });
