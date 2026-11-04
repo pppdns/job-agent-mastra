@@ -7,6 +7,7 @@ import type { RunStatusResponse } from "@/app/api/run-status/route";
 import { SidebarMenuBadge } from "@/components/ui/sidebar";
 import {
   markerFor,
+  mergeSeen,
   parseSeen,
   type RunMarker,
   SEEN_STORAGE_KEY,
@@ -33,14 +34,27 @@ export function useRunMarkers(threadIds: string[], openThreadId: string | null) 
   open.current = openThreadId;
   const refreshedFor = useRef(new Set<string>());
   const previous = useRef<RunStatusResponse["runs"]>({});
-  /** Server clock minus browser clock, from the last poll. */
-  const clockOffset = useRef(0);
+  /** Server clock minus browser clock, from the last poll; null until the first one. */
+  const clockOffset = useRef<number | null>(null);
 
   // Leaving a chat marks it seen now, so a reply that ended since the last poll gets no dot.
+  // Before the first poll there is no server time to record, so nothing is written.
   useEffect(() => {
     if (!openThreadId) return;
-    return () => markSeen(setSeen, openThreadId, Date.now() + clockOffset.current);
+    return () => {
+      if (clockOffset.current === null) return;
+      markSeen(setSeen, openThreadId, Date.now() + clockOffset.current);
+    };
   }, [openThreadId]);
+
+  // Another tab opened a chat: take its seen times too.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === SEEN_STORAGE_KEY) setSeen((current) => mergeSeen(current, readStored()));
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,8 +69,8 @@ export function useRunMarkers(threadIds: string[], openThreadId: string | null) 
 
       setSeen((current) => {
         if (current) return current;
-        const initial = parseSeen(localStorage.getItem(SEEN_STORAGE_KEY), body.now);
-        localStorage.setItem(SEEN_STORAGE_KEY, JSON.stringify(initial));
+        const initial = readStored() ?? { since: body.now, threads: {} };
+        writeStored(initial);
         return initial;
       });
       if (open.current) markSeen(setSeen, open.current, body.now);
@@ -101,15 +115,34 @@ export function useRunMarkers(threadIds: string[], openThreadId: string | null) 
     seen ? markerFor(runs[threadId], seenAtOf(seen, threadId), threadId === openThreadId) : null;
 }
 
+/** Storage is best effort (disabled or full storage): the in-memory state still works. */
+function readStored(): SeenState | null {
+  try {
+    return parseSeen(localStorage.getItem(SEEN_STORAGE_KEY));
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(state: SeenState) {
+  try {
+    localStorage.setItem(SEEN_STORAGE_KEY, JSON.stringify(state));
+  } catch {}
+}
+
+/** Records a chat as seen, merged with what other tabs stored so none of theirs is lost. */
 function markSeen(
-  setSeen: (update: (current: SeenState | null) => SeenState) => void,
+  setSeen: (update: (current: SeenState | null) => SeenState | null) => void,
   threadId: string,
   at: number,
 ) {
   setSeen((current) => {
-    const base = current ?? parseSeen(localStorage.getItem(SEEN_STORAGE_KEY), at);
-    const next = { ...base, threads: { ...base.threads, [threadId]: at } };
-    localStorage.setItem(SEEN_STORAGE_KEY, JSON.stringify(next));
+    const base = mergeSeen(current, readStored()) ?? { since: at, threads: {} };
+    const next = {
+      ...base,
+      threads: { ...base.threads, [threadId]: Math.max(base.threads[threadId] ?? 0, at) },
+    };
+    writeStored(next);
     return next;
   });
 }
@@ -120,7 +153,10 @@ const LABELS: Record<RunMarker, string> = {
   failed: "Reply failed",
 };
 
-/** Sits where the hover "Chat actions" button appears, so it hides while that shows. */
+/**
+ * On desktop it sits where the hover-only "Chat actions" button appears and hides while that
+ * shows; on mobile that button is always visible, so the marker sits just left of it.
+ */
 export function RunMarkerBadge({ marker }: { marker: RunMarker }) {
   return (
     <SidebarMenuBadge
@@ -128,7 +164,7 @@ export function RunMarkerBadge({ marker }: { marker: RunMarker }) {
       aria-label={LABELS[marker]}
       title={LABELS[marker]}
       data-marker={marker}
-      className="md:group-focus-within/menu-item:opacity-0 md:group-hover/menu-item:opacity-0"
+      className="right-7 md:right-1 md:group-focus-within/menu-item:opacity-0 md:group-hover/menu-item:opacity-0"
     >
       {marker === "running" ? (
         <LoaderCircleIcon className="size-3.5 animate-spin text-muted-foreground" />

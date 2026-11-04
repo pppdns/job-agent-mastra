@@ -27,12 +27,24 @@ export function markerFor(
 /** Chats never opened in this browser count as seen when the browser first loaded the app. */
 export const seenAtOf = (seen: SeenState, threadId: string) => seen.threads[threadId] ?? seen.since;
 
-export function parseSeen(raw: string | null, now: number): SeenState {
+/** Stored seen state, or null when missing or unreadable. */
+export function parseSeen(raw: string | null): SeenState | null {
   try {
     const parsed = JSON.parse(raw ?? "") as Partial<SeenState>;
     if (typeof parsed.since === "number" && parsed.threads && typeof parsed.threads === "object") {
       return { since: parsed.since, threads: parsed.threads };
     }
   } catch {}
-  return { since: now, threads: {} };
+  return null;
+}
+
+/**
+ * Merges two copies of the seen state (this tab's and another tab's, via storage): the earliest
+ * first-load time and, per chat, the latest seen time, so no tab can make a seen reply unread.
+ */
+export function mergeSeen(a: SeenState | null, b: SeenState | null): SeenState | null {
+  if (!a || !b) return a ?? b;
+  const threads = { ...a.threads };
+  for (const [id, at] of Object.entries(b.threads)) threads[id] = Math.max(threads[id] ?? 0, at);
+  return { since: Math.min(a.since, b.since), threads };
 }

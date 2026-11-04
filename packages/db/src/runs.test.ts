@@ -42,6 +42,19 @@ describe("runs", () => {
     expect(latest.b?.endedAt).toBeTypeOf("number");
   });
 
+  it("keeps a quiet chat's latest run however many runs a busy chat has", async () => {
+    await startRun(db, { id: "q1", threadId: "quiet" });
+    await endRun(db, "q1", "completed");
+    for (let i = 0; i < 5; i++) {
+      await new Promise((r) => setTimeout(r, 2));
+      await startRun(db, { id: `busy${i}`, threadId: "busy" });
+    }
+    const latest = await latestRunStatuses(db, 2);
+    expect(Object.keys(latest).sort()).toEqual(["busy", "quiet"]);
+    expect(latest.quiet?.status).toBe("completed");
+    expect(Object.keys(await latestRunStatuses(db, 1))).toEqual(["busy"]);
+  });
+
   it("marks runs left running by a previous process as interrupted", async () => {
     await startRun(db, { id: "r1", threadId: "t" });
     expect(await interruptStaleRuns(db)).toBe(1);

@@ -98,7 +98,12 @@ export function ThreadList({ threads }: { threads: ThreadListItem[] }) {
                   <SidebarMenuButton
                     asChild
                     isActive={pathname === href}
-                    className={marker ? "pr-8" : undefined}
+                    // Room for the marker next to the always-visible mobile actions button.
+                    className={
+                      marker
+                        ? "group-has-data-[sidebar=menu-action]/menu-item:pr-14 md:group-has-data-[sidebar=menu-action]/menu-item:pr-8"
+                        : undefined
+                    }
                   >
                     <Link href={href} onClick={() => setOpenMobile(false)}>
                       <span>{displayTitle(thread.title)}</span>

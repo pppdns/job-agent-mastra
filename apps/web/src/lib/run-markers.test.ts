@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { markerFor, parseSeen, seenAtOf } from "./run-markers";
+import { markerFor, mergeSeen, parseSeen, seenAtOf } from "./run-markers";
 
 describe("markerFor", () => {
   it("shows running chats, even the open one", () => {
@@ -21,13 +21,22 @@ describe("markerFor", () => {
 });
 
 describe("seen state", () => {
-  it("starts fresh on missing or broken storage", () => {
-    expect(parseSeen(null, 7)).toEqual({ since: 7, threads: {} });
-    expect(parseSeen("{oops", 7)).toEqual({ since: 7, threads: {} });
+  it("ignores missing or broken storage", () => {
+    expect(parseSeen(null)).toBeNull();
+    expect(parseSeen("{oops")).toBeNull();
+    expect(parseSeen('{"since":"x"}')).toBeNull();
+  });
+
+  it("merges tabs without making a seen chat unseen", () => {
+    const tabA = { since: 5, threads: { a: 30, b: 10 } };
+    const tabB = { since: 3, threads: { a: 20, c: 40 } };
+    expect(mergeSeen(tabA, tabB)).toEqual({ since: 3, threads: { a: 30, b: 10, c: 40 } });
+    expect(mergeSeen(null, tabB)).toBe(tabB);
+    expect(mergeSeen(null, null)).toBeNull();
   });
 
   it("falls back to the first-load time for chats never opened", () => {
-    const seen = parseSeen(JSON.stringify({ since: 3, threads: { a: 9 } }), 100);
+    const seen = { since: 3, threads: { a: 9 } };
     expect(seenAtOf(seen, "a")).toBe(9);
     expect(seenAtOf(seen, "b")).toBe(3);
   });
