@@ -103,9 +103,9 @@ The copilot is an open-ended conversational agent, not a wizard. It decides whic
 flowchart TD
   M[User message] --> K{What is it?}
   K -->|URL or pasted listing| I[ingest_listing]
-  I -->|complete| D[assess → save_job_draft<br/>reply ≤ 3 sentences + 2–3 research directions]
+  I -->|complete| D[assess → save_job_draft<br/>reply ≤ 3 sentences<br/>card offers researchTopics as buttons]
   I -->|needs_paste / blocked| P[ask the user to paste the listing]
-  K -->|"research X"| R[research_company<br/>1–3 decisive topics]
+  K -->|"research X" or a research button| R[research_company<br/>1–3 decisive topics]
   R --> D2[summarize what matters → save_job_draft]
   K -->|lasting preference / 'Remember …'| PP[propose_profile_change<br/>takes effect after approval]
   K -->|'for this chat …'| WM[updateWorkingMemory<br/>thread only]
@@ -120,7 +120,7 @@ Key behaviours, all from the prompt in [copilot.ts](../apps/agent/src/mastra/age
 
 - **Role vs fit.** Without a profile, a draft is `role_only`; with one, it is `with_profile` and personal fit points must be `inference` citing current profile fact ids.
 - **Evidence classes.** Every point is `official`, `independent`, `anonymous`, `inference` or `unknown_conflicting`. Sourced classes must cite sources of the same job (checked in `@copilot/db`, not by the model).
-- **Research on request.** It offers directions instead of researching by default.
+- **Research on request.** Each draft names 1–3 `researchTopics`; the chat card and the job page show them as "Research next" buttons that send a request naming the job id (`researchRequestText`). The copilot never researches by default.
 - **Never claims success early.** Snapshots and profile changes are "proposed" until the user approves them.
 
 Models come from the AI Gateway: `main` (Sonnet) for the copilot, researcher and rescorer, `fast` (Haiku) for compaction and chat titles. `LLM_MODE=mock` swaps in a deterministic fake for tests and offline dev ([models.ts](../apps/agent/src/mastra/models.ts)).

@@ -1,6 +1,6 @@
 # Company research
 
-`research_company` (`src/mastra/tools/research-company.ts`) → `runResearch` (`run.ts`).
+`research_company` (`src/mastra/tools/research-company.ts`) → `runResearch` (`run.ts`). Started by the user: in words, or with the "Research next" buttons the UI builds from the draft's `researchTopics` (message from `researchRequestText`, which names the job id).
 
 ```mermaid
 flowchart LR

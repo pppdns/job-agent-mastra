@@ -157,6 +157,10 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - [x] Verified: db/tool/list unit tests, e2e `jobs.spec.ts` (status, archive, tabs, search, unarchive, job page), browser check on the worktree DB.
 - Later if needed: paging (fine at a few hundred rows), bulk actions, notes and dates per job.
 
+### M11 — Research suggestions in the UI
+- [x] Assessments name 1–3 `researchTopics` (defaults for older drafts); the chat card and the job page show them as "Research next" buttons. Chat buttons send the request in the same chat; job-page buttons start a new chat (`startResearchAction`, company from the DB) and the copilot loads the job with `get_job`.
+- [x] Verified: shared unit tests, e2e `research.spec.ts` (card button, job-page button).
+
 ## Simplifications chosen (tell me if any is unacceptable)
 
 1. **Reconnect across agent-server restarts** would need Redis (shared event cache). Plan: in-process cache — browser refresh/reconnect works; after a server restart the run is marked interrupted with partial results kept, and you re-ask. Redis can be added later without redesign.

@@ -1,5 +1,6 @@
 import { gateway } from "@ai-sdk/gateway";
 import type { LanguageModelV4, LanguageModelV4Prompt } from "@ai-sdk/provider";
+import { RESEARCH_TOPIC_LABELS, RESEARCH_TOPICS } from "@copilot/shared";
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { env } from "../env";
@@ -130,6 +131,7 @@ const MOCK_ASSESSMENT = (sourceId: string) => ({
   ],
   weaknesses: [{ text: "Mock weakness: on-call is likely.", evidence: "inference" }],
   unknowns: [{ question: "What is the salary?", whyItMatters: "Not stated." }],
+  researchTopics: ["business", "business_health"],
   recommendation: { verdict: "investigate_further", rationale: "Mock rationale." },
 });
 
@@ -256,6 +258,15 @@ function mockTurn({
     const topics = text.slice(9).trim().split(/[ ,]+/).filter(Boolean);
     if (jobId)
       return call("research_company", { jobId, topics: topics.length ? topics : ["business"] });
+  }
+  // A research button's message (researchRequestText): "Research Acme (job <id>): engineering."
+  const button = text.match(/^Research .+ \(job ([^)]+)\): (.+)\.$/);
+  if (offered("research_company") && button?.[1] && button[2]) {
+    const labels = button[2].split(", ");
+    const topics = RESEARCH_TOPICS.filter((t) =>
+      labels.includes(RESEARCH_TOPIC_LABELS[t].toLowerCase()),
+    );
+    return call("research_company", { jobId: button[1], topics });
   }
   if (offered("propose_profile_change") && text.startsWith("Remember:")) {
     return call("propose_profile_change", {

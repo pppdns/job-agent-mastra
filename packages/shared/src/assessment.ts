@@ -74,6 +74,25 @@ export const FIT_LEVEL_LABELS: Record<FitLevel, string> = {
   poor: "Poor fit",
 };
 
+export const RESEARCH_TOPICS = [
+  "business",
+  "product",
+  "engineering",
+  "learning_ownership",
+  "business_health",
+  "role_facts",
+] as const;
+export type ResearchTopic = (typeof RESEARCH_TOPICS)[number];
+
+export const RESEARCH_TOPIC_LABELS: Record<ResearchTopic, string> = {
+  business: "What the company does",
+  product: "Product and mission",
+  engineering: "Engineering",
+  learning_ownership: "Learning and ownership",
+  business_health: "Business health",
+  role_facts: "Role-specific facts",
+};
+
 const points = (max: number) => z.array(assessmentPointSchema).max(max).default([]);
 
 /**
@@ -105,6 +124,11 @@ export const assessmentSchema = z.object({
     .max(10)
     .default([]),
   recruiterQuestions: z.array(text(300)).max(10).default([]),
+  researchTopics: z
+    .array(z.enum(RESEARCH_TOPICS))
+    .max(3)
+    .optional()
+    .describe("1–3 research topics whose findings would most change the decision"),
   recommendation: z.object({
     verdict: z.enum(RECOMMENDATIONS),
     rationale: text(800),
@@ -112,6 +136,30 @@ export const assessmentSchema = z.object({
   }),
 });
 export type Assessment = z.infer<typeof assessmentSchema>;
+
+/** Shown as research suggestions when an assessment names none (drafts saved before the field). */
+export const DEFAULT_RESEARCH_TOPICS: readonly ResearchTopic[] = [
+  "business",
+  "business_health",
+  "engineering",
+];
+
+/** Topics to offer as "research next" buttons for an assessment. */
+export const suggestedResearchTopics = (a: Pick<Assessment, "researchTopics">): ResearchTopic[] =>
+  a.researchTopics?.length ? [...new Set(a.researchTopics)] : [...DEFAULT_RESEARCH_TOPICS];
+
+/**
+ * The chat message a research button sends. It names the job id, so it also works in a new
+ * chat (the copilot loads the job with get_job).
+ */
+export function researchRequestText(job: {
+  jobId: string;
+  company?: string | null;
+  topics: readonly ResearchTopic[];
+}): string {
+  const labels = job.topics.map((t) => RESEARCH_TOPIC_LABELS[t].toLowerCase()).join(", ");
+  return `Research ${job.company || "the company"} (job ${job.jobId}): ${labels}.`;
+}
 
 /** Every point in an assessment, for checks that apply to all of them. */
 export const allPoints = (a: Assessment): AssessmentPoint[] => [
@@ -143,25 +191,6 @@ function firstSentence(text: string): string {
   const sentence = text.match(/^.+?[.!?](\s|$)/)?.[0]?.trim() ?? text;
   return sentence.length > 140 ? `${sentence.slice(0, 139)}…` : sentence;
 }
-
-export const RESEARCH_TOPICS = [
-  "business",
-  "product",
-  "engineering",
-  "learning_ownership",
-  "business_health",
-  "role_facts",
-] as const;
-export type ResearchTopic = (typeof RESEARCH_TOPICS)[number];
-
-export const RESEARCH_TOPIC_LABELS: Record<ResearchTopic, string> = {
-  business: "What the company does",
-  product: "Product and mission",
-  engineering: "Engineering",
-  learning_ownership: "Learning and ownership",
-  business_health: "Business health",
-  role_facts: "Role-specific facts",
-};
 
 const isoDate = z
   .string()
