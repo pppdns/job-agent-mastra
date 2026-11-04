@@ -148,6 +148,11 @@ describe("saveDraft", () => {
     await expect(
       saveDraft(db, { jobId, assessment: withProfile([fitPoint("not-a-fact")]) }),
     ).rejects.toThrow(/not in the approved profile/);
+    // A one-character miscopy of a UUID names the intended fact, so the retry can fix it.
+    const miscopied = `${factId.slice(0, -1)}${factId.endsWith("0") ? "1" : "0"}`;
+    await expect(
+      saveDraft(db, { jobId, assessment: withProfile([fitPoint(miscopied)]) }),
+    ).rejects.toThrow(`did you mean ${factId}`);
     await expect(
       saveDraft(db, { jobId, assessment: { ...assessment(), strengths: [fitPoint(factId)] } }),
     ).rejects.toThrow(/role_only drafts can't cite profileFactIds/);

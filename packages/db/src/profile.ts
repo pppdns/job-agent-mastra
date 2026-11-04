@@ -79,6 +79,38 @@ async function proposeProfileChangeUnlocked(
   return { approval, created: true };
 }
 
+/** Edit distance between two strings (Levenshtein). */
+function editDistance(a: string, b: string): number {
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (const [i, ca] of [...a].entries()) {
+    const row = [i + 1];
+    for (const [j, cb] of [...b].entries()) {
+      row.push(
+        Math.min((prev[j + 1] ?? 0) + 1, (row[j] ?? 0) + 1, (prev[j] ?? 0) + (ca === cb ? 0 : 1)),
+      );
+    }
+    prev = row;
+  }
+  return prev[b.length] ?? 0;
+}
+
+/**
+ * Retry hint for a fact id the model cited that isn't current. Models sometimes miscopy a
+ * character of a UUID and repeat it, so name the near match (or list the current ids) with
+ * its text; the model must still resend it, nothing is auto-corrected.
+ */
+export function factIdHint(id: string, facts: Pick<ProfileFact, "id" | "text">[]): string {
+  const [best, second] = facts
+    .map((f) => ({ f, d: editDistance(id, f.id) }))
+    .filter(({ d }) => d <= 3)
+    .sort((x, y) => x.d - y.d);
+  if (best && (!second || best.d < second.d)) {
+    return `; did you mean ${best.f.id} ("${best.f.text.slice(0, 60)}")? Copy ids exactly from [fact:…]`;
+  }
+  if (facts.length === 0) return "; the approved profile is empty";
+  return `; current fact ids: ${facts.map((f) => `${f.id} ("${f.text.slice(0, 40)}")`).join(", ")}`;
+}
+
 function resolveChanges(
   proposal: ProfileProposal,
   baseVersion: number,
@@ -90,7 +122,7 @@ function resolveChanges(
     const fact = current.get(change.factId);
     if (!fact) {
       throw new AssessmentError(
-        `fact ${change.factId} is not in the current profile; use ids from the profile shown to you`,
+        `fact ${change.factId} is not in the current profile${factIdHint(change.factId, [...current.values()])}`,
       );
     }
     if (touched.has(fact.id)) throw new AssessmentError(`fact ${fact.id} is changed twice`);

@@ -25,7 +25,7 @@ stateDiagram-v2
 - Only `decideApproval` changes status, and only the web app's server action calls it (user click). No tool can approve.
 - A decision from another chat returns `wrong_thread`; a changed payload returns `stale`; repeating a decision that already happened returns the same result (lost-response retry), and concurrent approvals create one snapshot.
 - Proposals are idempotent per draft + chat (`idempotency_key`). `payload` is exactly what gets stored; `payload_hash` is `hashPayload(payload)` (sorted-key JSON, SHA-256).
-- Drafts must cite only sources of the same job; `official`/`independent`/`anonymous` evidence needs at least one source id. Fit points (`profileFactIds` set) must be `inference` and cite current profile facts (a `fact:` prefix is stripped); `with_profile` drafts need at least one, `role_only` drafts none. `resetAppTables` (index.ts) empties every app table, for the eval DB only.
+- Drafts must cite only sources of the same job; `official`/`independent`/`anonymous` evidence needs at least one source id. Fit points (`profileFactIds` set) must be `inference` and cite current profile facts (a `fact:` prefix is stripped; an unknown id errors with the near-match fact from `factIdHint`, never auto-corrected); `with_profile` drafts need at least one, `role_only` drafts none. `resetAppTables` (index.ts) empties every app table, for the eval DB only.
 
 ## Profile change approvals
 

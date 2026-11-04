@@ -11,7 +11,7 @@ import { and, desc, eq, inArray, max, sql, TransactionRollbackError } from "driz
 import { AssessmentError, hashPayload } from "./hash";
 import type { Db } from "./index";
 import { reindexJob } from "./jobs";
-import { applyProfileChange, currentProfile, currentProfileVersion } from "./profile";
+import { applyProfileChange, currentProfile, currentProfileVersion, factIdHint } from "./profile";
 import {
   type Approval,
   approvals,
@@ -75,7 +75,8 @@ async function saveDraftUnlocked(db: Db, input: DraftInput): Promise<JobDraft> {
     ),
   );
   // Fit points (comparisons with the profile) are the model's judgement: deterministic labels.
-  const facts = new Set((await currentProfile(db)).facts.map((f) => f.id));
+  const currentFacts = (await currentProfile(db)).facts;
+  const facts = new Set(currentFacts.map((f) => f.id));
   const fitPoints = allPoints(assessment).filter((p) => p.profileFactIds.length > 0);
   if (assessment.fitBasis === "role_only" && fitPoints.length > 0) {
     throw new AssessmentError("role_only drafts can't cite profileFactIds; judge fit with_profile");
@@ -86,10 +87,10 @@ async function saveDraftUnlocked(db: Db, input: DraftInput): Promise<JobDraft> {
     );
   }
   for (const point of fitPoints) {
-    const stale = point.profileFactIds.filter((id) => !facts.has(id));
-    if (stale.length > 0) {
+    const stale = point.profileFactIds.find((id) => !facts.has(id));
+    if (stale) {
       throw new AssessmentError(
-        `profile fact ids ${stale.join(", ")} are not in the approved profile; use the [fact:…] ids shown to you`,
+        `profile fact id ${stale} is not in the approved profile${factIdHint(stale, currentFacts)}`,
       );
     }
     if (point.evidence !== "inference") {
