@@ -178,6 +178,8 @@ export const profileFacts = sqliteTable(
   "app_profile_facts",
   {
     id: text("id").primaryKey(),
+    /** Short, permanent number shown to models as `f<handle>` (never reused); see factHandle. */
+    handle: integer("handle").notNull().default(0),
     kind: text("kind", { enum: PROFILE_FACT_KINDS }).notNull(),
     text: text("text").notNull(),
     createdInVersion: integer("created_in_version").notNull(),
@@ -186,7 +188,10 @@ export const profileFacts = sqliteTable(
     supersedesId: text("supersedes_id"),
     createdAt: createdAt(),
   },
-  (t) => [index("app_profile_facts_current_idx").on(t.supersededInVersion)],
+  (t) => [
+    index("app_profile_facts_current_idx").on(t.supersededInVersion),
+    uniqueIndex("app_profile_facts_handle_idx").on(t.handle),
+  ],
 );
 
 /** Researched claims, written one by one during a research run (partial results survive stops). */

@@ -40,7 +40,7 @@ export const assessmentPointSchema = z.object({
     .max(5)
     .default([])
     .describe(
-      "Approved profile fact ids this point compares the job against; such a point is a fit judgement, so its evidence is inference",
+      "Handles (e.g. f7) of the approved profile facts this point compares the job against; such a point is a fit judgement, so its evidence is inference",
     ),
 });
 export type AssessmentPoint = z.infer<typeof assessmentPointSchema>;

@@ -2,9 +2,11 @@ import type { ProfileFact } from "@copilot/db";
 import { describe, expect, it } from "vitest";
 import { formatProfile, profileLearningHint, THIN_PROFILE_FACTS } from "./profile-context";
 
+let handle = 0;
 const fact = (id: string, kind: ProfileFact["kind"], text: string) =>
   ({
     id,
+    handle: ++handle,
     kind,
     text,
     createdInVersion: 1,
@@ -18,7 +20,8 @@ describe("formatProfile", () => {
     expect(formatProfile({ version: 0, facts: [] })).toMatch(/version 0\): empty/);
   });
 
-  it("groups facts by kind with their ids", () => {
+  it("groups facts by kind with their handles, never the full ids", () => {
+    handle = 6;
     expect(
       formatProfile({
         version: 3,
@@ -31,9 +34,9 @@ describe("formatProfile", () => {
       [
         "Approved profile (version 3):",
         "Hard requirements:",
-        "- [fact:a] Remote only",
+        "- [fact:f8] Remote only",
         "Soft preferences:",
-        "- [fact:b] Small teams",
+        "- [fact:f7] Small teams",
       ].join("\n"),
     );
   });
