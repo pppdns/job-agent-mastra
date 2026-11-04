@@ -2,23 +2,24 @@
 
 import { PROFILE_FACT_KINDS, PROFILE_FACT_LABELS, type ProfileFactKind } from "@copilot/shared";
 import { type FormEvent, useState, useTransition } from "react";
-import { proposeProfileEdit } from "@/app/actions";
+import { editProfileAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 type Fact = { id: string; kind: ProfileFactKind; text: string };
 
-function useProposal() {
+/** Applies an edit right away; `version` is the profile version the page shows. */
+function useEdit(version: number) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const propose = (changes: unknown[], reason: string, done?: () => void) =>
+  const apply = (changes: unknown[], reason: string, done?: () => void) =>
     startTransition(async () => {
       setError(null);
-      const result = await proposeProfileEdit({ changes, reason });
+      const result = await editProfileAction({ changes, reason }, version);
       if (result.error) setError(result.error);
       else done?.();
     });
-  return { error, pending, propose };
+  return { error, pending, apply };
 }
 
 function KindSelect({
@@ -44,12 +45,12 @@ function KindSelect({
   );
 }
 
-/** A current fact with edit/remove, both of which only create a proposal. */
-export function FactRow({ fact }: { fact: Fact }) {
+/** A current fact with edit/remove, both applied right away. */
+export function FactRow({ fact, version }: { fact: Fact; version: number }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(fact.text);
   const [kind, setKind] = useState(fact.kind);
-  const { error, pending, propose } = useProposal();
+  const { error, pending, apply } = useEdit(version);
 
   if (!editing) {
     return (
@@ -62,9 +63,7 @@ export function FactRow({ fact }: { fact: Fact }) {
           size="sm"
           variant="ghost"
           disabled={pending}
-          onClick={() =>
-            propose([{ op: "remove", factId: fact.id }], "Removed on the profile page")
-          }
+          onClick={() => apply([{ op: "remove", factId: fact.id }], "Removed on the profile page")}
         >
           Remove
         </Button>
@@ -75,7 +74,7 @@ export function FactRow({ fact }: { fact: Fact }) {
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    propose([{ op: "modify", factId: fact.id, kind, text }], "Edited on the profile page", () =>
+    apply([{ op: "modify", factId: fact.id, kind, text }], "Edited on the profile page", () =>
       setEditing(false),
     );
   };
@@ -90,7 +89,7 @@ export function FactRow({ fact }: { fact: Fact }) {
           className="h-8 flex-1"
         />
         <Button size="sm" type="submit" disabled={pending}>
-          Propose change
+          Save
         </Button>
         <Button size="sm" variant="ghost" type="button" onClick={() => setEditing(false)}>
           Cancel
@@ -101,14 +100,14 @@ export function FactRow({ fact }: { fact: Fact }) {
   );
 }
 
-export function AddFactForm() {
+export function AddFactForm({ version }: { version: number }) {
   const [text, setText] = useState("");
   const [kind, setKind] = useState<ProfileFactKind>("soft_preference");
-  const { error, pending, propose } = useProposal();
+  const { error, pending, apply } = useEdit(version);
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!text.trim()) return;
-    propose([{ op: "add", kind, text }], "Added on the profile page", () => setText(""));
+    apply([{ op: "add", kind, text }], "Added on the profile page", () => setText(""));
   };
   return (
     <form onSubmit={submit} className="flex flex-wrap items-center gap-2" aria-label="Add a fact">
@@ -121,7 +120,7 @@ export function AddFactForm() {
         className="h-8 flex-1"
       />
       <Button size="sm" type="submit" disabled={pending || !text.trim()}>
-        Propose
+        Add
       </Button>
       {error && <p className="basis-full text-sm text-destructive">{error}</p>}
     </form>

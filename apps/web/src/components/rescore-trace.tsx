@@ -8,12 +8,9 @@ import {
 } from "@copilot/shared";
 import { ArrowRightIcon, CheckIcon, CircleAlertIcon, RefreshCwIcon } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState, useTransition } from "react";
-import { approveDraftsAction, approvedDraftIdsAction } from "@/app/actions";
 import { FitMeter, VerdictBadge } from "@/components/assessment-visuals";
 import type { ToolPart } from "@/components/tool-trace";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Trace, TraceDescription, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
 
 type JobResult = {
@@ -91,7 +88,7 @@ export function RescoreProgress({ parts, running }: { parts: RescorePart[]; runn
                 key={key}
                 icon={<RefreshCwIcon />}
                 title={e.status === "cancelled" ? "Re-score stopped" : "Re-score finished"}
-                description={`${e.saved} new drafts${e.failed > 0 ? ` · ${e.failed} failed` : ""}`}
+                description={`${e.saved} saved${e.failed > 0 ? ` · ${e.failed} failed` : ""}`}
               />
             );
           default:
@@ -103,99 +100,32 @@ export function RescoreProgress({ parts, running }: { parts: RescorePart[]; runn
   );
 }
 
-type Outcome = Awaited<ReturnType<typeof approveDraftsAction>>["results"];
-
-const OUTCOME_TEXT: Record<string, string> = {
-  approved: "Approved",
-  changed: "Changed since: not approved",
-  stale: "Changed since: not approved",
-};
-
-/** The batch's new drafts with their verdict change, and one button to approve exactly these. */
-export function RescoreResult({ part, threadId }: { part: ToolPart; threadId: string }) {
+/** The batch's saved assessments with their verdict change. */
+export function RescoreResult({ part }: { part: ToolPart }) {
   const results = ((part.output ?? {}) as { results?: JobResult[] }).results ?? [];
   const saved = results.flatMap((r) => (r.status === "saved" ? [r] : []));
-  const draftIds = saved.map((r) => r.draftId);
-  const draftIdsKey = draftIds.join(",");
-  const [outcomes, setOutcomes] = useState<Outcome>();
-  // Approvals made earlier (this card before a reload, a job page, another chat).
-  const [approvedIds, setApprovedIds] = useState<string[]>([]);
-  const [error, setError] = useState<string>();
-  const [pending, startTransition] = useTransition();
-  useEffect(() => {
-    if (!draftIdsKey) return;
-    let active = true;
-    approvedDraftIdsAction(draftIdsKey.split(","))
-      .then((ids) => active && setApprovedIds(ids))
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, [draftIdsKey]);
   if (saved.length === 0) return null;
-
-  const outcomeOf = (draftId: string) =>
-    outcomes?.find((o) => o.draftId === draftId)?.outcome ??
-    (approvedIds.includes(draftId) ? "approved" : undefined);
-  const allApproved = draftIds.every((id) => outcomeOf(id) === "approved");
-  const approveAll = () =>
-    startTransition(async () => {
-      const response = await approveDraftsAction({
-        threadId,
-        // Drafts approved since (e.g. on a job page) are not sent again.
-        draftIds: draftIds.filter((id) => outcomeOf(id) !== "approved"),
-      });
-      if (response.error) setError("Couldn't approve these drafts. Try again.");
-      else setOutcomes(response.results);
-    });
-
   return (
-    <section
-      className="flex flex-col gap-3 rounded-lg border border-dashed p-3"
-      aria-label="Re-scored jobs"
-    >
+    <section className="flex flex-col gap-3 rounded-lg border p-3" aria-label="Re-scored jobs">
       <ul className="flex flex-col gap-2">
-        {saved.map((r) => {
-          const outcome = outcomeOf(r.draftId);
-          return (
-            <li key={r.draftId} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-              <Link href={`/jobs/${r.jobId}`} className="font-medium hover:underline">
-                {label(r)}
-              </Link>
-              <span className="inline-flex items-center gap-1">
-                {isVerdict(r.before.verdict) && (
-                  <VerdictBadge verdict={r.before.verdict} size="sm" />
-                )}
-                <ArrowRightIcon className="size-3 text-muted-foreground" aria-label="now" />
-                {isVerdict(r.after.verdict) && <VerdictBadge verdict={r.after.verdict} size="sm" />}
-              </span>
-              <FitMeter
-                fitLevel={r.after.fitLevel as FitLevel | undefined}
-                fitBasis={r.after.fitLevel ? "with_profile" : "role_only"}
-              />
-              {outcome ? (
-                <Badge variant={outcome === "approved" ? "default" : "destructive"}>
-                  {OUTCOME_TEXT[outcome] ?? "Not approved"}
-                </Badge>
-              ) : (
-                <Badge variant="outline">Draft v{r.version} · not approved</Badge>
-              )}
-            </li>
-          );
-        })}
+        {saved.map((r) => (
+          <li key={r.draftId} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <Link href={`/jobs/${r.jobId}`} className="font-medium hover:underline">
+              {label(r)}
+            </Link>
+            <span className="inline-flex items-center gap-1">
+              {isVerdict(r.before.verdict) && <VerdictBadge verdict={r.before.verdict} size="sm" />}
+              <ArrowRightIcon className="size-3 text-muted-foreground" aria-label="now" />
+              {isVerdict(r.after.verdict) && <VerdictBadge verdict={r.after.verdict} size="sm" />}
+            </span>
+            <FitMeter
+              fitLevel={r.after.fitLevel as FitLevel | undefined}
+              fitBasis={r.after.fitLevel ? "with_profile" : "role_only"}
+            />
+            <Badge variant="secondary">Saved · v{r.version}</Badge>
+          </li>
+        ))}
       </ul>
-      {!outcomes && !allApproved && (
-        <div className="flex flex-wrap items-center gap-3">
-          <Button size="sm" onClick={approveAll} disabled={pending}>
-            <CheckIcon />
-            Approve all {saved.length}
-          </Button>
-          <span className="text-xs text-muted-foreground">
-            Approves exactly the drafts above. Open a job to review it first.
-          </span>
-        </div>
-      )}
-      {error && <p className="text-sm text-destructive">{error}</p>}
     </section>
   );
 }

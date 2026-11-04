@@ -71,6 +71,13 @@
       "when": 1793829027986,
       "tag": "0009_fact_handles",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1793829861527,
+      "tag": "0010_drop_job_snapshots",
+      "breakpoints": true
     }
   ]
 }

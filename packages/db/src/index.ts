@@ -15,18 +15,15 @@ export * from "./profile";
 export * from "./runs";
 export type {
   Approval,
-  ApprovalPayload,
   ApprovalStatus,
   Claim,
   Job,
   JobDraft,
-  JobSnapshot,
   NewRunEvent,
   ProfileChangePayload,
   ProfileFact,
   Run,
   RunEvent,
-  SnapshotPayload,
   Source,
   SourceKind,
   SourceProvider,

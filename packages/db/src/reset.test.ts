@@ -3,10 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sql } from "drizzle-orm";
 import { expect, it } from "vitest";
-import { decideApproval } from "./assessments";
 import { createDb, migrateDb, resetAppTables } from "./index";
 import { searchJobIds, upsertJob } from "./jobs";
-import { currentProfile, proposeProfileChange } from "./profile";
+import { currentProfile, decideApproval, proposeProfileChange } from "./profile";
 
 it("resetAppTables empties app tables, search included, and keeps other tables", async () => {
   const db = createDb(`file:${join(mkdtempSync(join(tmpdir(), "reset-")), "test.db")}`);

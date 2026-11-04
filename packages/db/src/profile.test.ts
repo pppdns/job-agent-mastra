@@ -2,11 +2,18 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { decideApproval, getJobDetail, listJobs, saveDraft } from "./assessments";
+import { getJobDetail, listJobs, saveDraft } from "./assessments";
 import { AssessmentError } from "./hash";
 import { createDb, type Db, migrateDb } from "./index";
 import { addSource, ftsQuery, searchJobIds, upsertJob } from "./jobs";
-import { currentProfile, profileHistory, proposeProfileChange } from "./profile";
+import {
+  currentProfile,
+  decideApproval,
+  editProfile,
+  pendingApprovalsForThread,
+  profileHistory,
+  proposeProfileChange,
+} from "./profile";
 import type { Approval } from "./schema";
 
 let db: Db;
@@ -148,6 +155,42 @@ describe("profile changes", () => {
       approval: { status: "rejected" },
     });
     expect(await currentProfile(db)).toEqual({ version: 0, facts: [] });
+  });
+});
+
+describe("profile page edits", () => {
+  const edit = (changes: unknown[], baseVersion: number) =>
+    editProfile(db, {
+      threadId: "profile-page",
+      baseVersion,
+      proposal: { changes, reason: "Edited on the profile page" },
+    });
+
+  it("applies right away as a new version, recorded in history", async () => {
+    const { version } = await edit([{ op: "add", kind: "background", text: "Ten years of Go" }], 0);
+    expect(version).toBe(1);
+    expect(await currentProfile(db)).toMatchObject({
+      version: 1,
+      facts: [{ text: "Ten years of Go" }],
+    });
+    expect(await profileHistory(db)).toMatchObject([
+      { version: 1, change: { changes: [{ op: "add", text: "Ten years of Go" }] } },
+    ]);
+    expect(await pendingApprovalsForThread(db, "profile-page")).toEqual([]);
+  });
+
+  it("refuses an edit made against an older profile version", async () => {
+    await edit([{ op: "add", kind: "background", text: "Writes Go" }], 0);
+    await expect(edit([{ op: "add", kind: "background", text: "Writes Rust" }], 0)).rejects.toThrow(
+      /profile changed/,
+    );
+    expect((await currentProfile(db)).facts).toHaveLength(1);
+  });
+
+  it("makes a pending chat proposal from before the edit stale", async () => {
+    const { approval } = await propose([{ op: "add", kind: "soft_preference", text: "Remote" }]);
+    await edit([{ op: "add", kind: "background", text: "Writes Go" }], 0);
+    expect(await decide(approval)).toMatchObject({ ok: false, error: "stale" });
   });
 });
 

@@ -16,14 +16,9 @@ export type ToolPart = {
 export const isToolPart = (part: { type: string }): part is ToolPart =>
   part.type.startsWith("tool-");
 
-/**
- * A successful snapshot or profile proposal renders as an approval prompt instead of a trace
- * row. A draft that was already approved (possibly in another chat) has nothing to decide.
- */
+/** A successful profile proposal renders as an approval prompt instead of a trace row. */
 export function proposedApprovalId(part: ToolPart): string | undefined {
-  const proposes =
-    part.type === "tool-propose_job_snapshot" || part.type === "tool-propose_profile_change";
-  if (!proposes || part.state !== "output-available") return;
+  if (part.type !== "tool-propose_profile_change" || part.state !== "output-available") return;
   const output = part.output as { ok?: boolean; approvalId?: string; status?: string } | undefined;
   return output?.ok && output.status !== "approved" ? output.approvalId : undefined;
 }
@@ -58,8 +53,7 @@ function ToolLine({ part }: { part: ToolPart }) {
   const name = part.type.slice("tool-".length);
   const running: Record<string, string> = {
     ingest_listing: "Reading the listing",
-    save_job_draft: "Saving the draft",
-    propose_job_snapshot: "Preparing the snapshot",
+    save_job_draft: "Saving the assessment",
     propose_profile_change: "Preparing a profile change",
     find_saved_jobs: "Searching saved jobs",
     get_job: "Loading a saved job",
@@ -76,8 +70,7 @@ function ToolLine({ part }: { part: ToolPart }) {
   const failure = toolFailure(part.output);
   if (failure !== undefined) {
     const failed: Record<string, string> = {
-      save_job_draft: "Draft not saved",
-      propose_job_snapshot: "Snapshot not proposed",
+      save_job_draft: "Assessment not saved",
       propose_profile_change: "Profile change not proposed",
       set_job_status: "Status not changed",
       get_job: "Couldn't load the saved job",
@@ -86,20 +79,17 @@ function ToolLine({ part }: { part: ToolPart }) {
       <Line status="error" title={failed[name] ?? `Failed to run ${name}`} description={failure} />
     );
   }
-  if (name === "save_job_draft" || name === "propose_job_snapshot") {
-    const output = (part.output ?? {}) as {
-      version?: number;
-      draftVersion?: number;
-      status?: string;
-    };
-    if (name === "save_job_draft") {
-      return <Line title={`Saved draft v${output.version}`} description="not approved" />;
-    }
-    return output.status === "approved" ? (
-      <Line title={`Draft v${output.draftVersion} is already approved`} />
-    ) : (
-      <Line title="Proposed a snapshot for approval" />
-    );
+  if (name === "save_job_draft") {
+    const output = (part.output ?? {}) as { version?: number };
+    return <Line title={`Saved assessment v${output.version}`} />;
+  }
+  if (name === "propose_job_snapshot") {
+    // Older chats: snapshots no longer exist, every saved assessment is current.
+    return <Line title="Proposed a snapshot" description="no longer needed" />;
+  }
+  if (name === "propose_job_snapshot") {
+    // Older chats: snapshots no longer exist, every saved assessment is current.
+    return <Line title="Proposed a snapshot" description="no longer needed" />;
   }
   if (name === "propose_profile_change") {
     // A successful proposal renders as an approval card (proposedApprovalId), not here.

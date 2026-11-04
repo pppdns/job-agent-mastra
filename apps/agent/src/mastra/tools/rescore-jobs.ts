@@ -8,7 +8,7 @@ export const rescoreJobsTool = createTool({
   id: "rescore_jobs",
   description:
     "Re-assess saved jobs against the current approved profile, each in its own model call, " +
-    "and save each result as a new draft (not approved). Without jobIds: every job whose " +
+    "and save each result as the job's new current version. Without jobIds: every job whose " +
     `assessment predates the current profile (archived jobs skipped), at most ${MAX_RESCORE_JOBS} per call.`,
   inputSchema: z.object({
     jobIds: z

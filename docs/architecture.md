@@ -84,7 +84,7 @@ sequenceDiagram
   L-->>C: tool call ingest_listing
   C->>DB: save job + source
   L-->>C: tool call save_job_draft
-  C->>DB: save draft vN
+  C->>DB: save assessment vN
   L-->>C: short reply text
   C-->>A: stream chunks (sanitized, usage recorded)
   A-->>W: AI SDK UI message stream
@@ -111,17 +111,17 @@ flowchart TD
   K -->|'for this chat …'| WM[updateWorkingMemory<br/>thread only]
   K -->|hypothetical| N[discuss, change nothing]
   K -->|compare / recall| F[find_saved_jobs · get_job]
-  K -->|'finalize'| S[propose_job_snapshot<br/>user approves in the UI]
   K -->|'re-score stale jobs'| RS[rescore_jobs]
   K -->|unknown that changes the verdict| Q[ask one focused question]
 ```
 
 Key behaviours, all from the prompt in [copilot.ts](../apps/agent/src/mastra/agents/copilot.ts) and [assessment-rules.ts](../apps/agent/src/mastra/agents/assessment-rules.ts):
 
-- **Role vs fit.** Without a profile, a draft is `role_only`; with one, it is `with_profile` and personal fit points must be `inference` citing current profile facts by handle.
+- **Role vs fit.** Without a profile, an assessment is `role_only`; with one, it is `with_profile` and personal fit points must be `inference` citing current profile facts by handle.
 - **Evidence classes.** Every point is `official`, `independent`, `anonymous`, `inference` or `unknown_conflicting`. Sourced classes must cite sources of the same job (checked in `@copilot/db`, not by the model).
-- **Research on request.** Each draft names 1–3 `researchTopics`; the chat card and the job page show them as "Research next" buttons that send a request naming the job id (`researchRequestText`). The copilot never researches by default.
-- **Never claims success early.** Snapshots and profile changes are "proposed" until the user approves them.
+- **Research on request.** Each assessment names 1–3 `researchTopics`; the chat card and the job page show them as "Research next" buttons that send a request naming the job id (`researchRequestText`). The copilot never researches by default.
+- **No approval for assessments.** Every `save_job_draft` is the job's new current version; earlier versions stay as history.
+- **Never claims success early.** Profile changes are "proposed" until the user approves them.
 
 Models come from the AI Gateway: `main` (Sonnet) for the copilot, researcher and rescorer, `fast` (Haiku) for compaction and chat titles. `LLM_MODE=mock` swaps in a deterministic fake for tests and offline dev ([models.ts](../apps/agent/src/mastra/models.ts)).
 
@@ -138,14 +138,13 @@ flowchart LR
     WM[updateWorkingMemory]
   end
   subgraph propose["Propose only"]
-    PS[propose_job_snapshot]
     PC[propose_profile_change]
   end
   subgraph sub["Run a sub-agent"]
     RC[research_company]
     RJ[rescore_jobs]
   end
-  CP --> IL & SD & FS & GJ & WM & PS & PC & RC & RJ
+  CP --> IL & SD & FS & GJ & WM & PC & RC & RJ
   RC --> R1((researcher)) --> W1[web_search · extract_page · record_claim]
   RJ --> R2((rescorer<br/>structured output, no tools))
 ```
@@ -153,8 +152,7 @@ flowchart LR
 | Tool | Does | Writes |
 | --- | --- | --- |
 | `ingest_listing` | Reads a URL (via providers) or the pasted text from the latest user message | `app_jobs`, `app_sources` |
-| `save_job_draft` | Saves the assessment as a new draft version (no approval needed) | `app_job_drafts` |
-| `propose_job_snapshot` | Creates a **pending** approval for the latest draft | `app_approvals` |
+| `save_job_draft` | Saves the assessment as the job's new current version (no approval needed) | `app_job_drafts` |
 | `propose_profile_change` | Creates a **pending** approval with exact add/modify/remove changes | `app_approvals` |
 | `find_saved_jobs`, `get_job` | Full-text search and job detail; `includeListing` re-reads the stored listing | — |
 | `research_company` | Runs the researcher under a budget, streams progress | `app_sources`, `app_claims` |
@@ -165,7 +163,7 @@ Rule violations raised by `@copilot/db` come back as `{ ok: false, error }` so t
 
 ## Human-in-the-loop approvals
 
-Approvals are **database rows, not paused agent runs**. A `propose_*` tool writes a pending row bound to a payload hash and a version; the user approves later in the UI; app code applies the change. This survives restarts and compaction, and the model has no tool that can approve anything.
+Only profile changes the copilot proposes need approval. Approvals are **database rows, not paused agent runs**. `propose_profile_change` writes a pending row bound to a payload hash and a version; the user approves later in the UI; app code applies the change. This survives restarts and compaction, and the model has no tool that can approve anything.
 
 ```mermaid
 sequenceDiagram
@@ -176,7 +174,7 @@ sequenceDiagram
   participant UI as ApprovalCard (web)
   participant SA as decideApprovalAction (server action)
 
-  C->>DB: propose_job_snapshot / propose_profile_change<br/>(payload, payload_hash, thread, base version)
+  C->>DB: propose_profile_change<br/>(payload, payload_hash, thread, base version)
   DB-->>C: pending approval id
   C-->>U: "proposed — approve it in the app"
   UI->>DB: GET /api/approvals/:id?threadId (404 for other chats)
@@ -184,7 +182,7 @@ sequenceDiagram
   U->>SA: Approve (with the hash it displayed)
   SA->>DB: decideApproval
   alt same chat, same hash, still current
-    DB->>DB: insert snapshot vN / apply new profile version
+    DB->>DB: apply new profile version
     DB-->>UI: approved
   else payload or base moved
     DB-->>UI: stale (nothing applied)
@@ -194,25 +192,24 @@ sequenceDiagram
 
 ```mermaid
 stateDiagram-v2
-  [*] --> pending: propose_* tool (agent)
+  [*] --> pending: propose_profile_change (agent)
   pending --> approved: user approves in the same chat, hash matches, still current
   pending --> rejected: user rejects
-  pending --> stale: newer draft / profile moved past baseVersion
-  pending --> superseded: newer proposal for the same job
-  approved --> [*]: snapshot vN inserted or profile vN+1 applied
+  pending --> stale: profile moved past baseVersion
+  approved --> [*]: profile vN+1 applied
 ```
 
 What needs approval and what doesn't:
 
 | Change | Approval? | Where it lives |
 | --- | --- | --- |
-| Job draft (assessment) | No, saved automatically and versioned | `app_job_drafts` (dashed "Draft vN" card) |
-| Final job snapshot | **Yes** | `app_job_snapshots` (solid "Approved vN" card, never overwritten) |
-| Profile fact add/modify/remove | **Yes** | `app_profile_versions`, `app_profile_facts` |
+| Job assessment | No, saved automatically; the latest version is current, earlier ones are history | `app_job_drafts` ("Saved · vN") |
+| Profile change proposed in a chat | **Yes** | `app_profile_versions`, `app_profile_facts` |
+| Profile edit on `/profile` (the user's own) | No, applies right away as a new version (recorded as an approved change) | same |
 | "For this chat" assumption | No | Thread working memory |
 | Research claims | No | `app_claims` |
 
-Other approval entry points use the same state machine: `/profile` edits (thread `profile-page`), "Approve draft vN" on a job page (`job-page`) and "Approve all" after a re-score (`approveDrafts`). Exact rules: [packages/db/AGENTS.md](../packages/db/AGENTS.md#job-snapshot-approvals).
+Exact rules: [packages/db/AGENTS.md](../packages/db/AGENTS.md#profile-change-approvals).
 
 ## Memory: what the agent knows
 
@@ -222,7 +219,7 @@ Three layers, deliberately separated so that a chat can never "remember" somethi
 flowchart TB
   subgraph Durable["Durable, global (app tables)"]
     PF[Approved profile vN<br/>facts with ids]
-    JB[Saved jobs, drafts, snapshots, claims]
+    JB[Saved jobs, assessment versions, claims]
   end
   subgraph Thread["Per chat (Mastra memory, thread scope)"]
     H[Message history]
@@ -303,7 +300,7 @@ Details: [apps/agent/src/research/AGENTS.md](../apps/agent/src/research/AGENTS.m
 
 ## Batch re-score
 
-After a profile change, earlier drafts are **stale** (they predate the current profile version). The "Re-score" button on `/jobs` starts a new chat that calls `rescore_jobs`.
+After a profile change, earlier assessments are **stale** (they predate the current profile version). The "Re-score" button on `/jobs` starts a new chat that calls `rescore_jobs`.
 
 ```mermaid
 flowchart LR
@@ -312,7 +309,6 @@ flowchart LR
   R -->|profile + stored listing + claims| A((rescorer<br/>structured output))
   A --> D[saveDraft<br/>rejects if profile moved]
   R -->|data-rescore-progress| UI[results list]
-  UI -->|Approve all| AP[approveDrafts]
 ```
 
 Details: [apps/agent/src/rescore/AGENTS.md](../apps/agent/src/rescore/AGENTS.md).
@@ -343,11 +339,9 @@ Runs are recorded in `app_runs`; runs left over from a crashed process are marke
 ```mermaid
 erDiagram
   app_jobs ||--o{ app_sources : "listing + research pages"
-  app_jobs ||--o{ app_job_drafts : "versioned, automatic"
-  app_jobs ||--o{ app_job_snapshots : "approved only"
+  app_jobs ||--o{ app_job_drafts : "assessment versions, latest is current"
   app_jobs ||--o{ app_claims : "research findings"
   app_claims }o--o{ app_sources : cites
-  app_job_drafts ||--o{ app_approvals : "snapshot proposals"
   app_profile_versions ||--o{ app_profile_facts : contains
   app_profile_versions ||--o{ app_approvals : "change proposals (baseVersion)"
   app_runs ||--o{ app_run_events : "model + provider calls"
@@ -361,11 +355,11 @@ Deterministic code enforces everything that matters; the model only proposes.
 
 | Concern | Enforced by |
 | --- | --- |
-| Approvals | `decideApproval` in `@copilot/db`, called only from a web server action on a user click; payload hash + thread + version checks |
+| Approvals | `decideApproval` in `@copilot/db`, called only from a web server action on a user click; payload hash + thread + version checks. `/profile` edits (`editProfile`) come only from a server action too |
 | Auth | Servers bound to 127.0.0.1; every agent route behind `SimpleAuth` with `AGENT_SHARED_SECRET`; memory pinned to the user's resource |
 | Untrusted web text | URL guard on every fetch; page text marked untrusted; the UI renders replies without images or raw HTML |
 | Research spend | `ResearchBudget` aborts on tool calls, time or estimated USD |
-| Data integrity | Zod schemas on tool input; `@copilot/db` rejects drafts citing other jobs' sources or stale profile versions; serialized writes |
+| Data integrity | Zod schemas on tool input; `@copilot/db` rejects assessments citing other jobs' sources or stale profile versions; serialized writes |
 | Secrets | Server-side env only, validated at startup; `SensitiveDataFilter` on traces; redaction in usage events |
 
 ## Observability, usage and evals

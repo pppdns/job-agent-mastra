@@ -35,7 +35,7 @@ export function savedDraft(
   return parsed.success ? { assessment: parsed.data, output } : undefined;
 }
 
-/** A saved draft in the chat: summary header, then the full assessment. */
+/** A saved assessment in the chat: summary header, then the full assessment. */
 export function AssessmentCard({
   assessment,
   output,
@@ -53,8 +53,8 @@ export function AssessmentCard({
   const job = [output.title, output.company].filter(Boolean).join(" · ") || "Job";
   return (
     <article
-      aria-label="Assessment draft"
-      className="relative overflow-hidden rounded-xl border border-dashed bg-card p-4 pl-5"
+      aria-label="Saved assessment"
+      className="relative overflow-hidden rounded-xl border bg-card p-4 pl-5"
     >
       <span
         className={cn("absolute inset-y-0 left-0 w-1", TONE_FILL[VERDICT[summary.verdict].tone])}
@@ -65,7 +65,7 @@ export function AssessmentCard({
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <FileTextIcon className="size-4" />
             <span className="font-medium text-foreground">{job}</span>
-            <Badge variant="outline">Draft v{output.version} · not approved</Badge>
+            <Badge variant="secondary">Saved · v{output.version}</Badge>
             {output.jobId && (
               <Link
                 href={`/jobs/${output.jobId}`}

@@ -1,16 +1,12 @@
 "use client";
 
 import type { ApprovalView, DecisionError, ProfileChangePayload } from "@copilot/db";
-import { assessmentSummary, PROFILE_FACT_LABELS } from "@copilot/shared";
+import { PROFILE_FACT_LABELS } from "@copilot/shared";
 import { CheckIcon } from "lucide-react";
-import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { decideApprovalAction } from "@/app/actions";
-import { AssessmentView } from "@/components/assessment-view";
-import { FitMeter, SignalChips, VerdictBadge } from "@/components/assessment-visuals";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Item,
   ItemActions,
@@ -30,8 +26,8 @@ const ERRORS: Record<DecisionError | "invalid", string> = {
 };
 
 /**
- * Approval prompt for a proposed job snapshot or profile change. State comes from the
- * database, and the decision carries the hash of exactly the payload shown here.
+ * Approval prompt for a profile change the copilot proposed. State comes from the database,
+ * and the decision carries the hash of exactly the payload shown here.
  */
 export function ApprovalCard({
   approvalId,
@@ -40,7 +36,7 @@ export function ApprovalCard({
 }: {
   approvalId: string;
   threadId: string;
-  /** Server-loaded view (profile page); the chat fetches it. */
+  /** Server-loaded view; otherwise it is fetched. */
   initial?: ApprovalView;
 }) {
   const [view, setView] = useState<ApprovalView | null>(initial ?? null);
@@ -82,20 +78,11 @@ export function ApprovalCard({
       if (result.error) setError(ERRORS[result.error]);
     });
 
-  const isProfile = view.kind === "profile_change";
   return (
-    <Item
-      variant="outline"
-      aria-label={isProfile ? "Profile change approval" : "Snapshot approval"}
-    >
+    <Item variant="outline" aria-label="Profile change approval">
       <ItemContent>
-        <ItemTitle>{isProfile ? "Update your profile?" : "Save approved snapshot?"}</ItemTitle>
-        <ItemDescription>
-          {view.kind === "profile_change"
-            ? view.payload.reason
-            : `${[view.payload.job.title, view.payload.job.company].filter(Boolean).join(" · ") || "Untitled job"} — draft v${view.draftVersion}`}
-        </ItemDescription>
-        {view.kind === "job_snapshot" && <SnapshotSignals view={view} />}
+        <ItemTitle>Update your profile?</ItemTitle>
+        <ItemDescription>{view.payload.reason}</ItemDescription>
       </ItemContent>
       <ItemActions>
         {view.status === "pending" ? (
@@ -117,30 +104,7 @@ export function ApprovalCard({
         </p>
       )}
       <ItemFooter className="flex-col items-start gap-2">
-        {view.kind === "profile_change" ? (
-          <ProfileDiff payload={view.payload} />
-        ) : (
-          <>
-            <Collapsible className="w-full">
-              <CollapsibleTrigger asChild>
-                <Button variant="link" size="sm" className="h-auto px-0">
-                  Show the exact snapshot
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="pt-2">
-                <AssessmentView assessment={view.payload.assessment} />
-              </CollapsibleContent>
-            </Collapsible>
-            {view.jobId && (
-              <Link
-                href={`/jobs/${view.jobId}`}
-                className="text-sm underline-offset-4 hover:underline"
-              >
-                Open job
-              </Link>
-            )}
-          </>
-        )}
+        <ProfileDiff payload={view.payload} />
       </ItemFooter>
     </Item>
   );
@@ -180,26 +144,13 @@ export function ProfileDiff({ payload }: { payload: ProfileChangePayload }) {
   );
 }
 
-function SnapshotSignals({ view }: { view: Extract<ApprovalView, { kind: "job_snapshot" }> }) {
-  const summary = assessmentSummary(view.payload.assessment);
-  return (
-    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-      <VerdictBadge verdict={summary.verdict} size="sm" />
-      <FitMeter fitLevel={summary.fitLevel} fitBasis={summary.fitBasis} />
-      <SignalChips counts={summary.counts} />
-    </div>
-  );
-}
-
 function StatusBadge({ view }: { view: ApprovalView }) {
   switch (view.status) {
     case "approved":
       return (
         <Badge>
           <CheckIcon />
-          {view.kind === "profile_change"
-            ? `Approved · profile v${view.profileVersion}`
-            : `Approved · v${view.snapshotVersion}`}
+          Approved · profile v{view.profileVersion}
         </Badge>
       );
     case "rejected":

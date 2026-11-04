@@ -295,10 +295,6 @@ function mockTurn({
   if (offered("rescore_jobs") && text.startsWith("Re-score")) {
     return call("rescore_jobs", {});
   }
-  if (offered("propose_job_snapshot") && text === "Propose snapshot") {
-    const jobId = latestJobId(prompt);
-    if (jobId) return call("propose_job_snapshot", { jobId });
-  }
   if (text.startsWith("Slow:")) {
     const words = Array.from({ length: 30 }, (_, i) => `w${i + 1}`).join(" ");
     return { kind: "text", text: `Mock reply: Slow: ${words} end.` };

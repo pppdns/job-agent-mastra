@@ -25,8 +25,5 @@ export type ChatRequest = z.infer<typeof chatRequestSchema>;
 
 export const threadTitleSchema = z.string().trim().min(1).max(MAX_TITLE_CHARS);
 
-/** Approval "thread" for changes proposed from the profile page rather than a chat. */
+/** Approval "thread" recorded for edits made on the profile page rather than in a chat. */
 export const PROFILE_PAGE_THREAD = "profile-page";
-
-/** Approval "thread" for drafts approved from a job page rather than a chat. */
-export const JOB_PAGE_THREAD = "job-page";

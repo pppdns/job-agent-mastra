@@ -22,7 +22,10 @@ async function newChat(page: Page): Promise<string> {
   return new URL(page.url()).pathname;
 }
 
-test("approved profile reaches new chats; local notes and drafts behave", async ({ page }) => {
+test("approved profile reaches new chats; local notes and assessments behave", async ({
+  page,
+  request,
+}) => {
   // About a dozen turns plus the profile page: slower when the suite runs in parallel.
   test.setTimeout(60_000);
   const chatA = await newChat(page);
@@ -44,6 +47,23 @@ test("approved profile reaches new chats; local notes and drafts behave", async 
   await card.getByRole("button", { name: "Approve" }).click();
   await expect(card).toContainText("Approved · profile v");
 
+  // The approval is visible from its own chat only.
+  const approvals = createClient({ url: e2eDb });
+  const { rows: own } = await approvals.execute({
+    sql: "SELECT id FROM app_approvals WHERE thread_id = ?",
+    args: [threadA ?? ""],
+  });
+  approvals.close();
+  const approvalId = own[0]?.id;
+  expect(approvalId).toBeTruthy();
+  expect((await request.get(`/api/approvals/${approvalId}?threadId=${threadA}`)).status()).toBe(
+    200,
+  );
+  const otherChat = "00000000-0000-4000-8000-000000000000";
+  expect((await request.get(`/api/approvals/${approvalId}?threadId=${otherChat}`)).status()).toBe(
+    404,
+  );
+
   // Local note for this chat only.
   await send(page, "For this chat: include London roles");
   await expect(lastReply(page)).toContainText("Noted for this chat only");
@@ -57,7 +77,7 @@ test("approved profile reaches new chats; local notes and drafts behave", async 
   await send(page, "Local?");
   await expect(lastReply(page)).toContainText("Mock reply: local none");
 
-  // The job drafted before the change is flagged for review.
+  // The job assessed before the change is flagged for review.
   const db = createClient({ url: e2eDb });
   const { rows } = await db.execute({
     sql: "SELECT job_id FROM app_sources WHERE thread_id = ?",
@@ -72,17 +92,14 @@ test("approved profile reaches new chats; local notes and drafts behave", async 
       .filter({ has: page.locator(`a[href="/jobs/${rows[0]?.job_id}"]`) }),
   ).toContainText("Profile changed · review");
 
-  // Profile page edits are proposals too.
+  // The user's own edits on the profile page apply right away.
   await page.goto("/profile");
-  const approved = page.getByLabel("Approved profile");
-  await expect(approved).toContainText("Prefers small teams");
+  const profile = page.getByLabel("Your profile");
+  await expect(profile).toContainText("Prefers small teams");
   await page.getByLabel("Kind").last().selectOption("hard_requirement");
   await page.getByLabel("New fact").fill("Remote within the EU only");
-  await page.getByRole("button", { name: "Propose", exact: true }).click();
-  const pending = page.getByLabel("Pending changes");
-  await expect(pending).toContainText("AddRemote within the EU only");
-  await expect(approved).not.toContainText("Remote within the EU only");
-  await pending.getByRole("button", { name: "Approve" }).click();
-  await expect(approved).toContainText("Remote within the EU only");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(profile).toContainText("Remote within the EU only");
+  await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0);
   await expect(page.getByLabel("History")).toContainText("Added on the profile page");
 });

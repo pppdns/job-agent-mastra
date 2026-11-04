@@ -28,7 +28,8 @@ export function RescoreButton({ count }: { count: number }) {
         Re-score {count > 25 ? "25" : count}
       </Button>
       <span className="w-full text-xs text-muted-foreground">
-        One model call per job, at most 25 per batch. Results are new drafts for you to approve.
+        One model call per job, at most 25 per batch. Each result becomes the job's current
+        assessment.
       </span>
       {error && <p className="w-full text-destructive">{error}</p>}
     </div>

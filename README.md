@@ -5,10 +5,10 @@ A private, single-user chat assistant that assesses job listings against your ap
 Paste a LinkedIn or job-board URL (or the listing text), and the copilot:
 
 - reads the listing and gives a quick assessment: strengths, weaknesses, hard conflicts, unknowns, recruiter questions;
-- saves that assessment as a versioned **draft** automatically;
+- saves that assessment automatically as the job's current version, keeping earlier versions;
 - researches the company on request, within a time/cost/tool budget, citing sources and evidence quality;
 - asks focused questions and **proposes** profile updates, which only take effect after you approve them;
-- proposes a final **snapshot** of the job for approval, and compares it with your saved jobs later.
+- compares jobs with your saved ones later.
 
 Intent and constraints: [project-brief.md](project-brief.md). Decisions and milestones: [docs/PLAN.md](docs/PLAN.md).
 
@@ -34,8 +34,8 @@ pnpm workspaces + Turborepo · TypeScript · Mastra (agent server + Studio, Obse
 
 ```
 apps/agent       Mastra server: agents, tools, memory, durable chat runs, scorers, evals
-apps/web         Next.js UI: chats, /jobs, /profile, approval actions, proxy to the agent
-packages/db      Drizzle schema, migrations, data access, approval state machine
+apps/web         Next.js UI: chats, /jobs, /profile, profile approvals, proxy to the agent
+packages/db      Drizzle schema, migrations, data access, profile approval state machine
 packages/shared  Zod schemas and types shared by both apps
 fixtures/        synthetic listings and web pages for tests and evals
 scripts/         env setup, per-checkout ports, dev helpers
@@ -82,9 +82,9 @@ No keys? Set `LLM_MODE=mock` (deterministic fake model) and `WEB_MODE=fixture` (
 
 ## Using it
 
-- **Chat** (`/c/<id>`): paste a URL or listing, ask for research ("look into their engineering practices and on-call"), state preferences ("remember I don't want regular on-call"), say "finalize" to propose a snapshot. Approval cards appear inline.
-- **Jobs** (`/jobs`): saved jobs sorted by latest or best fit; drafts are dashed cards, approved snapshots solid ones. "Re-score" re-assesses jobs whose draft predates your current profile.
-- **Profile** (`/profile`): the approved facts the copilot may use, with history; edits also go through approval.
+- **Chat** (`/c/<id>`): paste a URL or listing, ask for research ("look into their engineering practices and on-call"), state preferences ("remember I don't want regular on-call"), Profile changes it suggests appear as approval cards inline.
+- **Jobs** (`/jobs`): saved jobs sorted by latest or best fit; each job page shows the current assessment and its earlier versions. "Re-score" re-assesses jobs whose assessment predates your current profile.
+- **Profile** (`/profile`): the facts the copilot may use, with history; your edits here apply right away.
 - **Technical panel** (chat header): tokens, estimated cost, tool calls and links to Studio traces for the chat.
 
 ## Privacy and safety
