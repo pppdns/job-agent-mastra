@@ -41,6 +41,8 @@ describe("toolRuns", () => {
         { toolName: "b", state: "call" },
         { toolName: "c", result: { ok: false, error: "source ids x are not sources" } },
         { toolName: "d", result: { ok: true } },
+        { toolName: "e", state: "output-error", errorText: "" },
+        { toolName: "f", isError: true, errorText: "" },
       ),
     ]);
     expect(runs.map((r) => r.error)).toEqual([
@@ -48,6 +50,8 @@ describe("toolRuns", () => {
       "no result",
       "source ids x are not sources",
       undefined,
+      "tool call failed",
+      "tool reported an error",
     ]);
   });
 });

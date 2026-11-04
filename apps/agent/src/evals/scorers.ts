@@ -20,9 +20,9 @@ const field = (value: unknown, key: string): unknown =>
 export type ToolRun = { name: string; args: unknown; result: unknown; error?: string };
 
 function toolError(call: MastraToolInvocation): string | undefined {
-  if (call.state === "output-error") return call.errorText ?? "tool call failed";
+  if (call.state === "output-error") return call.errorText || "tool call failed";
   if (call.state === "call" || call.state === "partial-call") return "no result";
-  if (call.isError) return call.errorText ?? "tool reported an error";
+  if (call.isError) return call.errorText || "tool reported an error";
   const error = field(call.result, "error");
   if (error) return typeof error === "string" ? error : JSON.stringify(error);
   return undefined;
