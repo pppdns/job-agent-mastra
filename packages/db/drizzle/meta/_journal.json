@@ -64,6 +64,13 @@
       "when": 1793743130537,
       "tag": "0008_job_status",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1793828417358,
+      "tag": "0009_drop_job_snapshots",
+      "breakpoints": true
     }
   ]
 }

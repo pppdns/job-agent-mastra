@@ -1,11 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
 
 // Batch re-score with the mock model: a profile change makes a job stale, the /jobs button
-// re-scores it in a new chat, and "Approve all" approves exactly the drafts shown.
+// re-scores it in a new chat, and each result becomes the job's current assessment.
 
 const visible = (page: Page, selector: string) => page.locator(selector).filter({ visible: true });
 
-test("re-score stale jobs from /jobs and approve them all", async ({ page }) => {
+test("re-score stale jobs from /jobs", async ({ page }) => {
   test.setTimeout(60_000);
   await page.goto("/");
   await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
@@ -16,13 +16,12 @@ test("re-score stale jobs from /jobs and approve them all", async ({ page }) => 
     "Mock reply: save_job_draft v1",
   );
 
-  // A profile change makes the draft stale.
+  // A profile change makes the assessment stale.
   await page.goto("/profile");
   await page.getByLabel("Kind").last().selectOption("soft_preference");
   await page.getByLabel("New fact").fill("Prefers Lisbon");
-  await page.getByRole("button", { name: "Propose", exact: true }).click();
-  await page.getByLabel("Pending changes").getByRole("button", { name: "Approve" }).click();
-  await expect(page.getByLabel("Approved profile")).toContainText("Prefers Lisbon");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByLabel("Your profile")).toContainText("Prefers Lisbon");
 
   await page.goto("/jobs");
   const row = page
@@ -42,16 +41,9 @@ test("re-score stale jobs from /jobs and approve them all", async ({ page }) => 
   );
   const results = visible(page, '[aria-label="Re-scored jobs"]');
   const job = results.getByRole("listitem").filter({ hasText: "Rescore Labs" });
-  await expect(job).toContainText("Draft v2 · not approved");
-  await results.getByRole("button", { name: /^Approve all \d+$/ }).click();
-  await expect(job).toContainText("Approved");
-  // Approval state comes from the database after a reload.
-  await page.reload();
-  await expect(job).toContainText("Approved");
-  await expect(results.getByRole("button", { name: /^Approve all/ })).toHaveCount(0);
+  await expect(job).toContainText("Saved · v2");
+  await expect(results.getByRole("button", { name: /^Approve/ })).toHaveCount(0);
 
   await page.goto("/jobs");
-  await expect(row).toContainText("Approved v1");
-  await expect(row).not.toContainText("not approved");
   await expect(row).not.toContainText("Profile changed · review");
 });

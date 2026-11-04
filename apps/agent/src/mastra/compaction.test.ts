@@ -2,17 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { LanguageModelV4Prompt } from "@ai-sdk/provider";
-import {
-  addSource,
-  createDb,
-  type Db,
-  decideApproval,
-  migrateDb,
-  proposeProfileChange,
-  proposeSnapshot,
-  saveDraft,
-  upsertJob,
-} from "@copilot/db";
+import { createDb, type Db, decideApproval, migrateDb, proposeProfileChange } from "@copilot/db";
 import { LOCAL_USER_ID } from "@copilot/shared";
 import { Agent } from "@mastra/core/agent";
 import { Mastra } from "@mastra/core/mastra";
@@ -54,7 +44,7 @@ function mainModel() {
 
 describe("compaction (Observational Memory, forced low threshold)", () => {
   it("drops old raw messages but keeps the approved profile and pending approvals", async () => {
-    // Durable state lives in app tables: an approved preference and a pending snapshot.
+    // Durable state lives in app tables: an approved preference and a pending one.
     const pref = await proposeProfileChange(db, {
       threadId: THREAD,
       proposal: {
@@ -68,26 +58,15 @@ describe("compaction (Observational Memory, forced low threshold)", () => {
       decision: "approve",
       payloadHash: pref.approval.payloadHash,
     });
-    const { job } = await upsertJob(db, {
-      company: "Northwind Robotics",
-      title: "Platform Engineer",
-    });
-    const { source } = await addSource(db, {
-      jobId: job.id,
-      kind: "pasted",
-      provider: "user",
-      content: "x",
-    });
-    await saveDraft(db, {
-      jobId: job.id,
-      assessment: {
-        overview: "Platform role.",
-        fitBasis: "role_only",
-        strengths: [{ text: "Clear scope", evidence: "official", sourceIds: [source.id] }],
-        recommendation: { verdict: "consider", rationale: "Remote unclear." },
-      },
-    });
-    const pending = (await proposeSnapshot(db, { jobId: job.id, threadId: THREAD })).approval;
+    const pending = (
+      await proposeProfileChange(db, {
+        threadId: THREAD,
+        proposal: {
+          changes: [{ op: "add", kind: "soft_preference", text: "Small teams" }],
+          reason: "said so",
+        },
+      })
+    ).approval;
 
     const agent = new Agent({
       id: "compaction-test",

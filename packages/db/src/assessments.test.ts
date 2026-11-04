@@ -1,24 +1,12 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  approveDrafts,
-  approvedDraftIds,
-  decideApproval,
-  getApproval,
-  getJobDetail,
-  listJobs,
-  proposeSnapshot,
-  saveDraft,
-  snapshotPayloadOf,
-} from "./assessments";
-import { AssessmentError, hashPayload } from "./hash";
+import { getJobDetail, listJobs, saveDraft } from "./assessments";
+import { AssessmentError } from "./hash";
 import { createDb, type Db, migrateDb } from "./index";
 import { addSource, upsertJob } from "./jobs";
-import { currentProfile, proposeProfileChange } from "./profile";
-import { approvals, jobSnapshots } from "./schema";
+import { currentProfile, decideApproval, proposeProfileChange } from "./profile";
 
 let db: Db;
 let jobId: string;
@@ -72,21 +60,6 @@ const fitPoint = (factId: string) => ({
   quote: "three days a week in our Lisbon office",
   profileFactIds: [factId],
 });
-
-const snapshots = () => db.select().from(jobSnapshots).where(eq(jobSnapshots.jobId, jobId));
-
-async function proposed(threadId = "thread-a") {
-  await saveDraft(db, { jobId, assessment: assessment(), threadId });
-  return (await proposeSnapshot(db, { jobId, threadId })).approval;
-}
-
-const approve = (approval: { id: string; payloadHash: string }, threadId = "thread-a") =>
-  decideApproval(db, {
-    approvalId: approval.id,
-    threadId,
-    decision: "approve",
-    payloadHash: approval.payloadHash,
-  });
 
 describe("saveDraft", () => {
   it("adds a new version on every save", async () => {
@@ -190,135 +163,18 @@ describe("saveDraft", () => {
   });
 });
 
-describe("proposeSnapshot", () => {
-  it("needs a draft", async () => {
-    await expect(proposeSnapshot(db, { jobId, threadId: "t" })).rejects.toThrow(/no draft/);
-  });
-
-  it("is idempotent per draft and chat", async () => {
-    const first = await proposed();
-    const again = await proposeSnapshot(db, { jobId, threadId: "thread-a" });
-    expect(again).toMatchObject({ created: false, approval: { id: first.id } });
-  });
-
-  it("binds the hash to the exact payload", async () => {
-    const approval = await proposed();
-    expect(approval.payloadHash).toBe(hashPayload(approval.payload));
-    expect(snapshotPayloadOf(approval).assessment.overview).toBe(
-      "Platform role at a robotics company.",
-    );
-  });
-
-  it("supersedes an older pending proposal for the same job", async () => {
-    const old = await proposed();
-    await saveDraft(db, { jobId, assessment: assessment("Revised") });
-    const fresh = (await proposeSnapshot(db, { jobId, threadId: "thread-a" })).approval;
-    expect(fresh.draftVersion).toBe(2);
-    expect(await approve(old)).toMatchObject({ ok: false, error: "superseded" });
-    expect(await snapshots()).toHaveLength(0);
-  });
-});
-
-describe("decideApproval", () => {
-  it("approving creates snapshot v1 with the approved payload", async () => {
-    const approval = await proposed();
-    const result = await approve(approval);
-    expect(result).toMatchObject({ ok: true, approval: { status: "approved" } });
-    if (result.ok) {
-      expect(result.snapshot).toMatchObject({ version: 1, payloadHash: approval.payloadHash });
-      expect(result.approval.snapshotId).toBe(result.snapshot?.id);
-    }
-  });
-
-  it("returns the same result for a retried approval (lost response) without a second snapshot", async () => {
-    const approval = await proposed();
-    const first = await approve(approval);
-    const retry = await approve(approval);
-    expect(retry).toMatchObject({ ok: true });
-    if (first.ok && retry.ok) expect(retry.snapshot?.id).toBe(first.snapshot?.id);
-    expect(await snapshots()).toHaveLength(1);
-  });
-
-  it("lets only one of two concurrent approvals create a snapshot", async () => {
-    const approval = await proposed();
-    const results = await Promise.all([approve(approval), approve(approval)]);
-    expect(results.every((r) => r.ok)).toBe(true);
-    expect(await snapshots()).toHaveLength(1);
-  });
-
-  it("rejects a decision from another chat", async () => {
-    const approval = await proposed("thread-a");
-    expect(await approve(approval, "thread-b")).toEqual({ ok: false, error: "wrong_thread" });
-    expect(await snapshots()).toHaveLength(0);
-  });
-
-  it("rejects a decision on a payload the user didn't see", async () => {
-    const approval = await proposed();
-    const result = await approve({ id: approval.id, payloadHash: "0".repeat(64) });
-    expect(result).toMatchObject({ ok: false, error: "stale" });
-    expect(await snapshots()).toHaveLength(0);
-  });
-
-  it("marks the approval stale when a newer draft exists", async () => {
-    const approval = await proposed();
-    await saveDraft(db, { jobId, assessment: assessment("Changed after proposal") });
-    expect(await approve(approval)).toMatchObject({
-      ok: false,
-      error: "stale",
-      approval: { status: "stale" },
-    });
-    expect(await snapshots()).toHaveLength(0);
-  });
-
-  it("does not approve after a rejection", async () => {
-    const approval = await proposed();
-    const reject = await decideApproval(db, {
-      approvalId: approval.id,
-      threadId: "thread-a",
-      decision: "reject",
-      payloadHash: approval.payloadHash,
-    });
-    expect(reject).toMatchObject({ ok: true, approval: { status: "rejected" } });
-    expect(await approve(approval)).toMatchObject({ ok: false, error: "already_resolved" });
-  });
-
-  it("returns not_found for unknown approvals", async () => {
-    expect(await approve({ id: "missing", payloadHash: "x" })).toEqual({
-      ok: false,
-      error: "not_found",
-    });
-  });
-
-  it("keeps earlier snapshots when a revised draft is approved", async () => {
-    await approve(await proposed());
-    await saveDraft(db, { jobId, assessment: assessment("Revised after research") });
-    const second = (await proposeSnapshot(db, { jobId, threadId: "thread-a" })).approval;
-    await approve(second);
-    const versions = (await snapshots()).map((s) => [s.version, s.payload.assessment.overview]);
-    expect(versions).toEqual([
-      [1, "Platform role at a robotics company."],
-      [2, "Revised after research"],
-    ]);
-  });
-});
-
 describe("read models", () => {
-  it("lists jobs with draft, approved and pending state", async () => {
-    const pending = await proposed();
-    expect(await listJobs(db)).toMatchObject([
-      { id: jobId, draftVersion: 1, approvedVersion: null, pendingApproval: true },
-    ]);
+  it("lists jobs with their latest version and keeps earlier ones as history", async () => {
+    await saveDraft(db, { jobId, assessment: assessment() });
+    expect(await listJobs(db)).toMatchObject([{ id: jobId, draftVersion: 1 }]);
+    await saveDraft(db, { jobId, assessment: assessment("Revised") });
+    expect(await listJobs(db)).toMatchObject([{ draftVersion: 2 }]);
     const detail = await getJobDetail(db, jobId);
     expect(detail).toMatchObject({
-      draft: { version: 1 },
-      snapshots: [],
+      draft: { version: 2, assessment: { overview: "Revised" } },
+      history: [{ version: 1 }],
       sources: [{ kind: "pasted" }],
     });
-    await approve(pending);
-    await saveDraft(db, { jobId, assessment: assessment("Revised") });
-    expect(await listJobs(db)).toMatchObject([
-      { draftVersion: 2, approvedVersion: 1, approvedDraftVersion: 1, pendingApproval: false },
-    ]);
   });
 });
 
@@ -343,72 +199,5 @@ describe("saveDraft profile check", () => {
     await expect(
       saveDraft(db, { jobId, assessment: assessment(), profileVersion: 0 }),
     ).rejects.toThrow(/profile changed/);
-  });
-});
-
-describe("approveDrafts", () => {
-  it("approves the shown drafts and skips one that changed since", async () => {
-    const other = (await upsertJob(db, { company: "Contoso", title: "SRE" })).job.id;
-    const otherSource = (
-      await addSource(db, { jobId: other, kind: "pasted", provider: "user", content: "sre" })
-    ).source.id;
-    const shown = await saveDraft(db, { jobId, assessment: assessment() });
-    const outdated = await saveDraft(db, {
-      jobId: other,
-      assessment: assessment("a", otherSource),
-    });
-    await saveDraft(db, { jobId: other, assessment: assessment("newer", otherSource) });
-
-    const results = await approveDrafts(db, {
-      threadId: "chat-a",
-      draftIds: [shown.id, outdated.id, "missing"],
-    });
-    expect(results.map((r) => r.outcome)).toEqual(["approved", "changed", "not_found"]);
-    expect((await getJobDetail(db, jobId))?.snapshots).toHaveLength(1);
-    expect((await getJobDetail(db, other))?.snapshots).toHaveLength(0);
-    // A retried click approves nothing twice.
-    expect(
-      (await approveDrafts(db, { threadId: "chat-a", draftIds: [shown.id] }))[0],
-    ).toMatchObject({
-      outcome: "approved",
-    });
-    expect((await getJobDetail(db, jobId))?.snapshots).toHaveLength(1);
-    expect(await approvedDraftIds(db, [shown.id, outdated.id])).toEqual([shown.id]);
-  });
-
-  it("leaves pending proposals alone when the shown draft changed", async () => {
-    const shown = await saveDraft(db, { jobId, assessment: assessment() });
-    await saveDraft(db, { jobId, assessment: assessment("newer") });
-    const chat = (await proposeSnapshot(db, { jobId, threadId: "chat-a" })).approval;
-    const [result] = await approveDrafts(db, { threadId: "job-page", draftIds: [shown.id] });
-    expect(result?.outcome).toBe("changed");
-    expect(await getApproval(db, chat.id)).toMatchObject({ status: "pending" });
-  });
-
-  it("does not re-propose a draft that is already approved", async () => {
-    const draft = await saveDraft(db, { jobId, assessment: assessment() });
-    await approveDrafts(db, { threadId: "job-page", draftIds: [draft.id] });
-    const again = await proposeSnapshot(db, { jobId, threadId: "chat-a" });
-    expect(again).toMatchObject({ created: false, approval: { status: "approved" } });
-  });
-
-  it("goes stale instead of snapshotting an already approved draft twice", async () => {
-    const draft = await saveDraft(db, { jobId, assessment: assessment() });
-    const chat = (await proposeSnapshot(db, { jobId, threadId: "chat-a" })).approval;
-    await approveDrafts(db, { threadId: "job-page", draftIds: [draft.id] });
-    // A proposal older code left pending for the now-approved draft:
-    await db.update(approvals).set({ status: "pending" }).where(eq(approvals.id, chat.id));
-    expect((await getJobDetail(db, jobId))?.pending).toEqual([]);
-    expect((await listJobs(db))[0]?.pendingApproval).toBe(false);
-    expect(await approve(chat, "chat-a")).toMatchObject({ ok: false, error: "stale" });
-    expect(await snapshots()).toHaveLength(1);
-  });
-
-  it("approves again after a chat superseded this page's earlier proposal", async () => {
-    const draft = await saveDraft(db, { jobId, assessment: assessment() });
-    await proposeSnapshot(db, { jobId, threadId: "job-page" });
-    await proposeSnapshot(db, { jobId, threadId: "chat-a" }); // supersedes the page's
-    const [result] = await approveDrafts(db, { threadId: "job-page", draftIds: [draft.id] });
-    expect(result?.outcome).toBe("approved");
   });
 });

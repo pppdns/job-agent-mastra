@@ -254,24 +254,11 @@ function JobRow({ job }: { job: JobOverview }) {
   );
 }
 
-/** Draft vs approved, pending approval and stale profile, as small badges. */
+/** Stale profile, as a small badge. */
 function JobFlags({ job }: { job: JobOverview }) {
   const small = "h-4 px-1.5 text-[11px]";
   return (
     <>
-      {job.approvedVersion !== null && (
-        <Badge className={small}>Approved v{job.approvedVersion}</Badge>
-      )}
-      {job.draftVersion !== null && job.draftVersion !== job.approvedDraftVersion && (
-        <Badge variant="outline" className={cn(small, "border-dashed")}>
-          Draft v{job.draftVersion} · not approved
-        </Badge>
-      )}
-      {job.pendingApproval && (
-        <Badge variant="secondary" className={small}>
-          Awaiting approval
-        </Badge>
-      )}
       {job.profileStale && (
         <Badge variant="destructive" className={small}>
           Profile changed · review

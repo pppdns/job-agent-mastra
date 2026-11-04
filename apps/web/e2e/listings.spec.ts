@@ -41,9 +41,9 @@ test("pasted listing text is saved with the chat as provenance", async ({ page }
   await send(page, "Listing: Senior Platform Engineer at Northwind Robotics, Lisbon. Hybrid.");
   const reply = visible(page, '[data-role="assistant"]');
   await expect(reply).toContainText("Read your pasted text (may be incomplete)");
-  // The mock then saves a draft automatically, like the real agent is instructed to.
-  const card = visible(page, '[aria-label="Assessment draft"]');
-  await expect(card).toContainText("Draft v1 · not approved");
+  // The mock then saves the assessment automatically, like the real agent is instructed to.
+  const card = visible(page, '[aria-label="Saved assessment"]');
+  await expect(card).toContainText("Saved · v1");
   await expect(card).toContainText("Mock headline: listing read, pay unknown");
   await expect(card).toContainText("Investigate further");
   await expect(card).toContainText("Fit not judged");
@@ -62,5 +62,5 @@ test("pasted listing text is saved with the chat as provenance", async ({ page }
   // The trace row survives a reload (history comes back from Mastra memory).
   await page.reload();
   await expect(visible(page, '[data-role="assistant"]')).toContainText("Read your pasted text");
-  await expect(visible(page, '[aria-label="Assessment draft"]')).toContainText("Mock headline");
+  await expect(visible(page, '[aria-label="Saved assessment"]')).toContainText("Mock headline");
 });

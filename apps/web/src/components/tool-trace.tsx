@@ -15,14 +15,9 @@ export type ToolPart = {
 export const isToolPart = (part: { type: string }): part is ToolPart =>
   part.type.startsWith("tool-");
 
-/**
- * A successful snapshot or profile proposal renders as an approval prompt instead of a trace
- * row. A draft that was already approved (possibly in another chat) has nothing to decide.
- */
+/** A successful profile proposal renders as an approval prompt instead of a trace row. */
 export function proposedApprovalId(part: ToolPart): string | undefined {
-  const proposes =
-    part.type === "tool-propose_job_snapshot" || part.type === "tool-propose_profile_change";
-  if (!proposes || part.state !== "output-available") return;
+  if (part.type !== "tool-propose_profile_change" || part.state !== "output-available") return;
   const output = part.output as { ok?: boolean; approvalId?: string; status?: string } | undefined;
   return output?.ok && output.status !== "approved" ? output.approvalId : undefined;
 }
@@ -57,8 +52,7 @@ function ToolLine({ part }: { part: ToolPart }) {
   const name = part.type.slice("tool-".length);
   const running: Record<string, string> = {
     ingest_listing: "Reading the listing",
-    save_job_draft: "Saving the draft",
-    propose_job_snapshot: "Preparing the snapshot",
+    save_job_draft: "Saving the assessment",
     propose_profile_change: "Preparing a profile change",
     find_saved_jobs: "Searching saved jobs",
     get_job: "Loading a saved job",
@@ -72,26 +66,17 @@ function ToolLine({ part }: { part: ToolPart }) {
   if (part.state !== "output-available") {
     return <Line status="running" title={running[name] ?? `Running ${name}`} />;
   }
-  if (name === "save_job_draft" || name === "propose_job_snapshot") {
-    const output = (part.output ?? {}) as {
-      ok?: boolean;
-      version?: number;
-      draftVersion?: number;
-      status?: string;
-      error?: string;
-    };
-    if (output.ok === false) {
-      const what = name === "save_job_draft" ? "Draft not saved" : "Snapshot not proposed";
-      return <Line status="error" title={what} description={output.error} />;
-    }
-    if (name === "save_job_draft") {
-      return <Line title={`Saved draft v${output.version}`} description="not approved" />;
-    }
-    return output.status === "approved" ? (
-      <Line title={`Draft v${output.draftVersion} is already approved`} />
+  if (name === "save_job_draft") {
+    const output = (part.output ?? {}) as { ok?: boolean; version?: number; error?: string };
+    return output.ok === false ? (
+      <Line status="error" title="Assessment not saved" description={output.error} />
     ) : (
-      <Line title="Proposed a snapshot for approval" />
+      <Line title={`Saved assessment v${output.version}`} />
     );
+  }
+  if (name === "propose_job_snapshot") {
+    // Older chats: snapshots no longer exist, every saved assessment is current.
+    return <Line title="Proposed a snapshot" description="no longer needed" />;
   }
   if (name === "propose_profile_change") {
     const output = (part.output ?? {}) as { error?: string };

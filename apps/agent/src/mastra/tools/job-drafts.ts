@@ -1,11 +1,5 @@
-import {
-  AssessmentError,
-  listJobs,
-  proposeSnapshot,
-  saveDraft,
-  snapshotPayloadOf,
-} from "@copilot/db";
-import { assessmentSchema, RECOMMENDATION_LABELS } from "@copilot/shared";
+import { AssessmentError, listJobs, saveDraft } from "@copilot/db";
+import { assessmentSchema } from "@copilot/shared";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { getAppDb } from "../app-db";
@@ -25,7 +19,8 @@ async function guarded<T>(fn: () => Promise<T>): Promise<T | { ok: false; error:
 export const saveJobDraftTool = createTool({
   id: "save_job_draft",
   description:
-    "Save your current assessment of a job as a new draft version (automatic, no approval). " +
+    "Save your current assessment of a job as its new current version (no approval; earlier " +
+    "versions stay as history). " +
     "Call it after an initial assessment and whenever the assessment changes materially. " +
     "Cite source ids for listing/official/independent/anonymous evidence: the listing's from " +
     "ingest_listing, and for research claims the claim's sourceIds (never its claimId). Mark " +
@@ -44,38 +39,6 @@ export const saveJobDraftTool = createTool({
         version: draft.version,
         title: job?.title ?? null,
         company: job?.company ?? null,
-      };
-    }),
-});
-
-export const proposeJobSnapshotTool = createTool({
-  id: "propose_job_snapshot",
-  description:
-    "Propose saving the job's latest draft as an approved snapshot. The user approves or " +
-    "rejects it in the app; you cannot approve it and must not say it is saved until they do. " +
-    "Only call this when the user wants to finalize or save the assessment.",
-  inputSchema: z.object({ jobId: jobIdSchema }),
-  execute: async ({ jobId }, context) =>
-    guarded(async () => {
-      const threadId = context?.agent?.threadId;
-      if (!threadId) return { ok: false as const, error: "proposals need a chat thread" };
-      const { approval, created } = await proposeSnapshot(await getAppDb(), { jobId, threadId });
-      const payload = snapshotPayloadOf(approval);
-      return {
-        ok: true as const,
-        approvalId: approval.id,
-        status: approval.status,
-        created,
-        draftVersion: approval.draftVersion,
-        summary: {
-          title: payload.job.title,
-          company: payload.job.company,
-          recommendation: RECOMMENDATION_LABELS[payload.assessment.recommendation.verdict],
-        },
-        note:
-          approval.status === "approved"
-            ? "This draft is already approved; nothing to decide."
-            : "Waiting for the user's decision in the app.",
       };
     }),
 });

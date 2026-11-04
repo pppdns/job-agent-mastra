@@ -241,7 +241,7 @@ function ChatMessage({
       blocks.push(
         <div key={part.toolCallId} className="flex flex-col gap-2">
           <RescoreProgress parts={batches[rescoreCalls] ?? []} running={!done && streaming} />
-          {part.state === "output-available" && <RescoreResult part={part} threadId={threadId} />}
+          {part.state === "output-available" && <RescoreResult part={part} />}
         </div>,
       );
       rescoreCalls += 1;

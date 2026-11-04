@@ -3,7 +3,6 @@ import { JOB_STATUS_LABELS, suggestedResearchTopics } from "@copilot/shared";
 import {
   BriefcaseIcon,
   Building2Icon,
-  CheckIcon,
   ChevronDownIcon,
   ClipboardPasteIcon,
   GlobeIcon,
@@ -14,7 +13,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { ApproveDraftButton } from "@/components/approve-draft-button";
 import { AssessmentView } from "@/components/assessment-view";
 import { VerdictBadge } from "@/components/assessment-visuals";
 import { EvidenceList } from "@/components/evidence-list";
@@ -66,10 +64,7 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
   await connection();
   const detail = await getJobDetail(await appDb(), jobId);
   if (!detail) notFound();
-  const { job, sources, draft, snapshots, pending, profileVersion, profileStale, claims } = detail;
-  const latestApproved = snapshots[0];
-  const draftAhead = draft && latestApproved && latestApproved.payload.draftVersion < draft.version;
-  const draftApproved = draft && latestApproved?.draftId === draft.id;
+  const { job, sources, draft, history, profileVersion, profileStale, claims } = detail;
 
   return (
     <div className="flex flex-col gap-6">
@@ -108,28 +103,16 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
       </div>
 
       {draft && (
-        <Card className={draftApproved ? undefined : "border-dashed"} aria-label="Current draft">
+        <Card aria-label="Current assessment">
           <CardHeader>
             <CardTitle className="flex flex-wrap items-center gap-2">
-              Current draft{" "}
-              {draftApproved ? (
-                <Badge>
-                  <CheckIcon />
-                  Draft v{draft.version} · approved as v{latestApproved.version}
-                </Badge>
-              ) : (
-                <Badge variant="outline">Draft v{draft.version} · not approved</Badge>
-              )}
-              {pending.length > 0 && <Badge variant="secondary">Awaiting approval</Badge>}
+              Assessment <Badge variant="secondary">v{draft.version}</Badge>
               {profileStale && <Badge variant="destructive">Profile changed · review</Badge>}
             </CardTitle>
             <CardDescription>
-              Saved automatically {formatDate(draft.createdAt)} using profile v
-              {draft.profileVersion}
+              Saved {formatDate(draft.createdAt)} using profile v{draft.profileVersion}
               {profileStale ? ` (current profile is v${profileVersion})` : ""}.
-              {draftAhead && ` Changed since approved v${latestApproved.version}.`}
             </CardDescription>
-            {!draftApproved && <ApproveDraftButton draftId={draft.id} version={draft.version} />}
             <ResearchJobButtons jobId={job.id} topics={suggestedResearchTopics(draft.assessment)} />
           </CardHeader>
           <CardContent>
@@ -138,38 +121,30 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
         </Card>
       )}
 
-      {snapshots.length > 0 && (
+      {history.length > 0 && (
         <Collapsible aria-label="Version history">
           <CollapsibleTrigger asChild>
             <Button variant="ghost" size="sm" className="group -ml-2 text-muted-foreground">
               <ChevronDownIcon className="transition-transform group-data-[state=open]:rotate-180" />
-              Version history · {snapshots.length} approved
+              Version history · {history.length} earlier
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent className="flex flex-col gap-3 pt-3">
-            {snapshots.map((s) => (
-              <Card key={s.id}>
+            {history.map((d) => (
+              <Card key={d.id}>
                 <Collapsible>
                   <CardHeader>
                     <CollapsibleTrigger className="flex flex-wrap items-center gap-2 text-left">
-                      <Badge>
-                        <CheckIcon />
-                        Approved v{s.version}
-                      </Badge>
-                      <VerdictBadge
-                        verdict={s.payload.assessment.recommendation.verdict}
-                        size="sm"
-                      />
+                      <Badge variant="outline">v{d.version}</Badge>
+                      <VerdictBadge verdict={d.assessment.recommendation.verdict} size="sm" />
                       <span className="text-sm text-muted-foreground">
-                        {formatDate(s.createdAt)} · from draft v{s.payload.draftVersion}
-                        {s.payload.profileVersion !== undefined &&
-                          ` · profile v${s.payload.profileVersion}`}
+                        {formatDate(d.createdAt)} · profile v{d.profileVersion}
                       </span>
                     </CollapsibleTrigger>
                   </CardHeader>
                   <CollapsibleContent>
                     <CardContent>
-                      <AssessmentView assessment={s.payload.assessment} />
+                      <AssessmentView assessment={d.assessment} />
                     </CardContent>
                   </CollapsibleContent>
                 </Collapsible>
@@ -183,8 +158,8 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
         <section className="flex flex-col gap-2" aria-label="Evidence">
           <h2 className="font-semibold">Research evidence</h2>
           <p className="text-sm text-muted-foreground">
-            Findings from research runs, read from web pages (untrusted). Not part of an approved
-            snapshot unless a draft that cites them is approved.
+            Findings from research runs, read from web pages (untrusted). The assessment uses only
+            the ones it cites.
           </p>
           <EvidenceList claims={claims} sources={sources} />
         </section>

@@ -75,8 +75,7 @@ export async function findSavedJobs(
       location: j.location,
       status: j.status,
       archived: j.archivedAt !== null,
-      draftVersion: j.draftVersion,
-      approvedVersion: j.approvedVersion,
+      assessmentVersion: j.draftVersion,
       profileStale: j.profileStale,
     })),
     ...(matches.length > limit && { more: matches.length - limit }),
@@ -105,8 +104,8 @@ export const findSavedJobsTool = createTool({
 export const getJobTool = createTool({
   id: "get_job",
   description:
-    "Load one saved job: identity, sources read, the latest draft assessment, the latest " +
-    "approved snapshot, and whether the assessment predates the current approved profile. " +
+    "Load one saved job: identity, sources read, the current assessment (with its version), " +
+    "and whether it predates the current approved profile. " +
     "Pass includeListing: true to also get the stored listing text, e.g. to re-assess the job " +
     "against the current profile without reading it again.",
   inputSchema: z.object({
@@ -120,7 +119,6 @@ export const getJobTool = createTool({
     const db = await getAppDb();
     const detail = await getJobDetail(db, jobId);
     if (!detail) return { ok: false as const, error: `no saved job with id ${jobId}` };
-    const latest = detail.snapshots[0];
     const source = includeListing ? await latestListingSource(db, jobId) : undefined;
     return {
       ok: true as const,
@@ -135,17 +133,11 @@ export const getJobTool = createTool({
       sources: detail.sources.map((s) => ({ id: s.id, kind: s.kind, url: s.url })),
       currentProfileVersion: detail.profileVersion,
       profileStale: detail.profileStale,
-      draft: detail.draft && {
+      current: detail.draft && {
         version: detail.draft.version,
         profileVersion: detail.draft.profileVersion,
         assessment: detail.draft.assessment,
       },
-      approved: latest && {
-        version: latest.version,
-        fromDraftVersion: latest.payload.draftVersion,
-        approvedAt: latest.createdAt.toISOString(),
-      },
-      pendingApproval: detail.pending.length > 0,
       ...(source && {
         listing: {
           sourceId: source.id,

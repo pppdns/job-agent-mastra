@@ -4,14 +4,11 @@ import { randomUUID } from "node:crypto";
 import {
   type ApprovalView,
   AssessmentError,
-  approveDrafts,
-  approvedDraftIds,
-  type BatchApprovalOutcome,
   type DecisionError,
   decideApproval,
+  editProfile,
   getApprovalView,
   listJobs,
-  proposeProfileChange,
   setJobArchived,
   setJobStatus,
 } from "@copilot/db";
@@ -19,12 +16,7 @@ import { JOB_STATUSES, RESEARCH_TOPICS, researchRequestText } from "@copilot/sha
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import {
-  JOB_PAGE_THREAD,
-  PROFILE_PAGE_THREAD,
-  threadIdSchema,
-  threadTitleSchema,
-} from "@/lib/chat-schema";
+import { PROFILE_PAGE_THREAD, threadIdSchema, threadTitleSchema } from "@/lib/chat-schema";
 import { agentFetch } from "@/server/agent";
 import { toAgentChatBody } from "@/server/chat-body";
 import { appDb } from "@/server/db";
@@ -66,8 +58,9 @@ const decisionSchema = z.object({
 });
 
 /**
- * The user's approve/reject click on a snapshot or profile change. App code enforces the rules (chat, payload hash, draft
- * freshness, idempotency); retries of a decision that already went through return it again.
+ * The user's approve/reject click on a profile change the copilot proposed. App code enforces
+ * the rules (chat, payload hash, profile freshness, idempotency); retries of a decision that
+ * already went through return it again.
  */
 export async function decideApprovalAction(
   input: z.infer<typeof decisionSchema>,
@@ -78,17 +71,26 @@ export async function decideApprovalAction(
   const result = await decideApproval(db, parsed.data);
   const view = await getApprovalView(db, parsed.data.approvalId);
   const visible = view && view.threadId === parsed.data.threadId ? view : undefined;
-  refresh(); // profile page, jobs pages and their badges read the new state
+  refresh(); // the profile page and stale-profile badges read the new state
   return result.ok ? { view: visible } : { error: result.error, view: visible };
 }
 
 /**
- * Profile page edits never change the profile directly: they become a proposal (bound to
- * the profile page) that the user then approves on the same page.
+ * The user's own edit on the profile page: applies right away as a new profile version.
+ * `baseVersion` is the version the page showed; if the profile moved since, nothing changes.
  */
-export async function proposeProfileEdit(proposal: unknown): Promise<{ error?: string }> {
+export async function editProfileAction(
+  proposal: unknown,
+  baseVersion: number,
+): Promise<{ error?: string }> {
+  const version = z.number().int().min(0).safeParse(baseVersion);
+  if (!version.success) return { error: "Invalid profile version." };
   try {
-    await proposeProfileChange(await appDb(), { threadId: PROFILE_PAGE_THREAD, proposal });
+    await editProfile(await appDb(), {
+      threadId: PROFILE_PAGE_THREAD,
+      proposal,
+      baseVersion: version.data,
+    });
   } catch (error) {
     if (error instanceof AssessmentError) return { error: error.message };
     throw error;
@@ -143,48 +145,4 @@ async function startChat(text: string): Promise<{ error?: string }> {
   await upstream.body?.cancel();
   if (!upstream.ok) return { error: "The agent server is unavailable." };
   redirect(`/c/${threadId}`);
-}
-
-const draftIdSchema = z.string().min(1).max(64);
-
-const approveAllSchema = z.object({
-  threadId: threadIdSchema,
-  draftIds: z.array(draftIdSchema).min(1).max(50),
-});
-
-/**
- * "Approve all" on a re-score result: approves exactly the drafts that card showed. A job
- * whose draft changed since is skipped (`changed`), never approved with other content.
- */
-export async function approveDraftsAction(
-  input: z.infer<typeof approveAllSchema>,
-): Promise<{ error?: "invalid"; results?: { draftId: string; outcome: BatchApprovalOutcome }[] }> {
-  const parsed = approveAllSchema.safeParse(input);
-  if (!parsed.success) return { error: "invalid" };
-  const results = await approveDrafts(await appDb(), parsed.data);
-  refresh();
-  return { results: results.map(({ draftId, outcome }) => ({ draftId, outcome })) };
-}
-
-/**
- * "Approve" on a job page: approves exactly the draft the page showed. If the job got a newer
- * draft since, nothing is approved (`changed`).
- */
-export async function approveJobDraftAction(
-  draftId: string,
-): Promise<{ error?: "invalid"; outcome?: BatchApprovalOutcome }> {
-  const parsed = draftIdSchema.safeParse(draftId);
-  if (!parsed.success) return { error: "invalid" };
-  const [result] = await approveDrafts(await appDb(), {
-    threadId: JOB_PAGE_THREAD,
-    draftIds: [parsed.data],
-  });
-  refresh();
-  return { outcome: result?.outcome };
-}
-
-/** Which of these drafts are approved, so a re-score card shows its state after a reload. */
-export async function approvedDraftIdsAction(draftIds: string[]): Promise<string[]> {
-  const parsed = z.array(draftIdSchema).max(50).safeParse(draftIds);
-  return parsed.success ? approvedDraftIds(await appDb(), parsed.data) : [];
 }

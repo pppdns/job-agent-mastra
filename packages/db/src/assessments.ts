@@ -7,35 +7,16 @@ import {
   type JobStatus,
   SOURCED_EVIDENCE_CLASSES,
 } from "@copilot/shared";
-import { and, desc, eq, inArray, max, sql, TransactionRollbackError } from "drizzle-orm";
-import { AssessmentError, hashPayload } from "./hash";
+import { desc, eq, inArray, max, sql } from "drizzle-orm";
+import { AssessmentError } from "./hash";
 import type { Db } from "./index";
 import { reindexJob } from "./jobs";
-import { applyProfileChange, currentProfile, currentProfileVersion } from "./profile";
-import {
-  type Approval,
-  approvals,
-  claims,
-  type JobDraft,
-  type JobSnapshot,
-  jobDrafts,
-  jobSnapshots,
-  jobs,
-  type ProfileChangePayload,
-  type SnapshotPayload,
-  sources,
-} from "./schema";
+import { currentProfile, currentProfileVersion } from "./profile";
+import { claims, type JobDraft, jobDrafts, jobs, sources } from "./schema";
 import { serializeWrites } from "./write-lock";
 
-/** The snapshot payload of a job_snapshot approval. */
-export function snapshotPayloadOf(approval: Approval): SnapshotPayload {
-  if (approval.kind !== "job_snapshot")
-    throw new Error(`approval ${approval.id} is not a snapshot`);
-  return approval.payload as SnapshotPayload;
-}
-
 /**
- * Saves the next draft version for a job. Evidence must cite sources stored for that job,
+ * Saves the next assessment version for a job (no approval: the latest version is current). Evidence must cite sources stored for that job,
  * and sourced evidence classes must cite at least one. Points citing profile facts must be
  * inference, cite current facts, and appear only (and at least once) in with_profile drafts.
  */
@@ -151,281 +132,6 @@ export async function latestDraft(db: Db, jobId: string): Promise<JobDraft | und
   });
 }
 
-/**
- * Proposes the job's latest draft as an approved snapshot. Idempotent per draft and chat;
- * older pending proposals for the job are superseded. A draft that is already approved (in
- * any chat) returns that approval instead. Never approves anything itself.
- */
-export function proposeSnapshot(
-  db: Db,
-  input: { jobId: string; threadId: string },
-): Promise<{ approval: Approval; created: boolean }> {
-  return serializeWrites(db, () => proposeSnapshotUnlocked(db, input));
-}
-
-async function proposeSnapshotUnlocked(
-  db: Db,
-  input: { jobId: string; threadId: string },
-): Promise<{ approval: Approval; created: boolean }> {
-  const job = await db.query.jobs.findFirst({ where: eq(jobs.id, input.jobId) });
-  if (!job) throw new AssessmentError(`unknown job id ${input.jobId}`);
-  const draft = await latestDraft(db, job.id);
-  if (!draft) throw new AssessmentError("this job has no draft yet; call save_job_draft first");
-
-  const approved = await approvalOfApprovedDraft(db, draft.id);
-  if (approved) return { approval: approved, created: false };
-
-  // Idempotent per draft and chat, unless another proposal superseded the last one: then
-  // proposing the same draft again is a new request (e.g. a job-page approve after a chat's).
-  const earlier = await db.query.approvals.findMany({
-    where: and(
-      eq(approvals.kind, "job_snapshot"),
-      eq(approvals.draftId, draft.id),
-      eq(approvals.threadId, input.threadId),
-    ),
-  });
-  const existing = earlier.find((a) => a.status !== "superseded");
-  if (existing) return { approval: existing, created: false };
-  const approvalId = randomUUID();
-  const idempotencyKey = earlier.length
-    ? `job_snapshot:${draft.id}:${input.threadId}:${approvalId}`
-    : `job_snapshot:${draft.id}:${input.threadId}`;
-
-  const payload: SnapshotPayload = {
-    job: {
-      title: job.title,
-      company: job.company,
-      location: job.location,
-      linkedinJobId: job.linkedinJobId,
-      canonicalUrl: job.canonicalUrl,
-    },
-    draftId: draft.id,
-    draftVersion: draft.version,
-    profileVersion: draft.profileVersion,
-    assessment: draft.assessment,
-  };
-
-  return db.transaction(async (tx) => {
-    const now = new Date();
-    await tx
-      .update(approvals)
-      .set({ status: "superseded", resolvedAt: now })
-      .where(
-        and(
-          eq(approvals.jobId, job.id),
-          eq(approvals.kind, "job_snapshot"),
-          eq(approvals.status, "pending"),
-        ),
-      );
-    const [approval] = await tx
-      .insert(approvals)
-      .values({
-        id: approvalId,
-        kind: "job_snapshot",
-        status: "pending",
-        threadId: input.threadId,
-        jobId: job.id,
-        draftId: draft.id,
-        draftVersion: draft.version,
-        payload,
-        payloadHash: hashPayload(payload),
-        idempotencyKey,
-      })
-      .returning();
-    if (!approval) throw new Error("approval insert returned no row");
-    return { approval, created: true };
-  });
-}
-
-export type DecisionError =
-  | "not_found"
-  | "wrong_thread"
-  | "stale"
-  | "superseded"
-  | "already_resolved";
-
-export type DecisionResult =
-  | { ok: true; approval: Approval; snapshot?: JobSnapshot }
-  | { ok: false; error: DecisionError; approval?: Approval };
-
-/**
- * Applies the user's decision. Only the user (via the web app) calls this, never a tool.
- * Rejects decisions from another chat, for a changed payload, or for an outdated draft.
- * Repeating a decision that already succeeded returns the same result (lost-response retry).
- */
-export type DecisionInput = {
-  approvalId: string;
-  threadId: string;
-  decision: "approve" | "reject";
-  payloadHash: string;
-};
-
-export function decideApproval(db: Db, input: DecisionInput): Promise<DecisionResult> {
-  return serializeWrites(db, () => decideApprovalUnlocked(db, input));
-}
-
-async function decideApprovalUnlocked(db: Db, input: DecisionInput): Promise<DecisionResult> {
-  const approval = await db.query.approvals.findFirst({
-    where: eq(approvals.id, input.approvalId),
-  });
-  if (!approval) return { ok: false, error: "not_found" };
-  if (approval.threadId !== input.threadId) return { ok: false, error: "wrong_thread" };
-
-  const wanted = input.decision === "approve" ? "approved" : "rejected";
-  if (approval.status !== "pending") return settled(db, approval, wanted);
-  if (approval.payloadHash !== input.payloadHash) return { ok: false, error: "stale", approval };
-
-  if (input.decision === "reject") {
-    const updated = await transition(db, approval.id, { status: "rejected" });
-    return updated ? { ok: true, approval: updated } : retry(db, approval.id, wanted);
-  }
-
-  if (approval.kind === "profile_change") return approveProfileChange(db, approval, wanted);
-
-  const draft = approval.jobId ? await latestDraft(db, approval.jobId) : undefined;
-  if (!draft || draft.version !== approval.draftVersion || !approval.jobId || !approval.draftId) {
-    const updated = await transition(db, approval.id, { status: "stale" });
-    return { ok: false, error: "stale", approval: updated ?? approval };
-  }
-  if (await approvalOfApprovedDraft(db, approval.draftId)) {
-    // Approved meanwhile through another proposal: never snapshot the same draft twice.
-    const updated = await transition(db, approval.id, { status: "stale" });
-    return { ok: false, error: "stale", approval: updated ?? approval };
-  }
-  const jobId = approval.jobId;
-  const draftId = approval.draftId;
-
-  return db.transaction(async (tx) => {
-    // Conditional update: only one concurrent approval of this row can win.
-    const [won] = await tx
-      .update(approvals)
-      .set({ status: "approved", resolvedAt: new Date() })
-      .where(and(eq(approvals.id, approval.id), eq(approvals.status, "pending")))
-      .returning();
-    if (!won) {
-      const current = await tx.query.approvals.findFirst({ where: eq(approvals.id, approval.id) });
-      return current ? settled(tx, current, wanted) : { ok: false, error: "not_found" };
-    }
-    const [row] = await tx
-      .select({ latest: max(jobSnapshots.version) })
-      .from(jobSnapshots)
-      .where(eq(jobSnapshots.jobId, jobId));
-    const [snapshot] = await tx
-      .insert(jobSnapshots)
-      .values({
-        id: randomUUID(),
-        jobId,
-        version: (row?.latest ?? 0) + 1,
-        draftId,
-        payload: snapshotPayloadOf(approval),
-        payloadHash: approval.payloadHash,
-        approvalId: approval.id,
-      })
-      .returning();
-    if (!snapshot) throw new Error("snapshot insert returned no row");
-    const [final] = await tx
-      .update(approvals)
-      .set({ snapshotId: snapshot.id })
-      .where(eq(approvals.id, approval.id))
-      .returning();
-    return { ok: true, approval: final ?? won, snapshot };
-  });
-}
-
-async function approveProfileChange(
-  db: Db,
-  approval: Approval,
-  wanted: Approval["status"],
-): Promise<DecisionResult> {
-  const result = await db
-    .transaction(async (tx) => {
-      const [won] = await tx
-        .update(approvals)
-        .set({ status: "approved", resolvedAt: new Date() })
-        .where(and(eq(approvals.id, approval.id), eq(approvals.status, "pending")))
-        .returning();
-      if (!won) return "lost" as const;
-      const version = await applyProfileChange(tx, won, approval.payload as ProfileChangePayload);
-      if (version === null) {
-        tx.rollback();
-        return "stale" as const;
-      }
-      const [final] = await tx
-        .update(approvals)
-        .set({ profileVersion: version })
-        .where(eq(approvals.id, approval.id))
-        .returning();
-      return final ?? won;
-    })
-    .catch((error: unknown) => {
-      // tx.rollback() throws this; the stale case is handled below.
-      if (error instanceof TransactionRollbackError) return "stale" as const;
-      throw error;
-    });
-
-  if (result === "lost") return retry(db, approval.id, wanted);
-  if (result === "stale") {
-    // The profile changed after this was proposed: the diff no longer applies as shown.
-    const updated = await transition(db, approval.id, { status: "stale" });
-    return { ok: false, error: "stale", approval: updated ?? approval };
-  }
-  return { ok: true, approval: result };
-}
-
-/** The approval that made this draft a snapshot, if it is approved. */
-async function approvalOfApprovedDraft(
-  db: Pick<Db, "query">,
-  draftId: string,
-): Promise<Approval | undefined> {
-  const snapshot = await db.query.jobSnapshots.findFirst({
-    where: eq(jobSnapshots.draftId, draftId),
-    columns: { approvalId: true },
-  });
-  return snapshot
-    ? db.query.approvals.findFirst({ where: eq(approvals.id, snapshot.approvalId) })
-    : undefined;
-}
-
-async function transition(
-  db: Db,
-  id: string,
-  set: Pick<Approval, "status">,
-): Promise<Approval | undefined> {
-  const [row] = await db
-    .update(approvals)
-    .set({ ...set, resolvedAt: new Date() })
-    .where(and(eq(approvals.id, id), eq(approvals.status, "pending")))
-    .returning();
-  return row;
-}
-
-async function retry(db: Db, id: string, wanted: Approval["status"]): Promise<DecisionResult> {
-  const current = await db.query.approvals.findFirst({ where: eq(approvals.id, id) });
-  return current ? settled(db, current, wanted) : { ok: false, error: "not_found" };
-}
-
-/** An approval that is no longer pending: same decision again → same result; otherwise an error. */
-async function settled(
-  db: Pick<Db, "query">,
-  approval: Approval,
-  wanted: Approval["status"],
-): Promise<DecisionResult> {
-  if (approval.status === wanted) {
-    const snapshot = approval.snapshotId
-      ? await db.query.jobSnapshots.findFirst({ where: eq(jobSnapshots.id, approval.snapshotId) })
-      : undefined;
-    return { ok: true, approval, snapshot };
-  }
-  if (approval.status === "stale" || approval.status === "superseded") {
-    return { ok: false, error: approval.status, approval };
-  }
-  return { ok: false, error: "already_resolved", approval };
-}
-
-export async function getApproval(db: Db, id: string): Promise<Approval | undefined> {
-  return db.query.approvals.findFirst({ where: eq(approvals.id, id) });
-}
-
 export type JobOverview = {
   id: string;
   title: string | null;
@@ -436,11 +142,8 @@ export type JobOverview = {
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  /** Latest assessment version (null before the first assessment). */
   draftVersion: number | null;
-  approvedVersion: number | null;
-  /** Draft version the latest approved snapshot was made from. */
-  approvedDraftVersion: number | null;
-  pendingApproval: boolean;
   /** Profile version the latest draft used; compare with the current one for staleness. */
   draftProfileVersion: number | null;
   /** True when the latest draft was written against an older approved profile. */
@@ -449,7 +152,7 @@ export type JobOverview = {
   summary: AssessmentSummary | null;
 };
 
-/** Jobs with their latest draft and approved versions, newest first (optionally only `ids`). */
+/** Jobs with their latest assessment version, newest first (optionally only `ids`). */
 export async function listJobs(db: Db, ids?: string[]): Promise<JobOverview[]> {
   if (ids?.length === 0) return [];
   const profileVersion = await currentProfileVersion(db);
@@ -467,13 +170,6 @@ export async function listJobs(db: Db, ids?: string[]): Promise<JobOverview[]> {
       draftVersion: sql<
         number | null
       >`(select max(version) from app_job_drafts d where d.job_id = "app_jobs"."id")`,
-      approvedVersion: sql<
-        number | null
-      >`(select max(version) from app_job_snapshots s where s.job_id = "app_jobs"."id")`,
-      approvedDraftVersion: sql<
-        number | null
-      >`(select d.version from app_job_snapshots s join app_job_drafts d on d.id = s.draft_id where s.job_id = "app_jobs"."id" order by s.version desc limit 1)`,
-      pending: sql<number>`(select count(*) from app_approvals a where a.job_id = "app_jobs"."id" and a.status = 'pending' and not exists (select 1 from app_job_snapshots s where s.draft_id = a.draft_id))`,
       draftProfileVersion: sql<
         number | null
       >`(select d.profile_version from app_job_drafts d where d.job_id = "app_jobs"."id" order by d.version desc limit 1)`,
@@ -485,10 +181,9 @@ export async function listJobs(db: Db, ids?: string[]): Promise<JobOverview[]> {
   const rows = await (ids ? query.where(inArray(jobs.id, ids)) : query).orderBy(
     desc(jobs.updatedAt),
   );
-  const overviews = rows.map(({ pending, draftAssessment, ...row }) => ({
+  const overviews = rows.map(({ draftAssessment, ...row }) => ({
     ...row,
     summary: summaryOf(draftAssessment),
-    pendingApproval: pending > 0,
     profileStale: row.draftProfileVersion !== null && row.draftProfileVersion !== profileVersion,
   }));
   // Keep search ranking when ids are given.
@@ -502,11 +197,11 @@ function summaryOf(json: string | null): AssessmentSummary | null {
   return parsed.success ? assessmentSummary(parsed.data) : null;
 }
 
-/** A job with its sources (metadata only), latest draft and every approved snapshot. */
+/** A job with its sources (metadata only), claims and every assessment version, newest first. */
 export async function getJobDetail(db: Db, jobId: string) {
   const job = await db.query.jobs.findFirst({ where: eq(jobs.id, jobId) });
   if (!job) return undefined;
-  const [jobSources, draft, snapshots, pending] = await Promise.all([
+  const [jobSources, drafts, profileVersion, jobClaims] = await Promise.all([
     db
       .select({
         id: sources.id,
@@ -519,155 +214,23 @@ export async function getJobDetail(db: Db, jobId: string) {
       .from(sources)
       .where(eq(sources.jobId, jobId))
       .orderBy(desc(sources.retrievedAt)),
-    latestDraft(db, jobId),
-    db.query.jobSnapshots.findMany({
-      where: eq(jobSnapshots.jobId, jobId),
-      orderBy: desc(jobSnapshots.version),
+    db.query.jobDrafts.findMany({
+      where: eq(jobDrafts.jobId, jobId),
+      orderBy: desc(jobDrafts.version),
     }),
-    db.query.approvals.findMany({
-      where: and(eq(approvals.jobId, jobId), eq(approvals.status, "pending")),
-      columns: { id: true, threadId: true, draftId: true, draftVersion: true },
-    }),
-  ]);
-  const [profileVersion, jobClaims] = await Promise.all([
     currentProfileVersion(db),
     db.query.claims.findMany({ where: eq(claims.jobId, jobId), orderBy: desc(claims.createdAt) }),
   ]);
+  const [draft, ...history] = drafts;
   return {
     job,
     claims: jobClaims,
     sources: jobSources,
+    /** The current assessment. */
     draft,
-    snapshots,
-    // A proposal left pending for a draft approved elsewhere is not awaiting anything.
-    pending: pending.filter((p) => !snapshots.some((s) => s.draftId === p.draftId)),
+    /** Earlier assessment versions. */
+    history,
     profileVersion,
     profileStale: draft !== undefined && draft.profileVersion !== profileVersion,
   };
-}
-
-/** An approval as the approval card shows it, with the resulting version once approved. */
-export async function getApprovalView(db: Db, id: string) {
-  const approval = await getApproval(db, id);
-  if (!approval) return undefined;
-  const common = {
-    id: approval.id,
-    threadId: approval.threadId,
-    status: approval.status,
-    payloadHash: approval.payloadHash,
-  };
-  if (approval.kind === "profile_change") {
-    return {
-      ...common,
-      kind: "profile_change" as const,
-      payload: approval.payload as ProfileChangePayload,
-      profileVersion: approval.profileVersion,
-    };
-  }
-  const snapshot = approval.snapshotId
-    ? await db.query.jobSnapshots.findFirst({
-        where: eq(jobSnapshots.id, approval.snapshotId),
-        columns: { version: true },
-      })
-    : undefined;
-  return {
-    ...common,
-    kind: "job_snapshot" as const,
-    jobId: approval.jobId,
-    draftVersion: approval.draftVersion,
-    payload: snapshotPayloadOf(approval),
-    snapshotVersion: snapshot?.version ?? null,
-  };
-}
-
-export type ApprovalView = NonNullable<Awaited<ReturnType<typeof getApprovalView>>>;
-
-/** Pending approvals proposed in one chat, as the agent sees them each turn. */
-export async function pendingApprovalsForThread(db: Db, threadId: string) {
-  const rows = await db.query.approvals.findMany({
-    where: and(eq(approvals.threadId, threadId), eq(approvals.status, "pending")),
-    orderBy: desc(approvals.createdAt),
-  });
-  return rows.map((a) =>
-    a.kind === "job_snapshot"
-      ? {
-          id: a.id,
-          kind: a.kind,
-          summary: `snapshot of ${[snapshotPayloadOf(a).job.title, snapshotPayloadOf(a).job.company].filter(Boolean).join(" at ") || "a job"} (draft v${a.draftVersion}, jobId ${a.jobId})`,
-        }
-      : {
-          id: a.id,
-          kind: a.kind,
-          summary: `profile change: ${(a.payload as ProfileChangePayload).changes
-            .map((c) => (c.op === "remove" ? `remove "${c.before.text}"` : `${c.op} "${c.text}"`))
-            .join("; ")}`,
-        },
-  );
-}
-
-/** Approval lifecycle events of one chat (for the technical panel). */
-export async function approvalsForThread(db: Db, threadId: string) {
-  return db.query.approvals.findMany({
-    where: eq(approvals.threadId, threadId),
-    columns: { id: true, kind: true, status: true, createdAt: true, resolvedAt: true },
-    orderBy: desc(approvals.createdAt),
-  });
-}
-
-/** Which of these drafts were approved (have a snapshot), e.g. to show a past batch's state. */
-export async function approvedDraftIds(db: Db, draftIds: string[]): Promise<string[]> {
-  if (draftIds.length === 0) return [];
-  const rows = await db
-    .selectDistinct({ draftId: jobSnapshots.draftId })
-    .from(jobSnapshots)
-    .where(inArray(jobSnapshots.draftId, draftIds));
-  return rows.map((r) => r.draftId);
-}
-
-export type BatchApprovalOutcome = "approved" | "changed" | "not_found" | DecisionError;
-
-/**
- * The user's "approve all" click on drafts they were shown (e.g. a re-score batch). Each one
- * goes through the normal propose → approve path in that chat; a draft that is no longer its
- * job's latest is skipped as `changed`, never approved in place of what was shown.
- */
-export async function approveDrafts(
-  db: Db,
-  input: { threadId: string; draftIds: string[] },
-): Promise<{ draftId: string; jobId?: string; outcome: BatchApprovalOutcome }[]> {
-  const results = [];
-  for (const draftId of input.draftIds) {
-    const draft = await db.query.jobDrafts.findFirst({ where: eq(jobDrafts.id, draftId) });
-    if (!draft) {
-      results.push({ draftId, outcome: "not_found" as const });
-      continue;
-    }
-    // Checked inside the write lock, so a changed job never gets a proposal from this click.
-    const proposal = await serializeWrites(db, async () =>
-      (await latestDraft(db, draft.jobId))?.id === draftId
-        ? proposeSnapshotUnlocked(db, { jobId: draft.jobId, threadId: input.threadId })
-        : undefined,
-    );
-    if (!proposal) {
-      results.push({ draftId, jobId: draft.jobId, outcome: "changed" as const });
-      continue;
-    }
-    const { approval } = proposal;
-    if (approval.status === "approved") {
-      results.push({ draftId, jobId: draft.jobId, outcome: "approved" as const });
-      continue;
-    }
-    const decided = await decideApproval(db, {
-      approvalId: approval.id,
-      threadId: input.threadId,
-      decision: "approve",
-      payloadHash: approval.payloadHash,
-    });
-    results.push({
-      draftId,
-      jobId: draft.jobId,
-      outcome: decided.ok ? ("approved" as const) : decided.error,
-    });
-  }
-  return results;
 }

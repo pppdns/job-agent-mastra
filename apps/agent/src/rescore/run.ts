@@ -106,7 +106,7 @@ export async function runRescore(input: { jobIds?: string[] }, deps: RescoreDeps
     profileVersion: profile.version,
     skipped: jobs.length - batch.length,
     results,
-    note: "Results are new drafts, not approved. The app shows an approve-all button.",
+    note: "Each result is saved as the job's new current assessment. The app shows them all.",
   };
 }
 

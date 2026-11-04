@@ -22,7 +22,7 @@ export function ResearchJobButtons({ jobId, topics }: { jobId: string; topics: R
       />
       <p className="text-xs text-muted-foreground">
         Opens a new chat. Each run has a fixed time and cost budget; findings are cited and the
-        draft is updated for you to approve.
+        assessment is updated.
       </p>
       {error && <p className="text-sm text-destructive">{error}</p>}
     </div>

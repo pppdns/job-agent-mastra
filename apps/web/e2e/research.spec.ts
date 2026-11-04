@@ -83,7 +83,7 @@ test("research streams real progress and shows cited findings", async ({ page })
   // The job page offers the same topics; a click starts the run in a new chat.
   const jobUrl = page.url();
   await page
-    .getByLabel("Current draft")
+    .getByLabel("Current assessment")
     .getByRole("group", { name: "Research next" })
     .getByRole("button", { name: "Business health" })
     .click();
