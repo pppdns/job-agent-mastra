@@ -152,6 +152,12 @@ describe("saveDraft", () => {
     await expect(
       saveDraft(db, { jobId, assessment: withProfile([fitPoint("f99")]) }),
     ).rejects.toThrow('current facts: f1 ("At most one office day a week")');
+    // Empty references never count as a citation.
+    for (const empty of ["", "fact:"]) {
+      await expect(
+        saveDraft(db, { jobId, assessment: withProfile([fitPoint(empty)]) }),
+      ).rejects.toThrow(/not in the approved profile/);
+    }
     // Models cite handles ("f1", also as "fact:f1"); the full id is stored.
     const byHandle = await saveDraft(db, { jobId, assessment: withProfile([fitPoint("fact:f1")]) });
     expect(byHandle.assessment.strengths[0]?.profileFactIds).toEqual([factId]);
