@@ -9,7 +9,7 @@ Source of intent: [project-brief.md](../project-brief.md). This file is the mile
 | Topology | Separate Mastra server (`apps/agent`, `mastra dev`, :4111) + Next.js UI (`apps/web`, :3000) | Runs live outside Next requests; Studio + `mastra api` CLI give a verification loop |
 | Web → agent | Next route handlers / server actions proxy to Mastra; browser never talks to :4111 | Keys stay server-side, one origin, ownership checks in one place |
 | Database | libSQL file (`data/copilot.db`): Mastra storage + app tables (Drizzle, `app_*` prefix) | Zero setup, local prototype; Turso later if ever deployed |
-| Approvals | DB-backed proposals: `propose_*` tools write a pending row bound to payload hash + version; UI approves; app code applies idempotently | Survives compaction/restarts, approvable later, model can't self-approve |
+| Approvals | DB-backed proposals: `propose_profile_change` writes a pending row bound to payload hash + version; UI approves; app code applies idempotently. Changed 2026-11-04: job assessments and the user's own `/profile` edits need no approval (see M12) | Survives compaction/restarts, approvable later, model can't self-approve |
 | Models | Vercel AI Gateway via the native `@ai-sdk/gateway` provider instance (not Mastra's `vercel/` router string, which uses Gateway's OpenAI-compatible endpoint and can drop cache/reasoning usage). Main `anthropic/claude-sonnet-5.5`, fast `anthropic/claude-haiku-5.5`; env-configurable; `LLM_MODE=mock` for a deterministic fake | Reuse Gateway with full usage data |
 | Web providers | Tavily (search/extract) + Firecrawl (scrape, optional hosted browser). Final split decided by the M3 spike | Minimal stack |
 | Chat UI | shadcn/ui native chat components (MessageScroller, Message, Bubble), Radix base; AI Elements added per component only where it adds value | shadcn guidance; fewer dependencies |
@@ -160,6 +160,11 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 ### M11 — Research suggestions in the UI
 - [x] Assessments name 1–3 `researchTopics` (defaults for older drafts); the chat card and the job page show them as "Research next" buttons. Chat buttons send the request in the same chat; job-page buttons start a new chat (`startResearchAction`, company from the DB) and the copilot loads the job with `get_job`.
 - [x] Verified: shared unit tests, e2e `research.spec.ts` (card button, job-page button).
+
+### M12 — Drop job snapshot approvals (2026-11-04)
+- [x] Approving drafts added clicks without value: every `save_job_draft` is now the job's current assessment, earlier versions stay as history on the job page. Removed `app_job_snapshots`, `propose_job_snapshot`, the approve buttons and "Approve all" (migration `0009` drops snapshot rows and their approvals). This supersedes the brief's snapshot-approval requirement.
+- [x] `/profile` edits apply right away (`editProfile`, checked against the version the page showed). Profile changes the copilot proposes in a chat still need approval (guards against injected memory changes).
+- [x] Verified: db tests (history, direct edits, stale edit refused, edit makes an older chat proposal stale), migration on a copy of the dev DB, e2e `assessments.spec.ts` (v1 → v2 with history, no approve controls), updated profile/rescore/listing/research specs.
 
 ## Simplifications chosen (tell me if any is unacceptable)
 

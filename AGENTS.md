@@ -22,7 +22,7 @@ Internal packages export TypeScript source directly (no build step); Next and Ma
 
 ## Visual Design
 
-Simple, polished, functional: shadcn/ui (Radix Nova preset) defaults. Clear visual distinction between draft vs approved records and transient vs durable (approved) memory.
+Simple, polished, functional: shadcn/ui (Radix Nova preset) defaults. Clear visual distinction between transient (this chat) and durable (profile) memory, and between pending and approved profile changes.
 
 ## Key Conventions
 

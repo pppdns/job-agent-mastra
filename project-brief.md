@@ -159,7 +159,7 @@ Conceptually persist:
 - Pending/resolved approvals.
 - Runs, progress events, usage, and trace references.
 
-A job draft can evolve automatically. Saving a final record requires approval of an exact snapshot. Subsequent research creates or updates a draft; it must not silently overwrite an approved snapshot. Approval creates a new approved version while preserving earlier versions.
+A job draft can evolve automatically. Saving a final record requires approval of an exact snapshot. (Changed 2026-11-04: assessments save without approval, each as a new version; see docs/PLAN.md M12.) Subsequent research creates or updates a draft; it must not silently overwrite an approved snapshot. Approval creates a new approved version while preserving earlier versions.
 
 Record which profile version an assessment used. When preferences change, indicate that an assessment may need review. Do not automatically rewrite approved records.
 
