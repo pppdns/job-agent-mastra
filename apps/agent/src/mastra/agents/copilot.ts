@@ -1,3 +1,4 @@
+import type { LanguageModelV4 } from "@ai-sdk/provider";
 import { currentProfile, type Db, pendingApprovalsForThread } from "@copilot/db";
 import { COPILOT_AGENT_ID } from "@copilot/shared";
 import { Agent } from "@mastra/core/agent";
@@ -76,8 +77,14 @@ export async function buildInstructions(
   return parts.join("\n\n");
 }
 
-/** The copilot; evals pass their own memory (e.g. a low compaction threshold). */
-export const createCopilotBaseAgent = ({ memory = chatMemory }: { memory?: Memory } = {}) =>
+/** The copilot; evals pass their own memory (e.g. a low compaction threshold) or a wrapped model. */
+export const createCopilotBaseAgent = ({
+  memory = chatMemory,
+  model = () => getModel("main"),
+}: {
+  memory?: Memory;
+  model?: () => LanguageModelV4;
+} = {}) =>
   new Agent({
     id: COPILOT_AGENT_ID,
     name: "Job Research Copilot",
@@ -90,7 +97,7 @@ export const createCopilotBaseAgent = ({ memory = chatMemory }: { memory?: Memor
       );
     },
 
-    model: () => getModel("main"),
+    model,
     memory,
     // Long assessments are tool arguments: a low provider default would cut them into invalid JSON.
     defaultOptions: { modelSettings: { maxOutputTokens: 16_000 }, maxSteps: 12 },

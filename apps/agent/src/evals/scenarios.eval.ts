@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { LanguageModelV4Prompt } from "@ai-sdk/provider";
 import {
   addSource,
   currentProfile,
@@ -17,11 +18,13 @@ import {
 import { LOCAL_USER_ID } from "@copilot/shared";
 import type { Agent } from "@mastra/core/agent";
 import { RequestContext } from "@mastra/core/request-context";
+import { wrapLanguageModel } from "ai";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createCopilotBaseAgent } from "../mastra/agents/copilot";
 import { getAppDb } from "../mastra/app-db";
 import { mastra } from "../mastra/index";
 import { createChatMemory } from "../mastra/memory";
+import { getModel } from "../mastra/models";
 import { THREAD_CONTEXT_KEY } from "../mastra/thread-context";
 import { profileSuite } from "./cases";
 import { type CaseGroundTruth, caseRubricJudge, EVAL_RUN_CONTEXT_KEY, toolRuns } from "./scorers";
@@ -38,9 +41,28 @@ const ONLY = process.env.EVAL_ONLY?.trim().toLowerCase();
 const runs = (name: string) =>
   !ONLY || "scenario".includes(ONLY) || ONLY.includes("scenario") || name.includes(ONLY);
 
-/** The copilot registered on the eval Mastra instance (storage), optionally with its own memory. */
-function copilot(key: string, memory = createChatMemory()): Agent {
-  const agent = createCopilotBaseAgent({ memory });
+/**
+ * The copilot registered on the eval Mastra instance (storage), optionally with its own memory.
+ * With `prompts`, every prompt the main model receives is recorded there.
+ */
+function copilot(
+  key: string,
+  memory = createChatMemory(),
+  prompts?: LanguageModelV4Prompt[],
+): Agent {
+  const model = prompts
+    ? () =>
+        wrapLanguageModel({
+          model: getModel("main"),
+          middleware: {
+            transformParams: async ({ params }) => {
+              prompts.push(params.prompt);
+              return params;
+            },
+          },
+        })
+    : undefined;
+  const agent = createCopilotBaseAgent({ memory, model });
   mastra.addAgent(agent, key);
   return agent;
 }
@@ -105,9 +127,10 @@ async function seedProfile(facts = profileSuite.profile) {
   });
 }
 
+/** Drafts the turn actually saved (rejected save_job_draft calls don't count). */
 const draftsOf = (t: Turn) =>
   t.tools
-    .filter((r) => r.name === "save_job_draft")
+    .filter((r) => r.name === "save_job_draft" && (r.result as { ok?: boolean })?.ok === true)
     .map((r) => (r.args as { assessment?: { fitBasis?: string } }).assessment);
 
 async function reset() {
@@ -157,8 +180,11 @@ describe.skipIf(!runs("memory across chats"))("scenario: memory across chats", (
     const wmA = await memory?.getWorkingMemory({ threadId: chatA, resourceId: LOCAL_USER_ID });
     const wmB = await memory?.getWorkingMemory({ threadId: chatB, resourceId: LOCAL_USER_ID });
     // Chat B may note the listing's office days, but no local exception of its own.
+    // The whole section, so notes written as bullets under the heading count too.
     const exceptions = (wm?: string | null) =>
-      (wm ?? "").split("\n").find((l) => /local assumptions and exceptions/i.test(l)) ?? "";
+      /local assumptions and exceptions:([\s\S]*?)(?:^\s*-\s*open questions:|$(?![\s\S]))/im.exec(
+        wm ?? "",
+      )?.[1] ?? "";
     expect(exceptions(wmA)).toMatch(/three|3/i);
     expect(exceptions(wmB)).not.toMatch(/three|3|lisbon/i);
   });
@@ -194,13 +220,38 @@ describe.skipIf(!runs("memory across chats"))("scenario: memory across chats", (
 describe.skipIf(!runs("compaction"))(
   "scenario: compaction keeps preferences and pending actions",
   () => {
-    // A low Observational Memory threshold compacts the chat after the first assessment. The
+    // A low, synchronous Observational Memory threshold (no async buffering, which keeps a raw
+    // tail) compacts the chat after the first assessment and again after the proposal. The
     // approved profile and this chat's pending approval come from the DB, so later turns still
     // know both even though the raw messages left the context.
     const chat = `eval-scn-compaction-${stamp}`;
-    const agent = copilot("evalScenarioCompaction", createChatMemory({ messageTokens: 1_500 }));
+    const prompts: LanguageModelV4Prompt[] = [];
+    const agent = copilot(
+      "evalScenarioCompaction",
+      createChatMemory({ messageTokens: 800, bufferTokens: false }),
+      prompts,
+    );
+    const PROPOSAL_TEXT = "Please propose adding it to my profile";
+    /** Whether a prompt still carries the proposal turn raw (its user text or tool call). */
+    const hasRawProposal = (prompt?: LanguageModelV4Prompt) =>
+      (prompt ?? [])
+        .filter((m) => m.role !== "system")
+        .some((m) => {
+          const content = JSON.stringify(m.content);
+          return (
+            content.includes(PROPOSAL_TEXT) ||
+            content.includes('"toolName":"propose_profile_change"')
+          );
+        });
+    /** The first model prompt of the next turn (its context before any tool step). */
+    const firstPromptOf = async (run: () => Promise<Turn>) => {
+      const start = prompts.length;
+      const t = await run();
+      return { turn: t, prompt: prompts[start] };
+    };
     let propose: Turn;
     let recall: Turn;
+    let recallPrompt: LanguageModelV4Prompt | undefined;
 
     beforeAll(async () => {
       await reset();
@@ -209,19 +260,26 @@ describe.skipIf(!runs("compaction"))(
       propose = await turn(
         agent,
         chat,
-        "Remember that my salary floor is EUR 95,000 a year. Please propose adding it to my profile.",
+        `Remember that my salary floor is EUR 95,000 a year. ${PROPOSAL_TEXT}.`,
       );
-      await turn(
-        agent,
-        chat,
+      // Filler turns until the proposal turn has left the raw context (bounded).
+      const fillers = [
         "What would a typical week in this role look like, from the listing?",
-      );
-      await turn(agent, chat, "What should I ask the recruiter about the on-call rotation?");
-      recall = await turn(
-        agent,
-        chat,
-        "Before I decide: which of my requirements does this job break, and is anything of mine still waiting for approval?",
-      );
+        "What should I ask the recruiter about the on-call rotation?",
+        "How big is the platform team's scope compared with the team size, from the listing?",
+        "Does the listing say anything about the cloud provider or regions?",
+      ];
+      for (const text of fillers) {
+        const { prompt } = await firstPromptOf(() => turn(agent, chat, text));
+        if (!hasRawProposal(prompt)) break;
+      }
+      ({ turn: recall, prompt: recallPrompt } = await firstPromptOf(() =>
+        turn(
+          agent,
+          chat,
+          "Before I decide: which of my requirements does this job break, and is anything of mine still waiting for approval?",
+        ),
+      ));
     });
 
     it("compacted the chat (observations exist)", async () => {
@@ -231,6 +289,14 @@ describe.skipIf(!runs("compaction"))(
         om as { getObservations(t: string, r?: string): Promise<string | undefined> } | null
       )?.getObservations(chat, LOCAL_USER_ID);
       expect(observations?.trim().length ?? 0).toBeGreaterThan(0);
+    });
+
+    it("the final turn's context no longer holds the proposal turn raw", () => {
+      expect(recallPrompt, "no prompt recorded").toBeDefined();
+      expect(hasRawProposal(recallPrompt)).toBe(false);
+      // The pending approval reaches the model through the system prompt (from the DB).
+      const system = JSON.stringify(recallPrompt?.filter((m) => m.role === "system"));
+      expect(system).toMatch(/Pending approvals in this chat \(waiting/);
     });
 
     it("left the salary floor pending, not applied", async () => {
