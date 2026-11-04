@@ -1,11 +1,18 @@
 "use client";
 
-import { type Assessment, assessmentSchema, assessmentSummary } from "@copilot/shared";
+import {
+  type Assessment,
+  assessmentSchema,
+  assessmentSummary,
+  type ResearchTopic,
+  suggestedResearchTopics,
+} from "@copilot/shared";
 import { cn } from "cn";
 import { ChevronDownIcon, ExternalLinkIcon, FileTextIcon } from "lucide-react";
 import Link from "next/link";
 import { AssessmentView, Points } from "@/components/assessment-view";
 import { SummaryHeader, TONE_FILL, VERDICT } from "@/components/assessment-visuals";
+import { ResearchSuggestions } from "@/components/research-suggestions";
 import type { ToolPart } from "@/components/tool-trace";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,10 +41,16 @@ export function savedDraft(
 export function AssessmentCard({
   assessment,
   output,
+  onResearch,
+  researchDisabled,
 }: {
   assessment: Assessment;
   output: DraftOutput;
+  /** Shows "Research next" buttons; called with the topics picked. */
+  onResearch?: (job: { jobId: string; topics: ResearchTopic[] }) => void;
+  researchDisabled?: boolean;
 }) {
+  const jobId = output.jobId;
   const summary = assessmentSummary(assessment);
   const job = [output.title, output.company].filter(Boolean).join(" · ") || "Job";
   return (
@@ -86,6 +99,15 @@ export function AssessmentCard({
           <AssessmentView assessment={assessment} showSummary={false} />
         </CollapsibleContent>
       </Collapsible>
+      {onResearch && jobId && (
+        <div className="mt-3 border-t pt-3">
+          <ResearchSuggestions
+            topics={suggestedResearchTopics(assessment)}
+            disabled={researchDisabled}
+            onResearch={(topics) => onResearch({ jobId, topics })}
+          />
+        </div>
+      )}
     </article>
   );
 }

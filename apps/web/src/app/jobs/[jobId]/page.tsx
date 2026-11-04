@@ -1,5 +1,5 @@
 import { getJobDetail } from "@copilot/db";
-import { JOB_STATUS_LABELS } from "@copilot/shared";
+import { JOB_STATUS_LABELS, suggestedResearchTopics } from "@copilot/shared";
 import {
   BriefcaseIcon,
   Building2Icon,
@@ -20,6 +20,7 @@ import { VerdictBadge } from "@/components/assessment-visuals";
 import { EvidenceList } from "@/components/evidence-list";
 import { JobStatusMenu } from "@/components/job-status-menu";
 import { PageHeader } from "@/components/page-header";
+import { ResearchJobButtons } from "@/components/research-job-buttons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -129,6 +130,7 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
               {draftAhead && ` Changed since approved v${latestApproved.version}.`}
             </CardDescription>
             {!draftApproved && <ApproveDraftButton draftId={draft.id} version={draft.version} />}
+            <ResearchJobButtons jobId={job.id} topics={suggestedResearchTopics(draft.assessment)} />
           </CardHeader>
           <CardContent>
             <AssessmentView assessment={draft.assessment} />

@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
-// Brief steps 3–4 offline: mock model + fixture web pages (fixtures/web). "Research: <topics>"
-// makes the mock call research_company for the latest job.
+// Brief steps 3–4 offline: mock model + fixture web pages (fixtures/web). The assessment card's
+// "Research next" buttons send researchRequestText, which the mock answers with research_company.
 
 const visible = (page: Page, selector: string) => page.locator(selector).filter({ visible: true });
 const lastReply = (page: Page) => visible(page, '[data-role="assistant"]').last();
@@ -19,7 +19,17 @@ test("research streams real progress and shows cited findings", async ({ page })
   await send(page, "Listing: Platform Engineer at Northwind Robotics, Lisbon. Hybrid.");
   await expect(lastReply(page)).toContainText("Mock reply: save_job_draft v1");
 
-  await send(page, "Research: business");
+  const suggestions = lastReply(page).getByRole("group", { name: "Research next" });
+  await expect(suggestions.getByRole("button")).toHaveText([
+    "What the company does",
+    "Business health",
+    "All 2",
+  ]);
+  await suggestions.getByRole("button", { name: "What the company does" }).click();
+  await expect(visible(page, '[data-role="user"]').last()).toContainText(
+    /^Research the company for job \S+: what the company does\.$/,
+  );
+  await expect(page.getByRole("button", { name: "Stop" })).toHaveCount(0);
   const progress = lastReply(page).getByLabel("Research progress");
   await expect(progress).toContainText("Researching Northwind Robotics");
   await expect(progress).toContainText("Searched “Northwind Robotics company”");
@@ -69,4 +79,17 @@ test("research streams real progress and shows cited findings", async ({ page })
     "Mock finding read from https://northwind-robotics.example/about",
   );
   await expect(page.getByLabel("Sources")).toContainText("Web page (research)");
+
+  // The job page offers the same topics; a click starts the run in a new chat.
+  const jobUrl = page.url();
+  await page
+    .getByLabel("Current draft")
+    .getByRole("group", { name: "Research next" })
+    .getByRole("button", { name: "Business health" })
+    .click();
+  await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
+  await expect(visible(page, '[data-role="user"]').last()).toContainText(
+    `Research the company for job ${jobUrl.split("/").at(-1)}: business health.`,
+  );
+  await expect(lastReply(page)).toContainText("Mock reply: research_company completed 1 claims");
 });

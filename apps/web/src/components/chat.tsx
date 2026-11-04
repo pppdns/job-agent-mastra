@@ -1,10 +1,17 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
+import { researchRequestText } from "@copilot/shared";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { ArrowUpIcon, SquareIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type FormEvent, type KeyboardEvent, type ReactNode, useState } from "react";
+import {
+  type ComponentProps,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactNode,
+  useState,
+} from "react";
 import { Streamdown } from "streamdown";
 import { ApprovalCard } from "@/components/approval-card";
 import { AssessmentCard, savedDraft } from "@/components/assessment-card";
@@ -111,6 +118,9 @@ export function Chat({
                       message={message}
                       streaming={status === "streaming" && message.id === messages.at(-1)?.id}
                       threadId={threadId}
+                      onResearch={
+                        busy ? undefined : (job) => sendMessage({ text: researchRequestText(job) })
+                      }
                     />
                   </MessageScrollerItem>
                 ))}
@@ -155,10 +165,13 @@ function ChatMessage({
   message,
   streaming,
   threadId,
+  onResearch,
 }: {
   message: UIMessage;
   streaming: boolean;
   threadId: string;
+  /** Unset while a reply runs: the research buttons are disabled then. */
+  onResearch?: ComponentProps<typeof AssessmentCard>["onResearch"];
 }) {
   if (message.role === "user") {
     const text = message.parts.flatMap((p) => (p.type === "text" ? [p.text] : [])).join("");
@@ -239,7 +252,14 @@ function ChatMessage({
     } else if (draft && isToolPart(part)) {
       // A saved draft is shown as its assessment card, not a trace row.
       flushTools();
-      blocks.push(<AssessmentCard key={part.toolCallId} {...draft} />);
+      blocks.push(
+        <AssessmentCard
+          key={part.toolCallId}
+          {...draft}
+          onResearch={onResearch ?? noop}
+          researchDisabled={!onResearch}
+        />,
+      );
     } else if (isToolPart(part)) {
       tools.push(part);
     } else if (part.type === "text" && part.text) {
@@ -266,6 +286,8 @@ function ChatMessage({
     </Message>
   );
 }
+
+const noop = () => {};
 
 /** Server errors arrive already sanitized and short; client-side parse errors can be huge. */
 function clientErrorText(error: Error): string {

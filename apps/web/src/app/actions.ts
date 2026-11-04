@@ -10,11 +10,12 @@ import {
   type DecisionError,
   decideApproval,
   getApprovalView,
+  listJobs,
   proposeProfileChange,
   setJobArchived,
   setJobStatus,
 } from "@copilot/db";
-import { JOB_STATUSES } from "@copilot/shared";
+import { JOB_STATUSES, RESEARCH_TOPICS, researchRequestText } from "@copilot/shared";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -105,11 +106,34 @@ const RESCORE_MESSAGE = "Re-score my jobs that were assessed with an older profi
  * durable, so the chat page reconnects to it; closing our copy of the stream doesn't stop it.
  */
 export async function startRescoreAction(): Promise<{ error?: string }> {
+  return startChat(RESCORE_MESSAGE);
+}
+
+const researchTopicsSchema = z.array(z.enum(RESEARCH_TOPICS)).min(1).max(3);
+
+/**
+ * "Research next" on a job page: starts research on the picked topics in a new chat, then
+ * opens it. The message holds only the job id (checked to exist) and topic labels.
+ */
+export async function startResearchAction(
+  jobId: string,
+  topics: string[],
+): Promise<{ error?: string }> {
+  const id = jobIdSchema.safeParse(jobId);
+  const picked = researchTopicsSchema.safeParse(topics);
+  if (!id.success || !picked.success) return { error: "Invalid research request." };
+  const [job] = await listJobs(await appDb(), [id.data]);
+  if (!job) return { error: "This job no longer exists." };
+  return startChat(researchRequestText({ jobId: job.id, topics: [...new Set(picked.data)] }));
+}
+
+/** Sends `text` as the first message of a new chat, then opens it (the run is durable). */
+async function startChat(text: string): Promise<{ error?: string }> {
   const threadId = randomUUID();
   const message = {
     id: randomUUID(),
     role: "user" as const,
-    parts: [{ type: "text" as const, text: RESCORE_MESSAGE }],
+    parts: [{ type: "text" as const, text }],
   };
   const upstream = await agentFetch("/chat", {
     method: "POST",
