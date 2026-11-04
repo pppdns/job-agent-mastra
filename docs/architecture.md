@@ -336,7 +336,7 @@ sequenceDiagram
   W->>A: POST /chat/:threadId/stop → abort run
 ```
 
-Runs are recorded in `app_runs`; runs left over from a crashed process are marked interrupted at startup. Background: [docs/spikes/durable-resume.md](spikes/durable-resume.md).
+Runs are recorded in `app_runs`; runs left over from a crashed process are marked interrupted at startup. Several chats can run at once (one run per chat); the sidebar polls `GET /api/run-status` to show a spinner on running chats and a dot on replies not opened yet. Background: [docs/spikes/durable-resume.md](spikes/durable-resume.md).
 
 ## Data model
 

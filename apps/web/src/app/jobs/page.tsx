@@ -254,22 +254,21 @@ function JobRow({ job }: { job: JobOverview }) {
   );
 }
 
-/** Draft vs approved, pending approval and stale profile, as small badges. */
+/**
+ * Only states that need attention: an unapproved draft (awaiting approval when proposed) and a
+ * changed profile. Approved jobs get no badge; the solid row is the default.
+ */
 function JobFlags({ job }: { job: JobOverview }) {
   const small = "h-4 px-1.5 text-[11px]";
+  const unapproved = job.draftVersion !== null && job.draftVersion !== job.approvedDraftVersion;
   return (
     <>
-      {job.approvedVersion !== null && (
-        <Badge className={small}>Approved v{job.approvedVersion}</Badge>
-      )}
-      {job.draftVersion !== null && job.draftVersion !== job.approvedDraftVersion && (
-        <Badge variant="outline" className={cn(small, "border-dashed")}>
-          Draft v{job.draftVersion} · not approved
-        </Badge>
-      )}
-      {job.pendingApproval && (
-        <Badge variant="secondary" className={small}>
-          Awaiting approval
+      {unapproved && (
+        <Badge
+          variant={job.pendingApproval ? "secondary" : "outline"}
+          className={cn(small, !job.pendingApproval && "border-dashed")}
+        >
+          Draft v{job.draftVersion} · {job.pendingApproval ? "awaiting approval" : "not approved"}
         </Badge>
       )}
       {job.profileStale && (
