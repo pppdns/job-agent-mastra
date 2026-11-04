@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # Called by install-deps.sh at SessionStart, before installing (hooks in one event run in parallel).
 # Fetches origin and fast-forwards local `main` (scripts/sync-main.sh). Worktrees branch from a
-# local ref that may have been stale, so a fresh worktree (clean tree, branch not pushed yet, no
+# local ref that may have been stale, so a fresh worktree (on a branch, clean, not pushed yet, no
 # commits of its own) is also fast-forwarded to the base branch. Never merges or resets.
 # Usage: sync-base.sh <checkout root>
 cd "${1:?checkout root}" || exit 0
 sync="$(dirname "$0")/../../scripts/sync-main.sh"
 [[ -x "$sync" ]] && "$sync" "$PWD"
 
-# The rest only for fresh linked worktrees.
+# The rest only for fresh linked worktrees on a branch (not detached HEAD, e.g. during a bisect).
+git symbolic-ref -q HEAD >/dev/null || exit 0
 [[ "$(git rev-parse --git-dir 2>/dev/null)" != "$(git rev-parse --git-common-dir 2>/dev/null)" ]] || exit 0
 git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1 && exit 0
 [[ -z "$(git status --porcelain 2>/dev/null)" ]] || exit 0
