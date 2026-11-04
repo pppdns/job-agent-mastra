@@ -57,6 +57,13 @@
       "when": 1793714813418,
       "tag": "0007_run_events",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1793743130537,
+      "tag": "0008_job_status",
+      "breakpoints": true
     }
   ]
 }

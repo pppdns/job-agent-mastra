@@ -1,12 +1,13 @@
 import {
   AssessmentError,
+  type Db,
   getJobDetail,
   latestListingSource,
   listJobs,
   proposeProfileChange,
   searchJobIds,
 } from "@copilot/db";
-import { profileProposalSchema } from "@copilot/shared";
+import { JOB_STATUSES, type JobStatus, profileProposalSchema } from "@copilot/shared";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { parseStoredListing } from "../../ingest/listing";
@@ -42,27 +43,63 @@ export const proposeProfileChangeTool = createTool({
   },
 });
 
+const MAX_STATUS_MATCHES = 30;
+const MAX_TEXT_MATCHES = 5;
+/** FTS candidates read before filtering by status/archive. */
+const MAX_SEARCH_CANDIDATES = 500;
+
+/**
+ * Saved jobs by free text (FTS, best 5) and/or pipeline status (newest first). Without
+ * `includeArchived`, archived jobs are left out unless the status filter asks for a closing one.
+ */
+export async function findSavedJobs(
+  db: Db,
+  input: { query?: string; status?: JobStatus; includeArchived?: boolean },
+) {
+  const { query, status } = input;
+  const includeArchived =
+    input.includeArchived ?? (status === "rejected" || status === "dismissed");
+  // Filter before limiting, so archived or other-status hits don't crowd out eligible ones.
+  const jobs = query
+    ? await listJobs(db, await searchJobIds(db, query, MAX_SEARCH_CANDIDATES))
+    : await listJobs(db);
+  const limit = query ? MAX_TEXT_MATCHES : MAX_STATUS_MATCHES;
+  const matches = jobs.filter(
+    (j) => (!status || j.status === status) && (includeArchived || j.archivedAt === null),
+  );
+  return {
+    matches: matches.slice(0, limit).map((j) => ({
+      jobId: j.id,
+      title: j.title,
+      company: j.company,
+      location: j.location,
+      status: j.status,
+      archived: j.archivedAt !== null,
+      draftVersion: j.draftVersion,
+      approvedVersion: j.approvedVersion,
+      profileStale: j.profileStale,
+    })),
+    ...(matches.length > limit && { more: matches.length - limit }),
+  };
+}
+
 export const findSavedJobsTool = createTool({
   id: "find_saved_jobs",
   description:
-    "Search saved jobs by company, title, location or assessment text (e.g. 'Acme platform'). " +
-    "Returns at most 5 matches. If several could be what the user means, ask which one.",
-  inputSchema: z.object({ query: z.string().trim().min(1).max(200) }),
-  execute: async ({ query }) => {
-    const db = await getAppDb();
-    const jobs = await listJobs(db, await searchJobIds(db, query, 5));
-    return {
-      matches: jobs.map((j) => ({
-        jobId: j.id,
-        title: j.title,
-        company: j.company,
-        location: j.location,
-        draftVersion: j.draftVersion,
-        approvedVersion: j.approvedVersion,
-        profileStale: j.profileStale,
-      })),
-    };
-  },
+    "Find saved jobs by company, title, location or assessment text (e.g. 'Acme platform'; " +
+    "at most 5 matches) and/or by pipeline status (e.g. status 'applied' for 'what did I apply " +
+    "to?'). Archived jobs are left out unless includeArchived is true or the status is " +
+    "rejected/dismissed. If several could be what the user means, ask which one.",
+  inputSchema: z
+    .object({
+      query: z.string().trim().min(1).max(200).optional(),
+      status: z.enum(JOB_STATUSES).optional(),
+      includeArchived: z.boolean().optional(),
+    })
+    .refine((i) => i.query || i.status || i.includeArchived, {
+      message: "give a query, a status, or includeArchived",
+    }),
+  execute: async (input) => findSavedJobs(await getAppDb(), input),
 });
 
 export const getJobTool = createTool({
@@ -92,6 +129,8 @@ export const getJobTool = createTool({
         title: detail.job.title,
         company: detail.job.company,
         location: detail.job.location,
+        status: detail.job.status,
+        archived: detail.job.archivedAt !== null,
       },
       sources: detail.sources.map((s) => ({ id: s.id, kind: s.kind, url: s.url })),
       currentProfileVersion: detail.profileVersion,

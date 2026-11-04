@@ -11,7 +11,10 @@ import {
   decideApproval,
   getApprovalView,
   proposeProfileChange,
+  setJobArchived,
+  setJobStatus,
 } from "@copilot/db";
+import { JOB_STATUSES } from "@copilot/shared";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -38,6 +41,19 @@ export async function deleteChat(threadId: string): Promise<void> {
 
 export async function setChatArchived(threadId: string, archived: boolean): Promise<void> {
   await setThreadArchived(threadIdSchema.parse(threadId), z.boolean().parse(archived));
+  refresh();
+}
+
+const jobIdSchema = z.string().min(1).max(64);
+
+/** The user's own pipeline status for a job (rejected/dismissed archive it). */
+export async function setJobStatusAction(jobId: string, status: string): Promise<void> {
+  await setJobStatus(await appDb(), jobIdSchema.parse(jobId), z.enum(JOB_STATUSES).parse(status));
+  refresh();
+}
+
+export async function setJobArchivedAction(jobId: string, archived: boolean): Promise<void> {
+  await setJobArchived(await appDb(), jobIdSchema.parse(jobId), z.boolean().parse(archived));
   refresh();
 }
 

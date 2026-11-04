@@ -25,7 +25,10 @@ test("re-score stale jobs from /jobs and approve them all", async ({ page }) => 
   await expect(page.getByLabel("Approved profile")).toContainText("Prefers Lisbon");
 
   await page.goto("/jobs");
-  const row = page.getByRole("list", { name: "Jobs" }).getByRole("link", { name: /Rescore Labs/ });
+  const row = page
+    .getByRole("table", { name: "Jobs" })
+    .getByRole("row")
+    .filter({ hasText: "Rescore Labs" });
   await expect(row).toContainText("Profile changed · review");
   await page.getByRole("button", { name: /^Re-score \d+$/ }).click();
 

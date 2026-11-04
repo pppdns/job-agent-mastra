@@ -4,6 +4,7 @@ import {
   allPoints,
   assessmentSchema,
   assessmentSummary,
+  type JobStatus,
   SOURCED_EVIDENCE_CLASSES,
 } from "@copilot/shared";
 import { and, desc, eq, inArray, max, sql, TransactionRollbackError } from "drizzle-orm";
@@ -430,6 +431,10 @@ export type JobOverview = {
   title: string | null;
   company: string | null;
   location: string | null;
+  status: JobStatus;
+  statusChangedAt: Date | null;
+  archivedAt: Date | null;
+  createdAt: Date;
   updatedAt: Date;
   draftVersion: number | null;
   approvedVersion: number | null;
@@ -454,6 +459,10 @@ export async function listJobs(db: Db, ids?: string[]): Promise<JobOverview[]> {
       title: jobs.title,
       company: jobs.company,
       location: jobs.location,
+      status: jobs.status,
+      statusChangedAt: jobs.statusChangedAt,
+      archivedAt: jobs.archivedAt,
+      createdAt: jobs.createdAt,
       updatedAt: jobs.updatedAt,
       draftVersion: sql<
         number | null

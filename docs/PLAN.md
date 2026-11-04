@@ -149,6 +149,14 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - [x] README (setup, keys, commands, limitations) + [docs/architecture.md](architecture.md) (mermaid walkthrough).
 - [ ] `docs/lessons.md`.
 
+### M10 — Job tracking (simple CRM) + learning preferences early
+- [x] `app_jobs.status` (`new → shortlisted → applied → interviewing → offer`, `rejected`, `dismissed`) with `status_changed_at` and `archived_at`; closing statuses archive, reopening unarchives, manual (un)archive keeps the status. Re-score skips archived jobs.
+- [x] `/jobs` as a compact table: status tabs with counts (Active, each open status, Archived), FTS search, sort, inline status menu; same menu on the job page.
+- [x] `set_job_status` tool (no approval, only on the user's request; the injection eval forbids it); `find_saved_jobs` filters by status.
+- [x] While the profile is thin (no hard requirement or < 6 facts), the copilot ends each assessment with 1–2 preference questions that decide that job; answers become profile proposals.
+- [x] Verified: db/tool/list unit tests, e2e `jobs.spec.ts` (status, archive, tabs, search, unarchive, job page), browser check on the worktree DB.
+- Later if needed: paging (fine at a few hundred rows), bulk actions, notes and dates per job.
+
 ## Simplifications chosen (tell me if any is unacceptable)
 
 1. **Reconnect across agent-server restarts** would need Redis (shared event cache). Plan: in-process cache — browser refresh/reconnect works; after a server restart the run is marked interrupted with partial results kept, and you re-ask. Redis can be added later without redesign.

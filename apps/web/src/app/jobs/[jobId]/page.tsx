@@ -1,4 +1,5 @@
 import { getJobDetail } from "@copilot/db";
+import { JOB_STATUS_LABELS } from "@copilot/shared";
 import {
   BriefcaseIcon,
   Building2Icon,
@@ -17,6 +18,7 @@ import { ApproveDraftButton } from "@/components/approve-draft-button";
 import { AssessmentView } from "@/components/assessment-view";
 import { VerdictBadge } from "@/components/assessment-visuals";
 import { EvidenceList } from "@/components/evidence-list";
+import { JobStatusMenu } from "@/components/job-status-menu";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -71,7 +73,18 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{job.title ?? "Untitled job"}</h1>
+        <div className="flex items-start gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">{job.title ?? "Untitled job"}</h1>
+          <span className="ml-auto flex shrink-0 items-center gap-2 pt-1">
+            {job.archivedAt && <Badge variant="secondary">Archived</Badge>}
+            <JobStatusMenu
+              jobId={job.id}
+              title={job.title ?? "Untitled job"}
+              status={job.status}
+              archived={job.archivedAt !== null}
+            />
+          </span>
+        </div>
         <p className="flex flex-wrap gap-x-4 text-sm text-muted-foreground">
           {job.company && (
             <span className="inline-flex items-center gap-1.5">
@@ -83,6 +96,11 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
             <span className="inline-flex items-center gap-1.5">
               <MapPinIcon className="size-4" />
               {job.location}
+            </span>
+          )}
+          {job.statusChangedAt && (
+            <span>
+              {JOB_STATUS_LABELS[job.status]} since {formatDate(job.statusChangedAt)}
             </span>
           )}
         </p>
