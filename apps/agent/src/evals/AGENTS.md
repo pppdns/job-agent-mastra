@@ -3,7 +3,7 @@
 Mastra scorers, datasets and experiments for the copilot.
 
 - `scorers.ts`: all scorers. Registered on the Mastra instance (`allScorers`), so Studio lists them and scores persist.
-  - Code: `check-no-tool-errors` (built-in), `draft-after-listing`, `role-only-without-profile`, `case-expectations` (eval cases only: `mustCall` / `mustNotCall` / `fitBasis` from ground truth).
+  - Code: `no-tool-errors` (any failed call, even one the model retried; the reason names each tool and error), `draft-after-listing`, `role-only-without-profile`, `case-expectations` (eval cases only: `mustCall` / `mustNotCall` / `fitBasis` from ground truth; `fitBasis` counts only drafts that saved). Unit tests: `scorers.test.ts`.
   - LLM judges (`EVAL_JUDGE_MODEL`, default `openai/gpt-6.1-sol` via the AI Gateway): `copilot-quality` (generic rubric, score = share of applicable criteria passed) and `case-rubric` (eval cases only: binary, case `must` / `mustNot`). Judges get user text, the approved profile, tool calls with results (clipped) and the reply, and treat all of it as data.
   - Not-applicable runs return `notScorable()` and store no score.
 - Live scoring (`liveCopilotScorers` on the copilot, only with `LLM_MODE=live`): code scorers on every turn, `copilot-quality` on 10%. A `requestContext.evalRun` filter keeps them off eval experiments. Judge calls show as scorer traces in Studio, not in the chat's usage panel.
