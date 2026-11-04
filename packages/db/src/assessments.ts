@@ -103,7 +103,7 @@ async function saveDraftUnlocked(db: Db, input: DraftInput): Promise<JobDraft> {
     const unknown = point.sourceIds.filter((id) => !known.has(id));
     if (unknown.length > 0) {
       throw new AssessmentError(
-        `source ids ${unknown.join(", ")} are not sources of this job; use ids from ingest_listing`,
+        `source ids ${unknown.join(", ")} are not sources of this job; cite the sourceIds from ingest_listing or research_company (a research claimId is not a source id)`,
       );
     }
     if (SOURCED_EVIDENCE_CLASSES.includes(point.evidence) && point.sourceIds.length === 0) {

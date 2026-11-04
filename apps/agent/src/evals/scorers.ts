@@ -1,7 +1,6 @@
 import { gateway } from "@ai-sdk/gateway";
-import type { MastraDBMessage } from "@mastra/core/agent/message-list";
+import type { MastraDBMessage, MastraToolInvocation } from "@mastra/core/agent/message-list";
 import { createScorer, type MastraScorers, notScorable } from "@mastra/core/evals";
-import { checks } from "@mastra/evals/checks";
 import {
   extractAgentResponseMessages,
   extractInputMessages,
@@ -10,8 +9,24 @@ import {
 import { z } from "zod";
 import { env } from "../env";
 
-/** One tool call from an agent run, with its result once it returned. */
-export type ToolRun = { name: string; args: unknown; result: unknown };
+const field = (value: unknown, key: string): unknown =>
+  value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined;
+
+/**
+ * One tool call from an agent run, with its result once it returned. `error` is set when the
+ * call failed: it threw or its arguments were rejected (`output-error`), the executor flagged
+ * it (`isError`), it never returned (`call`), or the tool returned an `error` (e.g. `guarded`).
+ */
+export type ToolRun = { name: string; args: unknown; result: unknown; error?: string };
+
+function toolError(call: MastraToolInvocation): string | undefined {
+  if (call.state === "output-error") return call.errorText ?? "tool call failed";
+  if (call.state === "call" || call.state === "partial-call") return "no result";
+  if (call.isError) return call.errorText ?? "tool reported an error";
+  const error = field(call.result, "error");
+  if (error) return typeof error === "string" ? error : JSON.stringify(error);
+  return undefined;
+}
 
 /** Tool calls of a run in call order, read from the output messages' tool-invocation parts. */
 export function toolRuns(output: readonly MastraDBMessage[]): ToolRun[] {
@@ -24,20 +39,39 @@ export function toolRuns(output: readonly MastraDBMessage[]): ToolRun[] {
         name: call.toolName,
         args: call.args,
         result: call.state === "result" ? call.result : undefined,
+        error: toolError(call),
       });
     }
   }
   return [...byId.values()];
 }
 
-const field = (value: unknown, key: string): unknown =>
-  value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined;
-
 /** True when the system prompt says the approved profile is empty (see formatProfile). */
 export const profileIsEmpty = (systemPrompt: string) =>
   /Approved profile \(version \d+\): empty\./.test(systemPrompt);
 
 // ---- Deterministic scorers (free; also run live on every copilot turn) ----
+
+/** Every tool call succeeded. Like `checks.noToolErrors()`, plus app-level `{ error }` results and a reason. */
+export const noToolErrorsScorer = createScorer({
+  id: "no-tool-errors",
+  name: "No tool errors",
+  description:
+    "Every tool call returned without an error (rejected arguments, thrown, unfinished, or an error result).",
+  type: "agent",
+})
+  .preprocess(({ run }) => {
+    const runs = toolRuns(run.output);
+    const errors = runs.flatMap((r) => (r.error ? [`${r.name}: ${r.error}`] : []));
+    return { total: runs.length, errors };
+  })
+  .generateScore(({ results }) => (results.preprocessStepResult.errors.length === 0 ? 1 : 0))
+  .generateReason(({ results }) => {
+    const { total, errors } = results.preprocessStepResult;
+    return errors.length === 0
+      ? `All ${total} tool calls succeeded.`
+      : `${errors.length} of ${total} tool calls failed (the model may have retried): ${errors.join("; ")}`;
+  });
 
 /** A complete listing saved in this turn must be followed by a saved draft (assess right away). */
 export const draftAfterListingScorer = createScorer({
@@ -126,8 +160,9 @@ export const caseExpectationsScorer = createScorer({
     let total = truth.mustCall.length + truth.mustNotCall.length;
     if (truth.fitBasis) {
       total += 1;
+      // Rejected calls saved nothing (and their args may be unparsed); judge only saved drafts.
       const bases = runs
-        .filter((r) => r.name === "save_job_draft")
+        .filter((r) => r.name === "save_job_draft" && !r.error)
         .map((r) => field(field(r.args, "assessment"), "fitBasis"));
       if (bases.length === 0 || bases.some((b) => b !== truth.fitBasis)) {
         failures.push(`drafts' fitBasis ${JSON.stringify(bases)}, expected ${truth.fitBasis}`);
@@ -294,7 +329,7 @@ const every = { type: "ratio", rate: 1 } as const;
 
 /** Scorers running live on copilot turns (only with real models; never in mock mode). */
 export const liveCopilotScorers: MastraScorers = {
-  noToolErrors: { scorer: checks.noToolErrors(), sampling: every, filter: notEval },
+  noToolErrors: { scorer: noToolErrorsScorer, sampling: every, filter: notEval },
   draftAfterListing: { scorer: draftAfterListingScorer, sampling: every, filter: notEval },
   roleOnlyWithoutProfile: {
     scorer: roleOnlyWithoutProfileScorer,
@@ -310,7 +345,7 @@ export const liveCopilotScorers: MastraScorers = {
 
 /** Every scorer, registered on the Mastra instance so Studio lists them and scores persist. */
 export const allScorers = {
-  noToolErrors: checks.noToolErrors(),
+  noToolErrors: noToolErrorsScorer,
   draftAfterListing: draftAfterListingScorer,
   roleOnlyWithoutProfile: roleOnlyWithoutProfileScorer,
   caseExpectations: caseExpectationsScorer,

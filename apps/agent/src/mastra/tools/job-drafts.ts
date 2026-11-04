@@ -27,8 +27,9 @@ export const saveJobDraftTool = createTool({
   description:
     "Save your current assessment of a job as a new draft version (automatic, no approval). " +
     "Call it after an initial assessment and whenever the assessment changes materially. " +
-    "Cite the source ids from ingest_listing for listing/official/independent/anonymous " +
-    "evidence; mark your own conclusions as inference.",
+    "Cite source ids for listing/official/independent/anonymous evidence: the listing's from " +
+    "ingest_listing, and for research claims the claim's sourceIds (never its claimId). Mark " +
+    "your own conclusions as inference.",
   inputSchema: z.object({ jobId: jobIdSchema, assessment: assessmentSchema }),
   execute: async ({ jobId, assessment }, context) =>
     guarded(async () => {
