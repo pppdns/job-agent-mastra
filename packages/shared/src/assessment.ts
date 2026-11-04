@@ -149,16 +149,17 @@ export const suggestedResearchTopics = (a: Pick<Assessment, "researchTopics">): 
   a.researchTopics?.length ? [...new Set(a.researchTopics)] : [...DEFAULT_RESEARCH_TOPICS];
 
 /**
- * The chat message a research button sends. It names the job id, so it also works in a new
- * chat (the copilot loads the job with get_job).
+ * The chat message a research button sends: only the job id and fixed topic labels. Never put
+ * job fields (company, title) in it: they come from fetched listings, and text in a user
+ * message counts as the user's own request (e.g. for status changes). The id also lets a new
+ * chat find the job (get_job).
  */
 export function researchRequestText(job: {
   jobId: string;
-  company?: string | null;
   topics: readonly ResearchTopic[];
 }): string {
   const labels = job.topics.map((t) => RESEARCH_TOPIC_LABELS[t].toLowerCase()).join(", ");
-  return `Research ${job.company || "the company"} (job ${job.jobId}): ${labels}.`;
+  return `Research the company for job ${job.jobId}: ${labels}.`;
 }
 
 /** Every point in an assessment, for checks that apply to all of them. */

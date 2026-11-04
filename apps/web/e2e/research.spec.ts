@@ -27,7 +27,7 @@ test("research streams real progress and shows cited findings", async ({ page })
   ]);
   await suggestions.getByRole("button", { name: "What the company does" }).click();
   await expect(visible(page, '[data-role="user"]').last()).toContainText(
-    /^Research Northwind Robotics \(job [^)]+\): what the company does\.$/,
+    /^Research the company for job \S+: what the company does\.$/,
   );
   await expect(page.getByRole("button", { name: "Stop" })).toHaveCount(0);
   const progress = lastReply(page).getByLabel("Research progress");
@@ -89,7 +89,7 @@ test("research streams real progress and shows cited findings", async ({ page })
     .click();
   await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
   await expect(visible(page, '[data-role="user"]').last()).toContainText(
-    `(job ${jobUrl.split("/").at(-1)}): business health.`,
+    `Research the company for job ${jobUrl.split("/").at(-1)}: business health.`,
   );
   await expect(lastReply(page)).toContainText("Mock reply: research_company completed 1 claims");
 });

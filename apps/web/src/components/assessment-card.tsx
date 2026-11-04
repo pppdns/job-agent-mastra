@@ -47,7 +47,7 @@ export function AssessmentCard({
   assessment: Assessment;
   output: DraftOutput;
   /** Shows "Research next" buttons; called with the topics picked. */
-  onResearch?: (job: { jobId: string; company?: string | null; topics: ResearchTopic[] }) => void;
+  onResearch?: (job: { jobId: string; topics: ResearchTopic[] }) => void;
   researchDisabled?: boolean;
 }) {
   const jobId = output.jobId;
@@ -104,7 +104,7 @@ export function AssessmentCard({
           <ResearchSuggestions
             topics={suggestedResearchTopics(assessment)}
             disabled={researchDisabled}
-            onResearch={(topics) => onResearch({ jobId, company: output.company, topics })}
+            onResearch={(topics) => onResearch({ jobId, topics })}
           />
         </div>
       )}

@@ -66,16 +66,9 @@ describe("research suggestions", () => {
     expect(assessmentSchema.safeParse({ ...minimal, researchTopics: four }).success).toBe(false);
   });
 
-  it("names the job id and topics in the request", () => {
-    expect(
-      researchRequestText({
-        jobId: "j1",
-        company: "Acme",
-        topics: ["business_health", "role_facts"],
-      }),
-    ).toBe("Research Acme (job j1): business health, role-specific facts.");
-    expect(researchRequestText({ jobId: "j1", company: null, topics: ["business"] })).toBe(
-      "Research the company (job j1): what the company does.",
+  it("names only the job id and topic labels in the request", () => {
+    expect(researchRequestText({ jobId: "j1", topics: ["business_health", "role_facts"] })).toBe(
+      "Research the company for job j1: business health, role-specific facts.",
     );
   });
 });

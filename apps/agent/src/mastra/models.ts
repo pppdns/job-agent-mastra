@@ -259,8 +259,8 @@ function mockTurn({
     if (jobId)
       return call("research_company", { jobId, topics: topics.length ? topics : ["business"] });
   }
-  // A research button's message (researchRequestText): "Research Acme (job <id>): engineering."
-  const button = text.match(/^Research .+ \(job ([^)]+)\): (.+)\.$/);
+  // A research button's message (researchRequestText): "Research the company for job <id>: engineering."
+  const button = text.match(/^Research the company for job (\S+): (.+)\.$/);
   if (offered("research_company") && button?.[1] && button[2]) {
     const labels = button[2].split(", ");
     const topics = RESEARCH_TOPICS.filter((t) =>

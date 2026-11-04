@@ -113,7 +113,7 @@ const researchTopicsSchema = z.array(z.enum(RESEARCH_TOPICS)).min(1).max(3);
 
 /**
  * "Research next" on a job page: starts research on the picked topics in a new chat, then
- * opens it. The message names the job id; the company name comes from the database.
+ * opens it. The message holds only the job id (checked to exist) and topic labels.
  */
 export async function startResearchAction(
   jobId: string,
@@ -124,9 +124,7 @@ export async function startResearchAction(
   if (!id.success || !picked.success) return { error: "Invalid research request." };
   const [job] = await listJobs(await appDb(), [id.data]);
   if (!job) return { error: "This job no longer exists." };
-  return startChat(
-    researchRequestText({ jobId: job.id, company: job.company, topics: [...new Set(picked.data)] }),
-  );
+  return startChat(researchRequestText({ jobId: job.id, topics: [...new Set(picked.data)] }));
 }
 
 /** Sends `text` as the first message of a new chat, then opens it (the run is durable). */
