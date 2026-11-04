@@ -30,6 +30,7 @@ import {
   ResearchResult,
 } from "@/components/research-trace";
 import { TechnicalPanel } from "@/components/technical-panel";
+import { RUN_STARTED_EVENT } from "@/components/thread-run-markers";
 import { isToolPart, proposedApprovalId, type ToolPart, ToolTrace } from "@/components/tool-trace";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
@@ -81,11 +82,17 @@ export function Chat({
     void fetch(`/api/chat/${encodeURIComponent(threadId)}/stop`, { method: "POST" }).finally(stop);
   }
 
+  /** Sends, then tells the sidebar a run is starting so its spinner shows right away. */
+  function send(text: string) {
+    sendMessage({ text });
+    window.dispatchEvent(new Event(RUN_STARTED_EVENT));
+  }
+
   function submit(event?: FormEvent) {
     event?.preventDefault();
     const text = input.trim();
     if (!text || busy) return;
-    sendMessage({ text });
+    send(text);
     setInput("");
   }
 
@@ -118,9 +125,7 @@ export function Chat({
                       message={message}
                       streaming={status === "streaming" && message.id === messages.at(-1)?.id}
                       threadId={threadId}
-                      onResearch={
-                        busy ? undefined : (job) => sendMessage({ text: researchRequestText(job) })
-                      }
+                      onResearch={busy ? undefined : (job) => send(researchRequestText(job))}
                     />
                   </MessageScrollerItem>
                 ))}

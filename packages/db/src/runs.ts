@@ -43,6 +43,25 @@ export async function activeRun(db: Db, threadId: string): Promise<Run | undefin
   });
 }
 
+export type ThreadRunStatus = { status: RunStatus; endedAt: number | null };
+
+/** Latest run per chat among the most recent runs (sidebar markers), keyed by thread id. */
+export async function latestRunStatuses(
+  db: Db,
+  limit = 500,
+): Promise<Record<string, ThreadRunStatus>> {
+  const rows = await db
+    .select({ threadId: runs.threadId, status: runs.status, endedAt: runs.endedAt })
+    .from(runs)
+    .orderBy(desc(runs.startedAt))
+    .limit(limit);
+  const latest: Record<string, ThreadRunStatus> = {};
+  for (const row of rows) {
+    latest[row.threadId] ??= { status: row.status, endedAt: row.endedAt?.getTime() ?? null };
+  }
+  return latest;
+}
+
 /**
  * Runs left "running" by a previous process can't be observed (the replay cache was in
  * memory): mark them interrupted at startup. Partial results (claims, drafts) stay.
