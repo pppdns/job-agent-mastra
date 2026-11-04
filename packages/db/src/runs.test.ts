@@ -7,6 +7,7 @@ import {
   activeRun,
   endRun,
   interruptStaleRuns,
+  latestRunStatuses,
   recordRunEvents,
   startRun,
   threadUsage,
@@ -26,6 +27,32 @@ describe("runs", () => {
     await endRun(db, "r1", "completed");
     expect(await activeRun(db, "t")).toBeUndefined();
     expect((await db.query.runs.findFirst())?.status).toBe("cancelled");
+  });
+
+  it("reports the latest run per chat", async () => {
+    await startRun(db, { id: "a1", threadId: "a" });
+    await endRun(db, "a1", "failed");
+    await new Promise((r) => setTimeout(r, 5));
+    await startRun(db, { id: "a2", threadId: "a" });
+    await startRun(db, { id: "b1", threadId: "b" });
+    await endRun(db, "b1", "completed");
+    const latest = await latestRunStatuses(db);
+    expect(latest.a).toEqual({ status: "running", endedAt: null });
+    expect(latest.b?.status).toBe("completed");
+    expect(latest.b?.endedAt).toBeTypeOf("number");
+  });
+
+  it("keeps a quiet chat's latest run however many runs a busy chat has", async () => {
+    await startRun(db, { id: "q1", threadId: "quiet" });
+    await endRun(db, "q1", "completed");
+    for (let i = 0; i < 5; i++) {
+      await new Promise((r) => setTimeout(r, 2));
+      await startRun(db, { id: `busy${i}`, threadId: "busy" });
+    }
+    const latest = await latestRunStatuses(db, 2);
+    expect(Object.keys(latest).sort()).toEqual(["busy", "quiet"]);
+    expect(latest.quiet?.status).toBe("completed");
+    expect(Object.keys(await latestRunStatuses(db, 1))).toEqual(["busy"]);
   });
 
   it("marks runs left running by a previous process as interrupted", async () => {

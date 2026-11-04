@@ -8,15 +8,13 @@ import {
   suggestedResearchTopics,
 } from "@copilot/shared";
 import { cn } from "cn";
-import { ChevronDownIcon, ExternalLinkIcon, FileTextIcon } from "lucide-react";
+import { ExternalLinkIcon, FileTextIcon } from "lucide-react";
 import Link from "next/link";
-import { AssessmentView, Points } from "@/components/assessment-view";
+import { AssessmentView } from "@/components/assessment-view";
 import { SummaryHeader, TONE_FILL, VERDICT } from "@/components/assessment-visuals";
 import { ResearchSuggestions } from "@/components/research-suggestions";
 import type { ToolPart } from "@/components/tool-trace";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 type DraftOutput = {
   ok?: boolean;
@@ -37,7 +35,7 @@ export function savedDraft(
   return parsed.success ? { assessment: parsed.data, output } : undefined;
 }
 
-/** A saved assessment in the chat: summary at a glance, key points, full detail on demand. */
+/** A saved assessment in the chat: summary header, then the full assessment. */
 export function AssessmentCard({
   assessment,
   output,
@@ -79,26 +77,9 @@ export function AssessmentCard({
           </div>
         }
       />
-      <div className="mt-4 flex flex-col gap-4 text-sm">
-        {assessment.hardConflicts.length > 0 && (
-          <Points kind="hardConflicts" points={assessment.hardConflicts} limit={2} />
-        )}
-        <div className="grid gap-4 md:grid-cols-2">
-          <Points kind="strengths" points={assessment.strengths} limit={3} />
-          <Points kind="weaknesses" points={assessment.weaknesses} limit={3} />
-        </div>
+      <div className="mt-4">
+        <AssessmentView assessment={assessment} showSummary={false} />
       </div>
-      <Collapsible className="mt-3">
-        <CollapsibleTrigger asChild>
-          <Button variant="ghost" size="sm" className="group -ml-2 text-muted-foreground">
-            <ChevronDownIcon className="transition-transform group-data-[state=open]:rotate-180" />
-            Full assessment
-          </Button>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="pt-3">
-          <AssessmentView assessment={assessment} showSummary={false} />
-        </CollapsibleContent>
-      </Collapsible>
       {onResearch && jobId && (
         <div className="mt-3 border-t pt-3">
           <ResearchSuggestions

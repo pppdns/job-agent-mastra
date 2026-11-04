@@ -12,6 +12,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type FormEvent, useRef, useState, useTransition } from "react";
 import { deleteChat, renameChat, setChatArchived } from "@/app/actions";
+import { RunMarkerBadge, useRunMarkers } from "@/components/thread-run-markers";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,6 +51,11 @@ export function ThreadList({ threads }: { threads: ThreadListItem[] }) {
   const [deleting, setDeleting] = useState<ThreadListItem | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [pending, startTransition] = useTransition();
+  const openThreadId = pathname.startsWith("/c/") ? pathname.slice(3) : null;
+  const markerOf = useRunMarkers(
+    threads.map((thread) => thread.id),
+    openThreadId,
+  );
 
   if (threads.length === 0) {
     return <p className="px-2 text-sm text-muted-foreground">No chats yet.</p>;
@@ -73,6 +79,7 @@ export function ThreadList({ threads }: { threads: ThreadListItem[] }) {
       <SidebarMenu aria-label={label}>
         {items.map((thread) => {
           const href = `/c/${thread.id}`;
+          const marker = markerOf(thread.id);
           return (
             <SidebarMenuItem key={thread.id}>
               {editingId === thread.id ? (
@@ -88,11 +95,21 @@ export function ThreadList({ threads }: { threads: ThreadListItem[] }) {
                 />
               ) : (
                 <>
-                  <SidebarMenuButton asChild isActive={pathname === href}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === href}
+                    // Room for the marker next to the always-visible mobile actions button.
+                    className={
+                      marker
+                        ? "group-has-data-[sidebar=menu-action]/menu-item:pr-14 md:group-has-data-[sidebar=menu-action]/menu-item:pr-8"
+                        : undefined
+                    }
+                  >
                     <Link href={href} onClick={() => setOpenMobile(false)}>
                       <span>{displayTitle(thread.title)}</span>
                     </Link>
                   </SidebarMenuButton>
+                  {marker && <RunMarkerBadge marker={marker} />}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <SidebarMenuAction showOnHover aria-label={`Chat actions`}>

@@ -63,3 +63,25 @@ test("a second message while a reply is running is refused", async ({ request })
   expect(second.status()).toBe(409);
   await (await first).body();
 });
+
+test("the sidebar marks running chats and unseen replies", async ({ page }) => {
+  const threadId = await start(page, "Slow: background me");
+  const row = page
+    .getByRole("list", { name: "Chats" })
+    .getByRole("listitem")
+    .filter({ has: page.locator(`a[href="/c/${threadId}"]`) });
+  await expect(row.getByRole("status", { name: "Reply running" })).toBeVisible();
+
+  // Leave while it runs: the spinner stays, then turns into a "new reply" dot.
+  await page.getByRole("button", { name: "New chat" }).click();
+  await expect(page).not.toHaveURL(new RegExp(threadId));
+  await expect(row.getByRole("status", { name: "Reply running" })).toBeVisible();
+  await expect(row.getByRole("status", { name: "New reply" })).toBeVisible({ timeout: 15_000 });
+
+  // Opening the chat clears it, and it stays cleared after leaving again.
+  await row.getByRole("link").click();
+  await expect(row.getByRole("status")).toHaveCount(0);
+  await page.getByRole("button", { name: "New chat" }).click();
+  await page.waitForTimeout(3500);
+  await expect(row.getByRole("status")).toHaveCount(0);
+});

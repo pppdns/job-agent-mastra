@@ -5,6 +5,7 @@ import {
   Building2Icon,
   ChevronDownIcon,
   ClipboardPasteIcon,
+  ExternalLinkIcon,
   GlobeIcon,
   type LucideIcon,
   MapPinIcon,
@@ -23,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { listingLinks } from "@/lib/listing-links";
 import { appDb } from "@/server/db";
 
 const SOURCE_LABELS = {
@@ -65,6 +67,7 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
   const detail = await getJobDetail(await appDb(), jobId);
   if (!detail) notFound();
   const { job, sources, draft, history, profileVersion, profileStale, claims } = detail;
+  const links = listingLinks(job.canonicalUrl, sources);
 
   return (
     <div className="flex flex-col gap-6">
@@ -100,6 +103,27 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
             </span>
           )}
         </p>
+        {links.length > 0 && (
+          <ul aria-label="Original listing" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            {links.map((link) => (
+              <li key={link.url} className="min-w-0">
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={link.url}
+                  className="inline-flex max-w-full items-center gap-1.5 font-medium underline-offset-4 hover:underline"
+                >
+                  <ExternalLinkIcon className="size-4 shrink-0" />
+                  <span className="truncate">
+                    {link.label}
+                    <span className="font-normal text-muted-foreground"> · {link.host}</span>
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {draft && (

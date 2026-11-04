@@ -254,16 +254,11 @@ function JobRow({ job }: { job: JobOverview }) {
   );
 }
 
-/** Stale profile, as a small badge. */
+/** Only states that need attention: a changed profile. */
 function JobFlags({ job }: { job: JobOverview }) {
-  const small = "h-4 px-1.5 text-[11px]";
-  return (
-    <>
-      {job.profileStale && (
-        <Badge variant="destructive" className={small}>
-          Profile changed · review
-        </Badge>
-      )}
-    </>
-  );
+  return job.profileStale ? (
+    <Badge variant="destructive" className="h-4 px-1.5 text-[11px]">
+      Profile changed · review
+    </Badge>
+  ) : null;
 }

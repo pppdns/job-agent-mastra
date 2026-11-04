@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, max } from "drizzle-orm";
 import type { Db } from "./index";
 import {
   type NewRunEvent,
@@ -41,6 +41,38 @@ export async function activeRun(db: Db, threadId: string): Promise<Run | undefin
     where: and(eq(runs.threadId, threadId), eq(runs.status, "running")),
     orderBy: desc(runs.startedAt),
   });
+}
+
+export type ThreadRunStatus = { status: RunStatus; endedAt: number | null };
+
+/**
+ * Latest run per chat (sidebar markers), keyed by thread id, for the `limit` most recently
+ * started chats. Picks per chat first, so a busy chat can't push another chat's run out.
+ */
+export async function latestRunStatuses(
+  db: Db,
+  limit = 500,
+): Promise<Record<string, ThreadRunStatus>> {
+  const latest = db
+    .select({ threadId: runs.threadId, startedAt: max(runs.startedAt).as("latest_started_at") })
+    .from(runs)
+    .groupBy(runs.threadId)
+    .orderBy(desc(max(runs.startedAt)))
+    .limit(limit)
+    .as("latest");
+  const rows = await db
+    .select({ threadId: runs.threadId, status: runs.status, endedAt: runs.endedAt })
+    .from(runs)
+    .innerJoin(
+      latest,
+      and(eq(runs.threadId, latest.threadId), eq(runs.startedAt, latest.startedAt)),
+    );
+  const statuses: Record<string, ThreadRunStatus> = {};
+  for (const row of rows) {
+    // Two runs of one chat started in the same millisecond: either is fine, keep the first.
+    statuses[row.threadId] ??= { status: row.status, endedAt: row.endedAt?.getTime() ?? null };
+  }
+  return statuses;
 }
 
 /**
