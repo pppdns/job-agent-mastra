@@ -47,9 +47,10 @@ test("assessments save without approval and keep earlier versions", async ({ pag
   // Past versions stay hidden until asked for.
   const history = page.getByLabel("Version history");
   await expect(history).toContainText("1 earlier");
-  await expect(history).not.toContainText("profile v0");
+  // Other specs share the database and may change the profile: match any version.
+  await expect(history).not.toContainText(/profile v\d+/);
   await history.getByRole("button", { name: /Version history/ }).click();
   await expect(history).toContainText("v1");
-  await expect(history).toContainText("profile v0");
+  await expect(history).toContainText(/profile v\d+/);
   await expect(page.getByLabel("Sources")).toContainText("Pasted text");
 });
