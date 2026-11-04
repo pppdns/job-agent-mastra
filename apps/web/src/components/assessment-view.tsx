@@ -124,31 +124,22 @@ function Section({
   );
 }
 
-/** One color-coded list of points; `limit` shows only the first few (chat card). */
-export function Points({
-  kind,
-  points,
-  limit,
-}: {
-  kind: PointKey;
-  points: AssessmentPoint[];
-  limit?: number;
-}) {
+/** One color-coded list of points. */
+function Points({ kind, points }: { kind: PointKey; points: AssessmentPoint[] }) {
   if (points.length === 0) return null;
   const { label, tone, icon: Icon } = SIGNALS[kind];
-  const shown = limit ? points.slice(0, limit) : points;
   const toneText = TONES[tone].split(" ")[0];
   return (
     <Section icon={Icon} tone={toneText} title={label} count={points.length}>
       <ul className="flex flex-col gap-2">
-        {shown.map((p) => (
+        {points.map((p) => (
           <li key={p.text} className="flex gap-2">
             <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", TONE_FILL[tone])} />
             <div className="flex min-w-0 flex-col gap-1">
               <p className="leading-snug text-foreground">
                 {p.text} <EvidenceBadge evidence={p.evidence} />
               </p>
-              {p.quote && !limit && (
+              {p.quote && (
                 <blockquote className="border-l-2 pl-2 text-xs text-muted-foreground italic">
                   “{p.quote}”
                 </blockquote>
@@ -156,9 +147,6 @@ export function Points({
             </div>
           </li>
         ))}
-        {limit && points.length > limit && (
-          <li className="pl-3.5 text-xs text-muted-foreground">+{points.length - limit} more</li>
-        )}
       </ul>
     </Section>
   );
