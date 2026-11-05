@@ -82,13 +82,52 @@ describe("ingestUrl: LinkedIn", () => {
     });
     expect(calls.extract).toEqual([`basic ${LINKEDIN}`]);
 
-    const again = await ingestUrl(LINKEDIN, { threadId: "thread-2" }, deps(web));
+    const again = await ingestUrl(LINKEDIN, { threadId: "thread-2", refresh: true }, deps(web));
     expect(again).toMatchObject({ status: "saved", newJob: false });
     if (first.status === "saved" && again.status === "saved") {
       expect(again.jobId).toBe(first.jobId);
       expect(again.source.id).toBe(first.source.id);
     }
     expect(await count()).toEqual({ jobs: 1, sources: 1 });
+  });
+
+  it("reports an already saved job without calling a provider", async () => {
+    const { web, calls } = fakeWeb({ [LINKEDIN]: page("linkedin-complete.md") });
+    const first = await ingestUrl(LINKEDIN, {}, deps(web));
+    calls.extract.length = 0;
+    const again = await ingestUrl(
+      "https://www.linkedin.com/jobs/search/?currentJobId=4479142839&keywords=platform",
+      { threadId: "thread-2" },
+      deps(web),
+    );
+    expect(again).toMatchObject({
+      status: "already_saved",
+      job: {
+        title: "Senior Platform Engineer",
+        company: "Northwind Robotics",
+        status: "new",
+        archived: false,
+        assessmentVersion: null,
+      },
+    });
+    if (first.status === "saved" && again.status === "already_saved") {
+      expect(again.jobId).toBe(first.jobId);
+    }
+    expect(calls.extract).toEqual([]);
+    expect(await count()).toEqual({ jobs: 1, sources: 1 });
+  });
+
+  it("recognizes the employer posting found through LinkedIn", async () => {
+    const { web, calls } = fakeWeb(
+      { [LINKEDIN]: page("linkedin-truncated.md"), [ATS_MATCH]: page("ats-complete.md") },
+      [{ url: ATS_MATCH, title: "Senior Platform Engineer - Northwind Robotics" }],
+    );
+    await ingestUrl(LINKEDIN, {}, deps(web));
+    calls.extract.length = 0;
+    expect(await ingestUrl(`${ATS_MATCH}?gh_src=abc`, {}, deps(web))).toMatchObject({
+      status: "already_saved",
+    });
+    expect(calls.extract).toEqual([]);
   });
 
   it("retries with advanced extraction when the basic result is incomplete", async () => {
@@ -190,6 +229,17 @@ describe("ingestUrl: guard and other pages", () => {
       status: "saved",
       source: { kind: "web", provider: "firecrawl", url },
     });
+  });
+
+  it("recognizes a saved page under different tracking parameters", async () => {
+    const url = "https://careers.example.com/platform-engineer";
+    const { web, calls } = fakeWeb({ [url]: page("ats-complete.md") });
+    await ingestUrl(`${url}?utm_source=x`, {}, deps(web));
+    calls.extract.length = 0;
+    expect(await ingestUrl(`${url}#apply`, {}, deps(web))).toMatchObject({
+      status: "already_saved",
+    });
+    expect(calls.extract).toEqual([]);
   });
 
   it("asks for a paste when no web provider is configured", async () => {

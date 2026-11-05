@@ -239,13 +239,15 @@ flowchart TB
 
 ## Listing ingestion
 
-The server never fetches listing URLs itself; providers do, and every URL passes the URL guard (public http(s) only, re-checked on the provider's final URL). LinkedIn guest pages often show only a job card, so the tool falls back to the employer's ATS posting or asks for a paste.
+The server never fetches listing URLs itself; providers do, and every URL passes the URL guard (public http(s) only, re-checked on the provider's final URL). LinkedIn guest pages often show only a job card, so the tool falls back to the employer's ATS posting or asks for a paste. A URL that already belongs to a saved job (same LinkedIn id, canonical URL or listing snapshot URL) is answered from the database before any provider call; the copilot just says so and re-reads only when asked (`refresh: true`).
 
 ```mermaid
 flowchart TD
   U[URL] --> G{url-guard}
   G -- private/unsafe --> B[blocked]
-  G --> L{LinkedIn?}
+  G --> D{saved job<br/>for this URL?}
+  D -- yes, no refresh --> AS[already_saved]
+  D -- no --> L{LinkedIn?}
   L -- yes --> T1[Tavily extract → parse]
   T1 -- complete --> S[(save job + source)]
   T1 -- job card only --> A[search ATS domains<br/>match title + company]

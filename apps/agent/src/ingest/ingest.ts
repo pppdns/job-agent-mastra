@@ -1,4 +1,13 @@
-import { addSource, type Db, type SourceKind, type SourceProvider, upsertJob } from "@copilot/db";
+import {
+  addSource,
+  type Db,
+  findJobByUrl,
+  type JobOverview,
+  listJobs,
+  type SourceKind,
+  type SourceProvider,
+  upsertJob,
+} from "@copilot/db";
 import type { PageResult, WebProviders } from "../web/providers";
 import { withRetry } from "../web/retry";
 import {
@@ -64,7 +73,24 @@ export type IngestResult =
       partial?: { title?: string; company?: string; location?: string };
       attempts: Attempt[];
     }
+  | {
+      /** The URL belongs to a job saved earlier; nothing was fetched or saved. */
+      status: "already_saved";
+      jobId: string;
+      job: SavedJobSummary;
+    }
   | { status: "blocked"; reason: string };
+
+export type SavedJobSummary = Pick<
+  JobOverview,
+  "title" | "company" | "location" | "status" | "profileStale"
+> & {
+  archived: boolean;
+  /** Current assessment version, null if the job was never assessed. */
+  assessmentVersion: number | null;
+  verdict: string | null;
+  savedAt: string;
+};
 
 export type IngestDeps = {
   db: Db;
@@ -82,13 +108,22 @@ type Found = {
   url: string;
 };
 
+/**
+ * Reads and saves a listing URL. Unless `refresh` is set, a URL that already belongs to a saved
+ * job (same LinkedIn id, canonical URL or listing snapshot URL) returns `already_saved` before
+ * any provider call.
+ */
 export async function ingestUrl(
   rawUrl: string,
-  context: { threadId?: string },
+  context: { threadId?: string; refresh?: boolean },
   deps: IngestDeps,
 ): Promise<IngestResult> {
   const checked = await checkUrl(rawUrl, deps.resolve);
   if (!checked.ok) return { status: "blocked", reason: checked.reason };
+  if (!context.refresh) {
+    const saved = await savedJobFor(deps.db, checked.url);
+    if (saved) return saved;
+  }
   const attempts: Attempt[] = [];
   if (!deps.web) {
     return {
@@ -108,6 +143,31 @@ export async function ingestUrl(
     return { status: "needs_paste", reason: "the page could not be read in full", attempts };
   }
   return save(deps.db, { canonicalUrl: url, title: found.page.title }, found, context, attempts);
+}
+
+async function savedJobFor(db: Db, url: URL): Promise<IngestResult | null> {
+  const linkedinJobId = isLinkedInHost(url) ? linkedInJobId(url) : null;
+  const urls = linkedinJobId
+    ? [canonicalLinkedInUrl(linkedinJobId)]
+    : [canonicalWebUrl(url), url.href];
+  const job = await findJobByUrl(db, { linkedinJobId, urls });
+  const [overview] = job ? await listJobs(db, [job.id]) : [];
+  if (!overview) return null;
+  return {
+    status: "already_saved",
+    jobId: overview.id,
+    job: {
+      title: overview.title,
+      company: overview.company,
+      location: overview.location,
+      status: overview.status,
+      archived: overview.archivedAt !== null,
+      assessmentVersion: overview.draftVersion,
+      verdict: overview.summary?.verdict ?? null,
+      profileStale: overview.profileStale,
+      savedAt: overview.createdAt.toISOString(),
+    },
+  };
 }
 
 async function ingestLinkedIn(

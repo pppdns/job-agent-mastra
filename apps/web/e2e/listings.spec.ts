@@ -25,6 +25,25 @@ test("a URL that cannot be read falls back to asking for a paste", async ({ page
   );
 });
 
+test("a saved job's URL in a new chat is recognized without reading it again", async ({ page }) => {
+  const url = "https://careers.northwind-robotics.example/jobs/platform-engineer";
+  await page.goto("/");
+  await send(page, `${url}?utm_source=newsletter`);
+  await expect(visible(page, '[data-role="assistant"]')).toContainText("Read the web page");
+  await expect(visible(page, '[data-role="assistant"]')).toContainText(
+    "Mock reply: save_job_draft",
+  );
+
+  await page.getByRole("button", { name: "New chat" }).click();
+  await send(page, url);
+  await expect(visible(page, '[data-role="assistant"]')).toContainText(
+    "Already saved, not read again",
+  );
+  await expect(visible(page, '[data-role="assistant"]')).toContainText(
+    "Mock reply: ingest_listing already_saved",
+  );
+});
+
 test("a private-network URL is blocked before any fetch", async ({ page }) => {
   await page.goto("/");
   await send(page, "http://169.254.169.254/latest/meta-data");
