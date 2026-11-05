@@ -4,7 +4,7 @@ import { z } from "zod";
 import { type IngestResult, ingestText, ingestUrl } from "../../ingest/ingest";
 import { MAX_URL_LENGTH } from "../../ingest/url-guard";
 import { meterWeb, recorderFor } from "../../usage/recorder";
-import { webProviders } from "../../web/active";
+import { webProviders, webResolver } from "../../web/active";
 import { getAppDb } from "../app-db";
 
 export const UNTRUSTED_NOTICE =
@@ -49,7 +49,7 @@ export const ingestListingTool = createTool({
       result = await ingestUrl(
         input.url,
         { threadId, refresh: input.refresh },
-        { db, web, signal: context?.abortSignal },
+        { db, web, resolve: webResolver(), signal: context?.abortSignal },
       );
     } else if (input.fromLatestUserMessage) {
       const text = latestUserText(context?.agent?.getMessages?.() ?? []);

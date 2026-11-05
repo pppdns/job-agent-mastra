@@ -34,7 +34,10 @@ test("a saved job's URL in a new chat is recognized without reading it again", a
     "Mock reply: save_job_draft",
   );
 
-  await page.getByRole("button", { name: "New chat" }).click();
+  const firstChat = page.url();
+  await page.goto("/");
+  await expect(page).not.toHaveURL(firstChat);
+  await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
   await send(page, url);
   await expect(visible(page, '[data-role="assistant"]')).toContainText(
     "Already saved, not read again",
