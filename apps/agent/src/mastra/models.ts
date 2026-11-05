@@ -297,7 +297,7 @@ function mockTurn({
     return { kind: "text", text: `Mock reply: local ${local?.trim() || "none"}` };
   }
   if (offered("rescore_jobs") && text.startsWith("Re-score")) {
-    return call("rescore_jobs", {});
+    return call("rescore_jobs", text.startsWith("Re-score all") ? { all: true } : {});
   }
   if (text.startsWith("Slow:")) {
     const words = Array.from({ length: 30 }, (_, i) => `w${i + 1}`).join(" ");

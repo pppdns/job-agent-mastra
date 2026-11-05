@@ -13,7 +13,7 @@ import {
 } from "@/components/assessment-visuals";
 import { JobStatusMenu } from "@/components/job-status-menu";
 import { PageHeader } from "@/components/page-header";
-import { RescoreButton } from "@/components/rescore-button";
+import { RescoreAllButton, RescoreButton } from "@/components/rescore-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,13 +75,15 @@ async function JobList({ searchParams }: Pick<PageProps<"/jobs">, "searchParams"
     all.filter((j) => inTab(j, params.tab)),
     params.sort,
   );
-  const stale = params.q ? 0 : all.filter((j) => j.profileStale && j.archivedAt === null).length;
+  const active = all.filter((j) => j.archivedAt === null && j.draftVersion !== null);
+  const stale = params.q ? 0 : active.filter((j) => j.profileStale).length;
   return (
     <div className="flex flex-col gap-4">
       {stale > 0 && <RescoreButton count={stale} />}
       <div className="flex flex-wrap items-center gap-2">
         <SearchForm params={params} />
         <SortToggle params={params} />
+        {!params.q && active.length > 0 && <RescoreAllButton count={active.length} />}
       </div>
       <StatusTabs params={params} counts={counts} />
       {jobs.length === 0 ? (

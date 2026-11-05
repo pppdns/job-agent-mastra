@@ -8,7 +8,7 @@ import {
   listJobs,
   saveDraft,
 } from "@copilot/db";
-import { type Assessment, assessmentSchema } from "@copilot/shared";
+import { type Assessment, assessmentSchema, MAX_RESCORE_JOBS } from "@copilot/shared";
 import type { TracingContext } from "@mastra/core/observability";
 import { env } from "../env";
 import { parseStoredListing } from "../ingest/listing";
@@ -16,8 +16,8 @@ import { rescorerAgent } from "../mastra/agents/rescorer";
 import { formatProfile } from "../mastra/profile-context";
 import type { RunRecorder } from "../usage/recorder";
 
-/** Most jobs one batch re-scores (a known maximum cost per click). */
-export const MAX_RESCORE_JOBS = 25;
+export { MAX_RESCORE_JOBS };
+
 const CONCURRENCY = 3;
 
 export type RescoreResult =
@@ -58,14 +58,25 @@ export type RescoreDeps = {
 /**
  * Re-assesses saved jobs against the current approved profile: one fresh model call per job
  * (so context and cost stay per job), each saved as a new draft. Without `jobIds`, every job
- * whose latest draft predates the profile, except archived ones. Drafts already saved are kept if the run stops.
+ * whose latest draft predates the profile, except archived ones; with `all`, every assessed
+ * active job, stale first, then least recently updated, so repeated batches move on through
+ * the list. Drafts already saved are kept if the run stops.
  */
-export async function runRescore(input: { jobIds?: string[] }, deps: RescoreDeps) {
+export async function runRescore(input: { jobIds?: string[]; all?: boolean }, deps: RescoreDeps) {
   const runId = randomUUID();
   const profile = await currentProfile(deps.db);
   const jobs = (await listJobs(deps.db, input.jobIds)).filter(
-    (j) => j.draftVersion !== null && (input.jobIds || (j.profileStale && j.archivedAt === null)),
+    (j) =>
+      j.draftVersion !== null &&
+      (input.jobIds || (j.archivedAt === null && (input.all || j.profileStale))),
   );
+  if (input.all && !input.jobIds) {
+    jobs.sort(
+      (a, b) =>
+        Number(b.profileStale) - Number(a.profileStale) ||
+        a.updatedAt.getTime() - b.updatedAt.getTime(),
+    );
+  }
   const batch = jobs.slice(0, MAX_RESCORE_JOBS);
   const emit = (event: RescoreEvent) => deps.emit({ runId, ...event });
   await emit({
