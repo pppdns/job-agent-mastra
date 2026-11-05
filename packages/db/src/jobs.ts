@@ -139,7 +139,13 @@ export async function findJobByUrl(
   const candidates = await db.query.sources.findMany({
     where: and(
       inArray(sources.kind, ["linkedin", "ats"]),
-      or(...paths.flatMap((p) => [eq(sources.url, p), like(sources.url, `${p}?%`)])),
+      or(
+        ...paths.flatMap((p) => [
+          eq(sources.url, p),
+          like(sources.url, `${p}?%`),
+          like(sources.url, `${p}#%`),
+        ]),
+      ),
     ),
     orderBy: desc(sources.retrievedAt),
   });
