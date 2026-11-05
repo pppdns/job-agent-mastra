@@ -1,5 +1,6 @@
 import {
   addSource,
+  canonicalWebUrl,
   type Db,
   findJobByUrl,
   type JobOverview,
@@ -23,6 +24,8 @@ import {
   wordCount,
 } from "./listing";
 import { checkUrl, type Resolver } from "./url-guard";
+
+export { canonicalWebUrl };
 
 export const MAX_PASTE_CHARS = 50_000;
 
@@ -147,9 +150,7 @@ export async function ingestUrl(
 
 async function savedJobFor(db: Db, url: URL): Promise<IngestResult | null> {
   const linkedinJobId = isLinkedInHost(url) ? linkedInJobId(url) : null;
-  const urls = linkedinJobId
-    ? [canonicalLinkedInUrl(linkedinJobId)]
-    : [canonicalWebUrl(url), url.href];
+  const urls = linkedinJobId ? [canonicalLinkedInUrl(linkedinJobId)] : [url.href];
   const job = await findJobByUrl(db, { linkedinJobId, urls });
   const [overview] = job ? await listJobs(db, [job.id]) : [];
   if (!overview) return null;
@@ -276,7 +277,14 @@ async function findEmployerListing(
       attempts.push({ step: "ats:candidate", url: hit.url, outcome: "different job or company" });
     } else {
       attempts.push({ step: "ats:candidate", url: hit.url, outcome: "matched" });
-      return { page, text: result.text, kind: "ats", provider: "tavily", url: checked.url.href };
+      // Stored without tracking parameters, so a later link to the same posting matches it.
+      return {
+        page,
+        text: result.text,
+        kind: "ats",
+        provider: "tavily",
+        url: canonicalWebUrl(checked.url),
+      };
     }
   }
   return null;
@@ -401,16 +409,6 @@ const isAtsUrl = (url: string) => {
   const host = new URL(url).hostname;
   return ATS_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`));
 };
-
-/** Drops fragments and tracking parameters so the same page dedupes by URL. */
-export function canonicalWebUrl(url: URL): string {
-  const copy = new URL(url.href);
-  copy.hash = "";
-  for (const key of [...copy.searchParams.keys()]) {
-    if (/^(utm_|gh_src$|ref$|source$|trk$|lever-source)/i.test(key)) copy.searchParams.delete(key);
-  }
-  return copy.href;
-}
 
 /** Provider read with bounded retries; a final failure becomes an `ok: false` result. */
 async function safeExtract(

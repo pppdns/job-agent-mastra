@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { CLOSED_JOB_STATUSES, type JobStatus } from "@copilot/shared";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, like, or, sql } from "drizzle-orm";
 import type { Db } from "./index";
 import {
   type Job,
@@ -10,6 +10,7 @@ import {
   type SourceProvider,
   sources,
 } from "./schema";
+import { canonicalWebUrl } from "./url";
 import { serializeWrites } from "./write-lock";
 
 export const MAX_SNAPSHOT_CHARS = 100_000;
@@ -113,6 +114,7 @@ async function upsertJobUnlocked(
 /**
  * The saved job behind a listing URL, without fetching it: by LinkedIn job id, the job's
  * canonical URL, or a listing snapshot (LinkedIn or employer posting) read from that URL.
+ * URLs compare without tracking parameters or fragment, also for snapshots stored with them.
  * Research pages (`web` sources) never count, so a company page is never taken for a job.
  */
 export async function findJobByUrl(
@@ -125,16 +127,33 @@ export async function findJobByUrl(
     });
     if (job) return job;
   }
-  const urls = [...new Set(input.urls)];
-  if (urls.length === 0) return undefined;
-  const byUrl = await db.query.jobs.findFirst({ where: inArray(jobs.canonicalUrl, urls) });
+  const wanted = new Set(input.urls.flatMap((u) => canonicalOrNull(u) ?? []));
+  if (wanted.size === 0) return undefined;
+  const byUrl = await db.query.jobs.findFirst({
+    where: inArray(jobs.canonicalUrl, [...wanted]),
+  });
   if (byUrl) return byUrl;
-  const source = await db.query.sources.findFirst({
-    where: and(inArray(sources.url, urls), inArray(sources.kind, ["linkedin", "ats"])),
+  // Stored snapshot URLs may still carry tracking parameters: fetch same-path candidates,
+  // then compare canonical forms.
+  const paths = [...wanted].map((u) => u.split(/[?#]/)[0] ?? u);
+  const candidates = await db.query.sources.findMany({
+    where: and(
+      inArray(sources.kind, ["linkedin", "ats"]),
+      or(...paths.flatMap((p) => [eq(sources.url, p), like(sources.url, `${p}?%`)])),
+    ),
     orderBy: desc(sources.retrievedAt),
   });
+  const source = candidates.find((s) => s.url && wanted.has(canonicalOrNull(s.url) ?? ""));
   return source ? db.query.jobs.findFirst({ where: eq(jobs.id, source.jobId) }) : undefined;
 }
+
+const canonicalOrNull = (url: string) => {
+  try {
+    return canonicalWebUrl(new URL(url));
+  } catch {
+    return null;
+  }
+};
 
 const compatible = (stored: string | null, incoming: string | null | undefined) =>
   !stored || !incoming || stored === incoming;
