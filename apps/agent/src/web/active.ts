@@ -17,13 +17,11 @@ export function webProviders(): WebProviders | null {
 }
 
 /**
- * DNS for the URL guard. In fixture mode the synthetic `.example` hosts resolve to a public
- * documentation-free address; every other guard check still applies. Live mode uses real DNS.
+ * DNS for the URL guard. In fixture mode every host resolves to a public address without a
+ * lookup (fixture providers only serve their own pages, so nothing leaves the machine); every
+ * other guard check still applies. Live mode uses real DNS.
  */
 export function webResolver(): Resolver | undefined {
   if (env.WEB_MODE !== "fixture") return undefined;
-  return async (host) => {
-    if (!host.endsWith(".example")) throw new Error("ENOTFOUND");
-    return ["93.184.216.34"];
-  };
+  return async () => ["93.184.216.34"];
 }

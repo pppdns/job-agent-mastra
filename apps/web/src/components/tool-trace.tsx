@@ -36,6 +36,7 @@ type IngestOutput = {
   complete?: boolean;
   source?: { kind?: string; url?: string | null };
   listing?: { title?: string; company?: string };
+  job?: { title?: string | null; company?: string | null; status?: JobStatus };
 };
 
 /** One trace row per tool call: what ran and, for listings, which source was actually read. */
@@ -143,6 +144,16 @@ function ToolLine({ part }: { part: ToolPart }) {
       <Line
         title={`Read ${source}${output.complete === false ? " (may be incomplete)" : ""}`}
         description={what || output.source?.url || undefined}
+      />
+    );
+  }
+  if (output.status === "already_saved") {
+    const what = [output.job?.title, output.job?.company].filter(Boolean).join(" · ");
+    const status = output.job?.status ? JOB_STATUS_LABELS[output.job.status] : undefined;
+    return (
+      <Line
+        title="Already saved, not read again"
+        description={[what, status].filter(Boolean).join(" · ") || undefined}
       />
     );
   }

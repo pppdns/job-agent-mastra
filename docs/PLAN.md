@@ -98,6 +98,7 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - [x] `ingest_listing`: URL or pasted text (read from the latest user message, not copied by the model); URL guard incl. DNS and final-URL re-check; sign-in/search/truncated detection; ATS fallback with identity check; ask-to-paste fallback; result names the source actually read. Overview: [apps/agent/src/ingest/AGENTS.md](../apps/agent/src/ingest/AGENTS.md).
 - [x] Tables `app_jobs` (dedupe: LinkedIn id → canonical URL → normalized company+title without conflicting ids) and `app_sources` (bounded snapshot, provider, URL, thread, retrieved_at; idempotent per job+content).
 - [x] UI: Markdown replies (Streamdown, no images/HTML), tool Trace rows.
+- [x] Saved-job check before fetching: a URL of a saved job returns `already_saved` (no scraping, no re-assessment); `refresh: true` re-reads on request.
 - [x] Verified: unit tests (guard, parser, dedupe, orchestrator with fixtures), offline e2e for fallback/blocked/pasted paths, live runs ([verification.md](verification.md)).
 
 ### M4 — Vertical slice: assessment → draft → approved snapshot ✅ (2026-11-03)

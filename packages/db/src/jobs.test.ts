@@ -7,6 +7,7 @@ import { createDb, type Db, migrateDb } from "./index";
 import {
   addSource,
   dedupeKey,
+  findJobByUrl,
   latestListingSource,
   MAX_SNAPSHOT_CHARS,
   setJobArchived,
@@ -184,5 +185,38 @@ describe("job status", () => {
     expect(overview).toMatchObject({ id: job.id, status: "dismissed" });
     expect(overview?.archivedAt).toBeInstanceOf(Date);
     expect(overview?.createdAt).toBeInstanceOf(Date);
+  });
+});
+
+describe("findJobByUrl", () => {
+  const ats = "https://job-boards.greenhouse.io/northwind/jobs/1";
+
+  it("finds a job by LinkedIn id, canonical URL or listing snapshot URL", async () => {
+    const { job } = await upsertJob(db, {
+      linkedinJobId: "4479142839",
+      canonicalUrl: "https://www.linkedin.com/jobs/view/4479142839/",
+      ...northwind,
+    });
+    await addSource(db, { jobId: job.id, kind: "ats", provider: "tavily", url: ats, content: "x" });
+
+    expect((await findJobByUrl(db, { linkedinJobId: "4479142839", urls: [] }))?.id).toBe(job.id);
+    expect(
+      (await findJobByUrl(db, { urls: ["https://www.linkedin.com/jobs/view/4479142839/"] }))?.id,
+    ).toBe(job.id);
+    expect((await findJobByUrl(db, { urls: [ats] }))?.id).toBe(job.id);
+    expect(await findJobByUrl(db, { linkedinJobId: "1111111111", urls: [] })).toBeUndefined();
+  });
+
+  it("ignores research pages stored as web sources", async () => {
+    const { job } = await upsertJob(db, northwind);
+    const about = "https://northwind.example/about";
+    await addSource(db, {
+      jobId: job.id,
+      kind: "web",
+      provider: "tavily",
+      url: about,
+      content: "y",
+    });
+    expect(await findJobByUrl(db, { urls: [about] })).toBeUndefined();
   });
 });

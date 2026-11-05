@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { CLOSED_JOB_STATUSES, type JobStatus } from "@copilot/shared";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "./index";
 import {
   type Job,
@@ -108,6 +108,32 @@ async function upsertJobUnlocked(
     await reindexJob(tx, job.id);
     return { job, created: true };
   });
+}
+
+/**
+ * The saved job behind a listing URL, without fetching it: by LinkedIn job id, the job's
+ * canonical URL, or a listing snapshot (LinkedIn or employer posting) read from that URL.
+ * Research pages (`web` sources) never count, so a company page is never taken for a job.
+ */
+export async function findJobByUrl(
+  db: Db,
+  input: { linkedinJobId?: string | null; urls: string[] },
+): Promise<Job | undefined> {
+  if (input.linkedinJobId) {
+    const job = await db.query.jobs.findFirst({
+      where: eq(jobs.linkedinJobId, input.linkedinJobId),
+    });
+    if (job) return job;
+  }
+  const urls = [...new Set(input.urls)];
+  if (urls.length === 0) return undefined;
+  const byUrl = await db.query.jobs.findFirst({ where: inArray(jobs.canonicalUrl, urls) });
+  if (byUrl) return byUrl;
+  const source = await db.query.sources.findFirst({
+    where: and(inArray(sources.url, urls), inArray(sources.kind, ["linkedin", "ats"])),
+    orderBy: desc(sources.retrievedAt),
+  });
+  return source ? db.query.jobs.findFirst({ where: eq(jobs.id, source.jobId) }) : undefined;
 }
 
 const compatible = (stored: string | null, incoming: string | null | undefined) =>

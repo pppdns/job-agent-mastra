@@ -4,7 +4,7 @@ import { z } from "zod";
 import { type IngestResult, ingestText, ingestUrl } from "../../ingest/ingest";
 import { MAX_URL_LENGTH } from "../../ingest/url-guard";
 import { meterWeb, recorderFor } from "../../usage/recorder";
-import { webProviders } from "../../web/active";
+import { webProviders, webResolver } from "../../web/active";
 import { getAppDb } from "../app-db";
 
 export const UNTRUSTED_NOTICE =
@@ -24,13 +24,19 @@ export const ingestListingTool = createTool({
     "For a URL, pass `url`. For pasted listing text, pass `fromLatestUserMessage: true` (the tool " +
     "reads the user's latest message itself; never copy the text into arguments) and, if the text " +
     "names them, `title` and `company`. Returns which source was actually read, or why the " +
-    "listing could not be read in full.",
+    "listing could not be read in full. A URL of a job that is already saved returns " +
+    "`already_saved` without reading anything; pass `refresh: true` only when the user asks to " +
+    "re-read that listing.",
   inputSchema: z.object({
     url: z.string().max(MAX_URL_LENGTH).optional().describe("Job listing URL the user shared"),
     fromLatestUserMessage: z
       .boolean()
       .optional()
       .describe("True when the user pasted the listing text into their latest message"),
+    refresh: z
+      .boolean()
+      .optional()
+      .describe("True only when the user asks to re-read a listing that is already saved"),
     title: z.string().max(200).optional().describe("Job title as written in pasted text"),
     company: z.string().max(200).optional().describe("Company name as written in pasted text"),
   }),
@@ -40,7 +46,11 @@ export const ingestListingTool = createTool({
     const web = meterWeb(webProviders(), recorderFor(threadId), "ingest");
     let result: IngestResult;
     if (input.url) {
-      result = await ingestUrl(input.url, { threadId }, { db, web, signal: context?.abortSignal });
+      result = await ingestUrl(
+        input.url,
+        { threadId, refresh: input.refresh },
+        { db, web, resolve: webResolver(), signal: context?.abortSignal },
+      );
     } else if (input.fromLatestUserMessage) {
       const text = latestUserText(context?.agent?.getMessages?.() ?? []);
       if (!text.trim()) return { status: "blocked", reason: "the latest user message has no text" };
