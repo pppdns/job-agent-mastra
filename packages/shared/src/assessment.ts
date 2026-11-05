@@ -167,17 +167,47 @@ export function researchRequestText(job: {
   return `Research the company for job ${job.jobId}: ${labels}.`;
 }
 
-/** Digit runs of a text with thousands separators removed ("75,000" → "75000"). */
-const digitRuns = (s: string) =>
-  s.replace(/(\d)[,.\u202f\u00a0' ](?=\d{3}\b)/g, "$1").match(/\d+/g) ?? [];
+// A number: thousands groups ("75,000", "62.000", "1 234") then optional decimals, or plain
+// digits with optional decimals ("25.50"); then an optional k/m multiplier ("75k", "1.2M").
+const AMOUNT =
+  /(\d{1,3}(?:[,.\u202f\u00a0' ]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)(?:\s?([kKmM])(?![\p{L}]))?/gu;
+const RANGE_GAP = /^\s*(?:-|–|—|to)\s*$/i;
+
+type Amount = { raw: string; value: number };
+
+/** Numeric amounts in a text. In "70–80k" the multiplier applies to both ends. */
+export function moneyAmounts(text: string): Amount[] {
+  const found = [...text.matchAll(AMOUNT)].map((m) => {
+    const digits = m[1] ?? "";
+    // A separator before exactly three digits groups thousands; any other one is decimal.
+    const plain = digits.replace(/[,.\u202f\u00a0' ](?=\d{3}(?!\d))/g, "").replace(",", ".");
+    return {
+      raw: m[0],
+      value: Number(plain),
+      unit: m[2]?.toLowerCase(),
+      start: m.index ?? 0,
+      end: (m.index ?? 0) + m[0].length,
+    };
+  });
+  found.forEach((a, i) => {
+    const next = found[i + 1];
+    if (!a.unit && next?.unit && RANGE_GAP.test(text.slice(a.end, next.start))) a.unit = next.unit;
+  });
+  const scale = { k: 1e3, m: 1e6 } as Record<string, number>;
+  return found.map((a) => ({ raw: a.raw, value: a.value * (a.unit ? (scale[a.unit] ?? 1) : 1) }));
+}
 
 /**
- * Figures in `salary` that appear in none of `texts` (e.g. the job's stored sources). A figure
- * counts as present when it starts a number there, so "75k" matches "75,000".
+ * Amounts in `salary` that appear in none of `texts` (e.g. the job's stored sources), compared
+ * by value: "75k" matches "75,000" but not "750,000"; "25.50" doesn't match "50.25".
  */
 export function salaryFiguresMissing(salary: string, texts: readonly string[]): string[] {
-  const present = texts.flatMap(digitRuns);
-  return digitRuns(salary).filter((d) => !present.some((p) => p.startsWith(d)));
+  const present = new Set(
+    texts.flatMap((t) => moneyAmounts(t).map((a) => Math.round(a.value * 100))),
+  );
+  return moneyAmounts(salary)
+    .filter((a) => !present.has(Math.round(a.value * 100)))
+    .map((a) => a.raw.trim());
 }
 
 /** Every point in an assessment, for checks that apply to all of them. */

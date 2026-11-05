@@ -5,6 +5,7 @@ import {
   assessmentSchema,
   assessmentSummary,
   type JobStatus,
+  moneyAmounts,
   SOURCED_EVIDENCE_CLASSES,
   salaryFiguresMissing,
 } from "@copilot/shared";
@@ -55,6 +56,11 @@ async function saveDraftUnlocked(db: Db, input: DraftInput): Promise<JobDraft> {
   const known = new Set(jobSources.map((s) => s.id));
   // Pay is a listing fact: every figure must come from a stored source, never an estimate.
   if (assessment.salary) {
+    if (moneyAmounts(assessment.salary).length === 0) {
+      throw new AssessmentError(
+        `salary "${assessment.salary.slice(0, 40)}" states no figure; omit salary unless the listing gives an amount`,
+      );
+    }
     const missing = salaryFiguresMissing(
       assessment.salary,
       jobSources.map((s) => s.content),

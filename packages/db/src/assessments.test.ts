@@ -178,7 +178,10 @@ describe("saveDraft", () => {
     await saveDraft(db, { jobId, assessment: withSalary("EUR 75k–90k") });
     await expect(
       saveDraft(db, { jobId, assessment: withSalary("EUR 85,000 – 95,000") }),
-    ).rejects.toThrow(/salary figures 85000, 95000 are not in this job's sources/);
+    ).rejects.toThrow(/salary figures 85,000, 95,000 are not in this job's sources/);
+    await expect(saveDraft(db, { jobId, assessment: withSalary("Competitive") })).rejects.toThrow(
+      /states no figure/,
+    );
     const [job] = await listJobs(db, [jobId]);
     expect(job?.summary?.salary).toBe("EUR 75k–90k");
   });
