@@ -47,3 +47,29 @@ test("re-score stale jobs from /jobs", async ({ page }) => {
   await page.goto("/jobs");
   await expect(row).not.toContainText("Profile changed · review");
 });
+
+test("re-score all active jobs from /jobs after confirming", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
+  const input = page.getByRole("textbox", { name: "Message" }).filter({ visible: true });
+  await input.fill("Listing: Platform Engineer at Rescore All Inc, remote.");
+  await input.press("Enter");
+  await expect(visible(page, '[data-role="assistant"]').last()).toContainText(
+    "Mock reply: save_job_draft v1",
+  );
+
+  await page.goto("/jobs");
+  await page.getByRole("button", { name: "Re-score all" }).click();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toContainText("Re-score all active jobs?");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(page).toHaveURL(/\/jobs/);
+
+  await page.getByRole("button", { name: "Re-score all" }).click();
+  await dialog.getByRole("button", { name: /^Re-score \d+$/ }).click();
+  await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
+  const progress = visible(page, '[aria-label="Re-score progress"]');
+  await expect(progress).toContainText("Re-score finished");
+  await expect(progress).toContainText("Platform Engineer · Rescore All Inc");
+});

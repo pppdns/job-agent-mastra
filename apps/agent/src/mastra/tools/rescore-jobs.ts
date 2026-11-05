@@ -9,7 +9,8 @@ export const rescoreJobsTool = createTool({
   description:
     "Re-assess saved jobs against the current approved profile, each in its own model call, " +
     "and save each result as the job's new current version. Without jobIds: every job whose " +
-    `assessment predates the current profile (archived jobs skipped), at most ${MAX_RESCORE_JOBS} per call.`,
+    `assessment predates the current profile (archived jobs skipped), at most ${MAX_RESCORE_JOBS} per call. ` +
+    "With all: every assessed, non-archived job, least recently updated first; call again for the next batch.",
   inputSchema: z.object({
     jobIds: z
       .array(z.string().min(1).max(64))
@@ -17,6 +18,10 @@ export const rescoreJobsTool = createTool({
       .max(MAX_RESCORE_JOBS)
       .optional()
       .describe("Specific jobs to re-score; omit for all stale, non-archived jobs"),
+    all: z
+      .boolean()
+      .optional()
+      .describe("Re-score every assessed, non-archived job, not only stale ones"),
   }),
   execute: async (input, context) =>
     runRescore(input, {

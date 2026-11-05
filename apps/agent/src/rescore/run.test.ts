@@ -102,6 +102,20 @@ describe("runRescore", () => {
     expect(byId.results.map((r) => r.jobId)).toEqual([dismissed]);
   });
 
+  it("re-scores every active assessed job with all, stale ones first", async () => {
+    const stale = await savedJob("Platform Engineer");
+    await approveProfileFact("Remote only");
+    const fresh = await savedJob("Data Engineer");
+    const dismissed = await savedJob("SRE");
+    await setJobStatus(db, dismissed, "dismissed");
+
+    const result = await runRescore({ all: true }, deps());
+    expect(events[0]).toMatchObject({ kind: "start", total: 2, skipped: 0 });
+    expect(result.results.map((r) => r.jobId).sort()).toEqual([stale, fresh].sort());
+    expect((await getJobDetail(db, fresh))?.draft?.version).toBe(2);
+    expect((await getJobDetail(db, dismissed))?.draft?.version).toBe(1);
+  });
+
   it("reports a job without a stored listing as failed and keeps going", async () => {
     const { job } = await upsertJob(db, { company: "Contoso", title: "SRE" });
     await saveDraft(db, {

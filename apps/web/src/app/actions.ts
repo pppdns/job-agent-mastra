@@ -100,15 +100,20 @@ export async function editProfileAction(
 }
 
 // "use server" files may only export async functions.
-/** The fixed message the "Re-score" button sends; the copilot answers it with rescore_jobs. */
-const RESCORE_MESSAGE = "Re-score my jobs that were assessed with an older profile.";
+/** The fixed messages the re-score buttons send; the copilot answers them with rescore_jobs. */
+const RESCORE_MESSAGES = {
+  stale: "Re-score my jobs that were assessed with an older profile.",
+  all: "Re-score all my active jobs (rescore_jobs with all).",
+} as const;
 
 /**
- * "Re-score stale jobs" on /jobs: starts the run in a new chat, then opens it. The run is
- * durable, so the chat page reconnects to it; closing our copy of the stream doesn't stop it.
+ * "Re-score" on /jobs (stale jobs, or all active ones): starts the run in a new chat, then
+ * opens it. The run is durable, so the chat page reconnects to it; closing our copy of the
+ * stream doesn't stop it.
  */
-export async function startRescoreAction(): Promise<{ error?: string }> {
-  return startChat(RESCORE_MESSAGE);
+export async function startRescoreAction(scope: unknown = "stale"): Promise<{ error?: string }> {
+  const message = scope === "all" ? RESCORE_MESSAGES.all : RESCORE_MESSAGES.stale;
+  return startChat(message);
 }
 
 const researchTopicsSchema = z.array(z.enum(RESEARCH_TOPICS)).min(1).max(3);
