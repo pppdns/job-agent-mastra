@@ -15,7 +15,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { AssessmentView } from "@/components/assessment-view";
-import { VerdictBadge } from "@/components/assessment-visuals";
+import { SalaryLabel, VerdictBadge } from "@/components/assessment-visuals";
 import { EvidenceList } from "@/components/evidence-list";
 import { JobStatusMenu } from "@/components/job-status-menu";
 import { PageHeader } from "@/components/page-header";
@@ -97,6 +97,7 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
               {job.location}
             </span>
           )}
+          {draft?.assessment.salary && <SalaryLabel salary={draft.assessment.salary} />}
           {job.statusChangedAt && (
             <span>
               {JOB_STATUS_LABELS[job.status]} since {formatDate(job.statusChangedAt)}

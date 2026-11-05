@@ -11,7 +11,7 @@ import { cn } from "cn";
 import { ExternalLinkIcon, FileTextIcon } from "lucide-react";
 import Link from "next/link";
 import { AssessmentView } from "@/components/assessment-view";
-import { SummaryHeader, TONE_FILL, VERDICT } from "@/components/assessment-visuals";
+import { SalaryLabel, SummaryHeader, TONE_FILL, VERDICT } from "@/components/assessment-visuals";
 import { ResearchSuggestions } from "@/components/research-suggestions";
 import type { ToolPart } from "@/components/tool-trace";
 import { Badge } from "@/components/ui/badge";
@@ -66,6 +66,7 @@ export function AssessmentCard({
             <FileTextIcon className="size-4" />
             <span className="font-medium text-foreground">{job}</span>
             <Badge variant="secondary">Saved · v{output.version}</Badge>
+            {summary.salary && <SalaryLabel salary={summary.salary} />}
             {output.jobId && (
               <Link
                 href={`/jobs/${output.jobId}`}

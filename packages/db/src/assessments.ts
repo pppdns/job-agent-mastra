@@ -6,6 +6,7 @@ import {
   assessmentSummary,
   type JobStatus,
   SOURCED_EVIDENCE_CLASSES,
+  salaryFiguresMissing,
 } from "@copilot/shared";
 import { desc, eq, inArray, max, sql } from "drizzle-orm";
 import { AssessmentError } from "./hash";
@@ -19,6 +20,7 @@ import { serializeWrites } from "./write-lock";
  * Saves the next assessment version for a job (no approval: the latest version is current). Evidence must cite sources stored for that job,
  * and sourced evidence classes must cite at least one. Points citing profile facts must be
  * inference, cite current facts, and appear only (and at least once) in with_profile drafts.
+ * Every figure in `salary` must appear in one of the job's sources.
  */
 export function saveDraft(db: Db, input: DraftInput): Promise<JobDraft> {
   return serializeWrites(db, () => saveDraftUnlocked(db, input));
@@ -46,11 +48,23 @@ async function saveDraftUnlocked(db: Db, input: DraftInput): Promise<JobDraft> {
   const job = await db.query.jobs.findFirst({ where: eq(jobs.id, input.jobId) });
   if (!job) throw new AssessmentError(`unknown job id ${input.jobId}`);
 
-  const known = new Set(
-    (await db.select({ id: sources.id }).from(sources).where(eq(sources.jobId, job.id))).map(
-      (s) => s.id,
-    ),
-  );
+  const jobSources = await db
+    .select({ id: sources.id, content: sources.content })
+    .from(sources)
+    .where(eq(sources.jobId, job.id));
+  const known = new Set(jobSources.map((s) => s.id));
+  // Pay is a listing fact: every figure must come from a stored source, never an estimate.
+  if (assessment.salary) {
+    const missing = salaryFiguresMissing(
+      assessment.salary,
+      jobSources.map((s) => s.content),
+    );
+    if (missing.length > 0) {
+      throw new AssessmentError(
+        `salary figures ${missing.join(", ")} are not in this job's sources; copy the pay as the listing states it, or omit salary when none is stated`,
+      );
+    }
+  }
   // Fit points (comparisons with the profile) are the model's judgement: deterministic labels.
   // Models cite handles (f7, maybe as "fact:f7"); store the full ids of current facts.
   const currentFacts = (await currentProfile(db)).facts;

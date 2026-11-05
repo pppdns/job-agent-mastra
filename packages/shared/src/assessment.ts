@@ -108,6 +108,11 @@ export const assessmentSchema = z.object({
       "Always set: one line with the gist, e.g. 'Senior IC backend role; 4 office days conflicts with remote'",
     ),
   overview: text(1500).describe("Short role and company overview"),
+  salary: text(120)
+    .optional()
+    .describe(
+      "Pay as the listing states it, figures copied as written, e.g. 'EUR 75,000 – 90,000 / year + equity'. Omit when no figure is stated ('competitive' is not one); never estimate",
+    ),
   fitBasis: z
     .enum(["role_only", "with_profile"])
     .describe("role_only until the user's preferences are known"),
@@ -162,6 +167,19 @@ export function researchRequestText(job: {
   return `Research the company for job ${job.jobId}: ${labels}.`;
 }
 
+/** Digit runs of a text with thousands separators removed ("75,000" → "75000"). */
+const digitRuns = (s: string) =>
+  s.replace(/(\d)[,.\u202f\u00a0' ](?=\d{3}\b)/g, "$1").match(/\d+/g) ?? [];
+
+/**
+ * Figures in `salary` that appear in none of `texts` (e.g. the job's stored sources). A figure
+ * counts as present when it starts a number there, so "75k" matches "75,000".
+ */
+export function salaryFiguresMissing(salary: string, texts: readonly string[]): string[] {
+  const present = texts.flatMap(digitRuns);
+  return digitRuns(salary).filter((d) => !present.some((p) => p.startsWith(d)));
+}
+
 /** Every point in an assessment, for checks that apply to all of them. */
 export const allPoints = (a: Assessment): AssessmentPoint[] => [
   ...a.strengths,
@@ -174,6 +192,7 @@ export const allPoints = (a: Assessment): AssessmentPoint[] => [
 export function assessmentSummary(a: Assessment) {
   return {
     headline: a.headline ?? firstSentence(a.overview),
+    salary: a.salary,
     verdict: a.recommendation.verdict,
     fitBasis: a.fitBasis,
     fitLevel: a.fitBasis === "with_profile" ? a.fitLevel : undefined,

@@ -30,4 +30,4 @@ stateDiagram-v2
 
 ## Assessment rules
 
-Assessments must cite only sources of the same job; `official`/`independent`/`anonymous` evidence needs at least one source id. Fit points (`profileFactIds` set) must be `inference` and cite current profile facts by handle or full id (`resolveFactRef`; the full id is stored; an unknown one errors with the current handles); `with_profile` assessments need at least one, `role_only` ones none. `resetAppTables` (index.ts) empties every app table, for the eval DB only.
+Assessments must cite only sources of the same job; `official`/`independent`/`anonymous` evidence needs at least one source id. Fit points (`profileFactIds` set) must be `inference` and cite current profile facts by handle or full id (`resolveFactRef`; the full id is stored; an unknown one errors with the current handles); `with_profile` assessments need at least one, `role_only` ones none. Every figure in `salary` must appear in one of the job's sources (`salaryFiguresMissing`), so pay is never estimated. `resetAppTables` (index.ts) empties every app table, for the eval DB only.

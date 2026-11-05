@@ -166,6 +166,23 @@ describe("saveDraft", () => {
     });
   });
 
+  it("accepts a salary only when its figures are in the job's sources", async () => {
+    await addSource(db, {
+      jobId,
+      kind: "pasted",
+      provider: "user",
+      content: "Salary range EUR 75,000 – 90,000 per year plus equity.",
+    });
+    const withSalary = (salary: string) => ({ ...assessment(), salary });
+    await saveDraft(db, { jobId, assessment: withSalary("EUR 75,000 – 90,000 / year + equity") });
+    await saveDraft(db, { jobId, assessment: withSalary("EUR 75k–90k") });
+    await expect(
+      saveDraft(db, { jobId, assessment: withSalary("EUR 85,000 – 95,000") }),
+    ).rejects.toThrow(/salary figures 85000, 95000 are not in this job's sources/);
+    const [job] = await listJobs(db, [jobId]);
+    expect(job?.summary?.salary).toBe("EUR 75k–90k");
+  });
+
   it("rejects unknown jobs and invalid assessments", async () => {
     await expect(saveDraft(db, { jobId: "nope", assessment: assessment() })).rejects.toThrow(
       /unknown job/,

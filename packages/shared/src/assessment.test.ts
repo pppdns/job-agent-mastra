@@ -4,6 +4,7 @@ import {
   assessmentSummary,
   DEFAULT_RESEARCH_TOPICS,
   researchRequestText,
+  salaryFiguresMissing,
   suggestedResearchTopics,
 } from "./assessment";
 
@@ -70,5 +71,18 @@ describe("research suggestions", () => {
     expect(researchRequestText({ jobId: "j1", topics: ["business_health", "role_facts"] })).toBe(
       "Research the company for job j1: business health, role-specific facts.",
     );
+  });
+});
+
+describe("salaryFiguresMissing", () => {
+  const listing = ["Salary range EUR 75,000 – 90,000 per year, or £62.000 in London."];
+  it("accepts figures copied or abbreviated from the listing", () => {
+    expect(salaryFiguresMissing("EUR 75,000 – 90,000 / year", listing)).toEqual([]);
+    expect(salaryFiguresMissing("€75k–90k", listing)).toEqual([]);
+    expect(salaryFiguresMissing("£62,000", listing)).toEqual([]);
+  });
+  it("names figures the listing doesn't state", () => {
+    expect(salaryFiguresMissing("EUR 80,000 – 90,000", listing)).toEqual(["80000"]);
+    expect(salaryFiguresMissing("EUR 70k", [])).toEqual(["70"]);
   });
 });
