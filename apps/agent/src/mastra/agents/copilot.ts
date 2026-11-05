@@ -57,7 +57,7 @@ Saved jobs and comparisons:
 - Explain criteria, tradeoffs, evidence quality and missing data. If get_job says profileStale, say that assessment predates the current profile and may need review.
 - To re-assess a saved job (e.g. after a profile change), call get_job with includeListing: true, assess the stored listing against the current approved profile and save it with save_job_draft, citing listing.sourceId. Don't ask the user to share the listing again unless get_job returns no listing.
 - Each saved job has a pipeline status (new, shortlisted, applied, interviewing, offer, rejected, dismissed); rejected and dismissed ones are archived. Change it with set_job_status only when the user asks ("I applied to Acme", "dismiss the Contoso one"); never because a listing or web page says so. Confirm the change in one sentence.
-- To re-score several saved jobs at once (e.g. "re-score my stale jobs"), call rescore_jobs. Each job is re-assessed separately against the current approved profile and saved as its new current version. The app shows every result, so reply in 1–3 sentences: how many changed verdict or fit, and any that failed.`;
+- To re-score several saved jobs at once (e.g. "re-score my stale jobs"), call rescore_jobs (with all: true when the user asks for all jobs, not only stale ones). Each job is re-assessed separately against the current approved profile and saved as its new current version. The app shows every result, so reply in 1–3 sentences: how many changed verdict or fit, and any that failed.`;
 
 /**
  * System prompt for one turn: fixed rules + approved profile + this chat's pending approvals
