@@ -3,7 +3,9 @@ import {
   assessmentSchema,
   assessmentSummary,
   DEFAULT_RESEARCH_TOPICS,
+  moneyAmounts,
   researchRequestText,
+  salaryFiguresMissing,
   suggestedResearchTopics,
 } from "./assessment";
 
@@ -70,5 +72,33 @@ describe("research suggestions", () => {
     expect(researchRequestText({ jobId: "j1", topics: ["business_health", "role_facts"] })).toBe(
       "Research the company for job j1: business health, role-specific facts.",
     );
+  });
+});
+
+describe("salaryFiguresMissing", () => {
+  const listing = [
+    "Salary range EUR 75,000 – 90,000 per year, or £62.000 in London. Contractors: EUR 50.25 / hour.",
+  ];
+  it("accepts amounts copied or abbreviated from the listing", () => {
+    expect(salaryFiguresMissing("EUR 75,000 – 90,000 / year", listing)).toEqual([]);
+    expect(salaryFiguresMissing("€75k–90k", listing)).toEqual([]);
+    expect(salaryFiguresMissing("€75–90k", listing)).toEqual([]);
+    expect(salaryFiguresMissing("£62,000", listing)).toEqual([]);
+    expect(salaryFiguresMissing("EUR 50.25/h", listing)).toEqual([]);
+  });
+  it("names amounts the listing doesn't state", () => {
+    expect(salaryFiguresMissing("EUR 80,000 – 90,000", listing)).toEqual(["80,000"]);
+    expect(salaryFiguresMissing("EUR 7.5k", listing)).toEqual(["7.5k"]);
+    expect(salaryFiguresMissing("EUR 75k", ["EUR 750,000"])).toEqual(["75k"]);
+    expect(salaryFiguresMissing("EUR 25.50 / hour", ["EUR 50.25 / hour"])).toEqual(["25.50"]);
+  });
+});
+
+describe("moneyAmounts", () => {
+  it("parses separators, decimals and multipliers", () => {
+    expect(moneyAmounts("1.234,56 · 1,500 · 1.2M · 75 kr").map((a) => a.value)).toEqual([
+      1234.56, 1500, 1_200_000, 75,
+    ]);
+    expect(moneyAmounts("Competitive")).toEqual([]);
   });
 });

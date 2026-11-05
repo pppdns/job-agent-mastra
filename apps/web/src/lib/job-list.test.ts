@@ -21,6 +21,7 @@ const job = (id: string, summary?: Partial<AssessmentSummary>): JobOverview => (
   summary: summary
     ? {
         headline: "",
+        salary: undefined,
         verdict: "consider",
         fitBasis: "with_profile",
         fitLevel: undefined,

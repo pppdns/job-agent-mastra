@@ -54,3 +54,24 @@ test("assessments save without approval and keep earlier versions", async ({ pag
   await expect(history).toContainText(/profile v\d+/);
   await expect(page.getByLabel("Sources")).toContainText("Pasted text");
 });
+
+test("shows the listing's salary in the chat, the job list and the job page", async ({ page }) => {
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
+
+  await send(page, "Listing: Backend Engineer at Initech Payments. Salary EUR 70,000 – 80,000.");
+  const salary = "Salary: EUR 70,000 – 80,000";
+  const card = visible(page, '[aria-label="Saved assessment"]').last();
+  await expect(card).toContainText(salary);
+  const jobPath = await card.getByRole("link", { name: "Open job" }).getAttribute("href");
+
+  await page.goto("/jobs");
+  const row = page
+    .getByRole("table", { name: "Jobs" })
+    .getByRole("row")
+    .filter({ has: page.locator(`a[href="${jobPath}"]`) });
+  await expect(row).toContainText(salary);
+
+  await row.getByRole("link").click();
+  await expect(page.getByRole("main")).toContainText(salary);
+});

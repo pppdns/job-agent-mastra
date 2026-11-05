@@ -11,6 +11,7 @@ import {
 import { cn } from "cn";
 import {
   BadgeCheckIcon,
+  BanknoteIcon,
   CircleCheckIcon,
   CircleHelpIcon,
   LightbulbIcon,
@@ -197,6 +198,17 @@ export function EvidenceBadge({ evidence }: { evidence: EvidenceClass }) {
 }
 
 /** Headline, verdict, fit and counts: the part to read first. */
+/** Pay as the listing states it (from the latest assessment). */
+export function SalaryLabel({ salary, className }: { salary: string; className?: string }) {
+  return (
+    <span className={cn("inline-flex items-center gap-1.5", className)}>
+      <BanknoteIcon aria-hidden className="size-4 shrink-0" />
+      <span className="sr-only">Salary: </span>
+      {salary}
+    </span>
+  );
+}
+
 export function SummaryHeader({
   summary,
   title,

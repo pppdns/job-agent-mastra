@@ -4,7 +4,13 @@ import { SearchIcon } from "lucide-react";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { FitMeter, TONE_FILL, VERDICT, VerdictBadge } from "@/components/assessment-visuals";
+import {
+  FitMeter,
+  SalaryLabel,
+  TONE_FILL,
+  VERDICT,
+  VerdictBadge,
+} from "@/components/assessment-visuals";
 import { JobStatusMenu } from "@/components/job-status-menu";
 import { PageHeader } from "@/components/page-header";
 import { RescoreButton } from "@/components/rescore-button";
@@ -221,6 +227,7 @@ function JobRow({ job }: { job: JobOverview }) {
         </Link>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           {meta && <span className="truncate">{meta}</span>}
+          {summary?.salary && <SalaryLabel salary={summary.salary} className="[&>svg]:size-3.5" />}
           <JobFlags job={job} />
         </div>
         {summary && (

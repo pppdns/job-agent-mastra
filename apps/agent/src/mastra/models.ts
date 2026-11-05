@@ -122,9 +122,13 @@ function toolResultValue(part: unknown): ToolResultValue {
     : {};
 }
 
-const MOCK_ASSESSMENT = (sourceId: string) => ({
+/** Pay copied from a pasted listing ("EUR 70,000 – 80,000"), like a real model would. */
+const mockSalary = (text: string) => text.match(/EUR \d[\d,]*(?: – \d[\d,]*)?/)?.[0];
+
+const MOCK_ASSESSMENT = (sourceId: string, salary?: string) => ({
   headline: "Mock headline: listing read, pay unknown",
   overview: "Mock assessment of the pasted listing.",
+  ...(salary && { salary }),
   fitBasis: "role_only",
   strengths: [
     { text: "The listing text was provided.", evidence: "official", sourceIds: [sourceId] },
@@ -192,7 +196,7 @@ function mockTurn({
       if (offered("save_job_draft")) {
         return call("save_job_draft", {
           jobId: value.jobId,
-          assessment: MOCK_ASSESSMENT(value.source.id),
+          assessment: MOCK_ASSESSMENT(value.source.id, mockSalary(lastUserText(prompt))),
         });
       }
     }

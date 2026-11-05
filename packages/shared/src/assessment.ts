@@ -108,6 +108,11 @@ export const assessmentSchema = z.object({
       "Always set: one line with the gist, e.g. 'Senior IC backend role; 4 office days conflicts with remote'",
     ),
   overview: text(1500).describe("Short role and company overview"),
+  salary: text(120)
+    .optional()
+    .describe(
+      "Pay as the listing states it, figures copied as written, e.g. 'EUR 75,000 – 90,000 / year + equity'. Omit when no figure is stated ('competitive' is not one); never estimate",
+    ),
   fitBasis: z
     .enum(["role_only", "with_profile"])
     .describe("role_only until the user's preferences are known"),
@@ -162,6 +167,49 @@ export function researchRequestText(job: {
   return `Research the company for job ${job.jobId}: ${labels}.`;
 }
 
+// A number: thousands groups ("75,000", "62.000", "1 234") then optional decimals, or plain
+// digits with optional decimals ("25.50"); then an optional k/m multiplier ("75k", "1.2M").
+const AMOUNT =
+  /(\d{1,3}(?:[,.\u202f\u00a0' ]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)(?:\s?([kKmM])(?![\p{L}]))?/gu;
+const RANGE_GAP = /^\s*(?:-|–|—|to)\s*$/i;
+
+type Amount = { raw: string; value: number };
+
+/** Numeric amounts in a text. In "70–80k" the multiplier applies to both ends. */
+export function moneyAmounts(text: string): Amount[] {
+  const found = [...text.matchAll(AMOUNT)].map((m) => {
+    const digits = m[1] ?? "";
+    // A separator before exactly three digits groups thousands; any other one is decimal.
+    const plain = digits.replace(/[,.\u202f\u00a0' ](?=\d{3}(?!\d))/g, "").replace(",", ".");
+    return {
+      raw: m[0],
+      value: Number(plain),
+      unit: m[2]?.toLowerCase(),
+      start: m.index ?? 0,
+      end: (m.index ?? 0) + m[0].length,
+    };
+  });
+  found.forEach((a, i) => {
+    const next = found[i + 1];
+    if (!a.unit && next?.unit && RANGE_GAP.test(text.slice(a.end, next.start))) a.unit = next.unit;
+  });
+  const scale = { k: 1e3, m: 1e6 } as Record<string, number>;
+  return found.map((a) => ({ raw: a.raw, value: a.value * (a.unit ? (scale[a.unit] ?? 1) : 1) }));
+}
+
+/**
+ * Amounts in `salary` that appear in none of `texts` (e.g. the job's stored sources), compared
+ * by value: "75k" matches "75,000" but not "750,000"; "25.50" doesn't match "50.25".
+ */
+export function salaryFiguresMissing(salary: string, texts: readonly string[]): string[] {
+  const present = new Set(
+    texts.flatMap((t) => moneyAmounts(t).map((a) => Math.round(a.value * 100))),
+  );
+  return moneyAmounts(salary)
+    .filter((a) => !present.has(Math.round(a.value * 100)))
+    .map((a) => a.raw.trim());
+}
+
 /** Every point in an assessment, for checks that apply to all of them. */
 export const allPoints = (a: Assessment): AssessmentPoint[] => [
   ...a.strengths,
@@ -174,6 +222,7 @@ export const allPoints = (a: Assessment): AssessmentPoint[] => [
 export function assessmentSummary(a: Assessment) {
   return {
     headline: a.headline ?? firstSentence(a.overview),
+    salary: a.salary,
     verdict: a.recommendation.verdict,
     fitBasis: a.fitBasis,
     fitLevel: a.fitBasis === "with_profile" ? a.fitLevel : undefined,
