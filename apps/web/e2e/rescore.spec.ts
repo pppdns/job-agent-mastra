@@ -66,7 +66,9 @@ test("re-score all active jobs from /jobs after confirming", async ({ page }) =>
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(page).toHaveURL(/\/jobs/);
 
+  await expect(dialog).toBeHidden();
   await page.getByRole("button", { name: "Re-score all" }).click();
+  await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: /^Re-score \d+$/ }).click();
   await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
   const progress = visible(page, '[aria-label="Re-score progress"]');

@@ -111,9 +111,12 @@ const RESCORE_MESSAGES = {
  * opens it. The run is durable, so the chat page reconnects to it; closing our copy of the
  * stream doesn't stop it.
  */
-export async function startRescoreAction(scope: unknown = "stale"): Promise<{ error?: string }> {
-  const message = scope === "all" ? RESCORE_MESSAGES.all : RESCORE_MESSAGES.stale;
-  return startChat(message);
+export async function startRescoreAction(
+  scope: keyof typeof RESCORE_MESSAGES = "stale",
+): Promise<{ error?: string }> {
+  // Server actions are callable with any payload: reject unknown scopes instead of guessing.
+  if (!Object.hasOwn(RESCORE_MESSAGES, scope)) return { error: "unknown re-score scope" };
+  return startChat(RESCORE_MESSAGES[scope]);
 }
 
 const researchTopicsSchema = z.array(z.enum(RESEARCH_TOPICS)).min(1).max(3);
