@@ -207,6 +207,33 @@ describe("findJobByUrl", () => {
     expect(await findJobByUrl(db, { linkedinJobId: "1111111111", urls: [] })).toBeUndefined();
   });
 
+  it("matches a snapshot stored with tracking parameters", async () => {
+    const { job } = await upsertJob(db, northwind);
+    await addSource(db, {
+      jobId: job.id,
+      kind: "ats",
+      provider: "tavily",
+      url: `${ats}?gh_src=old`,
+      content: "x",
+    });
+    expect((await findJobByUrl(db, { urls: [ats] }))?.id).toBe(job.id);
+    expect((await findJobByUrl(db, { urls: [`${ats}?gh_src=new#apply`] }))?.id).toBe(job.id);
+    expect(await findJobByUrl(db, { urls: [`${ats}0`] })).toBeUndefined();
+  });
+
+  it("matches a snapshot stored with only a fragment", async () => {
+    const { job } = await upsertJob(db, northwind);
+    await addSource(db, {
+      jobId: job.id,
+      kind: "ats",
+      provider: "tavily",
+      url: `${ats}#apply`,
+      content: "x",
+    });
+    expect((await findJobByUrl(db, { urls: [`${ats}#apply`] }))?.id).toBe(job.id);
+    expect((await findJobByUrl(db, { urls: [ats] }))?.id).toBe(job.id);
+  });
+
   it("ignores research pages stored as web sources", async () => {
     const { job } = await upsertJob(db, northwind);
     const about = "https://northwind.example/about";

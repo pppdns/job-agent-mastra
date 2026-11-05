@@ -29,6 +29,7 @@ export type {
   SourceProvider,
 } from "./schema";
 export * as schema from "./schema";
+export { canonicalWebUrl } from "./url";
 
 export function createDb(url: string = resolveDatabaseUrl()) {
   // Agent and web both write this file: wait for locks instead of failing with SQLITE_BUSY.

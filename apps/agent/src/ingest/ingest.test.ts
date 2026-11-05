@@ -117,16 +117,20 @@ describe("ingestUrl: LinkedIn", () => {
     expect(await count()).toEqual({ jobs: 1, sources: 1 });
   });
 
-  it("recognizes the employer posting found through LinkedIn", async () => {
+  it("recognizes the employer posting found through LinkedIn, whatever its tracking parameters", async () => {
+    const searchHit = `${ATS_MATCH}?gh_src=search`;
     const { web, calls } = fakeWeb(
-      { [LINKEDIN]: page("linkedin-truncated.md"), [ATS_MATCH]: page("ats-complete.md") },
-      [{ url: ATS_MATCH, title: "Senior Platform Engineer - Northwind Robotics" }],
+      { [LINKEDIN]: page("linkedin-truncated.md"), [searchHit]: page("ats-complete.md") },
+      [{ url: searchHit, title: "Senior Platform Engineer - Northwind Robotics" }],
     );
-    await ingestUrl(LINKEDIN, {}, deps(web));
-    calls.extract.length = 0;
-    expect(await ingestUrl(`${ATS_MATCH}?gh_src=abc`, {}, deps(web))).toMatchObject({
-      status: "already_saved",
+    expect(await ingestUrl(LINKEDIN, {}, deps(web))).toMatchObject({
+      status: "saved",
+      source: { kind: "ats", url: ATS_MATCH },
     });
+    calls.extract.length = 0;
+    for (const url of [ATS_MATCH, `${ATS_MATCH}?gh_src=newsletter`]) {
+      expect(await ingestUrl(url, {}, deps(web))).toMatchObject({ status: "already_saved" });
+    }
     expect(calls.extract).toEqual([]);
   });
 
