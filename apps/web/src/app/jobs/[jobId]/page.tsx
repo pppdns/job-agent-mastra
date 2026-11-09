@@ -3,6 +3,7 @@ import { JOB_STATUS_LABELS, suggestedResearchTopics } from "@copilot/shared";
 import {
   BriefcaseIcon,
   Building2Icon,
+  CalendarIcon,
   ChevronDownIcon,
   ClipboardPasteIcon,
   ExternalLinkIcon,
@@ -24,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { APPROXIMATE_HINT, formatDay, isApproximate, postedVerb } from "@/lib/job-age";
 import { listingLinks } from "@/lib/listing-links";
 import { appDb } from "@/server/db";
 
@@ -66,7 +68,7 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
   await connection();
   const detail = await getJobDetail(await appDb(), jobId);
   if (!detail) notFound();
-  const { job, sources, draft, history, profileVersion, profileStale, claims } = detail;
+  const { job, sources, draft, history, profileVersion, profileStale, claims, posted } = detail;
   const links = listingLinks(job.canonicalUrl, sources);
 
   return (
@@ -98,6 +100,21 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
             </span>
           )}
           {draft?.assessment.salary && <SalaryLabel salary={draft.assessment.salary} />}
+          <span className="inline-flex items-center gap-1.5">
+            <CalendarIcon className="size-4" />
+            {posted && (
+              <>
+                <time
+                  dateTime={posted.at.toISOString()}
+                  title={isApproximate(posted.basis) ? APPROXIMATE_HINT : undefined}
+                >
+                  {postedVerb(posted.basis)} {formatDay(posted.at, posted.basis)}
+                </time>
+                <span aria-hidden>·</span>
+              </>
+            )}
+            <time dateTime={job.createdAt.toISOString()}>Added {formatDay(job.createdAt)}</time>
+          </span>
           {job.statusChangedAt && (
             <span>
               {JOB_STATUS_LABELS[job.status]} since {formatDate(job.statusChangedAt)}

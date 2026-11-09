@@ -1,0 +1,59 @@
+import { describe, expect, it } from "vitest";
+import { compactAge, formatDay, jobAge } from "./job-age";
+
+const DAY = 86_400_000;
+const now = new Date("2026-11-09T12:00:00Z");
+const ago = (days: number) => new Date(now.getTime() - days * DAY);
+
+describe("compactAge", () => {
+  it("rounds down to the largest whole unit", () => {
+    expect(compactAge(ago(0.5), now)).toBe("today");
+    expect(compactAge(ago(6), now)).toBe("6d");
+    expect(compactAge(ago(7), now)).toBe("1w");
+    expect(compactAge(ago(29), now)).toBe("4w");
+    expect(compactAge(ago(30), now)).toBe("1mo");
+    expect(compactAge(ago(400), now)).toBe("1y");
+    expect(compactAge(new Date(now.getTime() + DAY), now)).toBe("today");
+  });
+});
+
+describe("formatDay", () => {
+  it("marks approximate dates and shows exact ones as their UTC calendar day", () => {
+    expect(formatDay(new Date(Date.UTC(2026, 2, 2)), "exact")).toBe("2 Mar 2026");
+    expect(formatDay(new Date("2026-10-19T12:00:00Z"), "relative")).toBe("~19 Oct 2026");
+  });
+});
+
+describe("jobAge", () => {
+  const createdAt = ago(2);
+
+  it("uses the posted date when known, approximate for relative ages", () => {
+    expect(jobAge({ postedAt: ago(21), postedBasis: "relative", createdAt }, now)).toEqual({
+      label: "Posted ~3w ago",
+      tone: "muted",
+      tooltip: `Posted ~${formatDay(ago(21))} (approximate) · Added ${formatDay(createdAt)}`,
+    });
+    expect(jobAge({ postedAt: ago(3), postedBasis: "reposted", createdAt }, now).label).toBe(
+      "Reposted ~3d ago",
+    );
+    const exact = jobAge({ postedAt: ago(40), postedBasis: "exact", createdAt }, now);
+    expect(exact).toMatchObject({ label: "Posted 1mo ago", tone: "warning" });
+  });
+
+  it("falls back to when the job was added", () => {
+    expect(jobAge({ postedAt: null, postedBasis: null, createdAt }, now)).toEqual({
+      label: "Added 2d ago",
+      tone: "info",
+      tooltip: `Added ${formatDay(createdAt)}`,
+    });
+    expect(jobAge({ postedAt: null, postedBasis: null, createdAt: ago(0.1) }, now).label).toBe(
+      "Added today",
+    );
+  });
+
+  it("tints by freshness", () => {
+    const tone = (days: number) =>
+      jobAge({ postedAt: null, postedBasis: null, createdAt: ago(days) }, now).tone;
+    expect([tone(7), tone(8), tone(30), tone(31)]).toEqual(["info", "muted", "muted", "warning"]);
+  });
+});
