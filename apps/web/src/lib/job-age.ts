@@ -39,7 +39,7 @@ export type AgeTone = "info" | "muted" | "warning";
 export function jobAge(
   job: Pick<JobOverview, "postedAt" | "postedBasis" | "createdAt">,
   now: Date,
-): { label: string; tone: AgeTone; tooltip: string } {
+): { label: string; short: string; tone: AgeTone; tooltip: string } {
   const added = `Added ${formatDay(job.createdAt)}`;
   const posted =
     job.postedAt && job.postedBasis ? { at: job.postedAt, basis: job.postedBasis } : null;
@@ -50,6 +50,8 @@ export function jobAge(
   const days = (now.getTime() - date.getTime()) / DAY_MS;
   return {
     label: age === "today" ? `${verb} today` : `${verb} ${approx}${age} ago`,
+    /** For narrow screens: "~3w", "today". */
+    short: `${approx}${age}`,
     tone: days <= 7 ? "info" : days <= 30 ? "muted" : "warning",
     tooltip: posted
       ? `${postedVerb(posted.basis)} ${formatDay(posted.at, posted.basis)}${isApproximate(posted.basis) ? " (approximate)" : ""} · ${added}`

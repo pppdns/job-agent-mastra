@@ -30,6 +30,7 @@ describe("jobAge", () => {
   it("uses the posted date when known, approximate for relative ages", () => {
     expect(jobAge({ postedAt: ago(21), postedBasis: "relative", createdAt }, now)).toEqual({
       label: "Posted ~3w ago",
+      short: "~3w",
       tone: "muted",
       tooltip: `Posted ~${formatDay(ago(21))} (approximate) · Added ${formatDay(createdAt)}`,
     });
@@ -43,6 +44,7 @@ describe("jobAge", () => {
   it("falls back to when the job was added", () => {
     expect(jobAge({ postedAt: null, postedBasis: null, createdAt }, now)).toEqual({
       label: "Added 2d ago",
+      short: "2d",
       tone: "info",
       tooltip: `Added ${formatDay(createdAt)}`,
     });

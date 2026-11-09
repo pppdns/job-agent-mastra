@@ -5,11 +5,12 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import {
+  FIT_TONE,
   FitMeter,
   SalaryLabel,
   TONE_FILL,
-  VERDICT,
-  VerdictBadge,
+  TONES,
+  VerdictIcon,
 } from "@/components/assessment-visuals";
 import { JobStatusMenu } from "@/components/job-status-menu";
 import { PageHeader } from "@/components/page-header";
@@ -25,6 +26,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { jobAge } from "@/lib/job-age";
 import {
   inTab,
   JOB_SORTS,
@@ -93,7 +96,7 @@ async function JobList({ searchParams }: Pick<PageProps<"/jobs">, "searchParams"
             : "No jobs here."}
         </p>
       ) : (
-        <JobTable jobs={jobs} />
+        <JobTable jobs={jobs} now={new Date()} />
       )}
     </div>
   );
@@ -183,31 +186,28 @@ function StatusTabs({
   );
 }
 
-const dateFormat = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" });
-
-function JobTable({ jobs }: { jobs: JobOverview[] }) {
+function JobTable({ jobs, now }: { jobs: JobOverview[]; now: Date }) {
   return (
     <Table aria-label="Jobs" className="table-fixed">
       <TableHeader>
         <TableRow>
           <TableHead className="w-auto">Job</TableHead>
-          <TableHead className="w-36">Verdict</TableHead>
-          <TableHead className="hidden w-36 md:table-cell">Fit</TableHead>
-          <TableHead className="hidden w-16 sm:table-cell">Added</TableHead>
+          <TableHead className="hidden w-36 sm:table-cell">Age</TableHead>
+          <TableHead className="w-24 sm:w-44">Fit</TableHead>
           <TableHead className="w-32 text-right">Status</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {jobs.map((job) => (
-          <JobRow key={job.id} job={job} />
+          <JobRow key={job.id} job={job} now={now} />
         ))}
       </TableBody>
     </Table>
   );
 }
 
-/** One row; the title link covers the row, the status menu sits above it. */
-function JobRow({ job }: { job: JobOverview }) {
+/** One row; the title link covers the row, the status menu and tooltips sit above it. */
+function JobRow({ job, now }: { job: JobOverview; now: Date }) {
   const { summary } = job;
   const title = job.title ?? "Untitled job";
   const meta = [job.company, job.location].filter(Boolean).join(" · ");
@@ -218,7 +218,9 @@ function JobRow({ job }: { job: JobOverview }) {
           aria-hidden
           className={cn(
             "absolute inset-y-1 left-0 w-1 rounded-full",
-            summary ? TONE_FILL[VERDICT[summary.verdict].tone] : "bg-border",
+            summary?.fitLevel && summary.fitBasis === "with_profile"
+              ? TONE_FILL[FIT_TONE[summary.fitLevel]]
+              : "bg-border",
           )}
         />
         <Link
@@ -230,6 +232,7 @@ function JobRow({ job }: { job: JobOverview }) {
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           {meta && <span className="truncate">{meta}</span>}
           {summary?.salary && <SalaryLabel salary={summary.salary} className="[&>svg]:size-3.5" />}
+          <AgePill job={job} now={now} compact className="sm:hidden" />
           <JobFlags job={job} />
         </div>
         {summary && (
@@ -238,18 +241,22 @@ function JobRow({ job }: { job: JobOverview }) {
           </p>
         )}
       </TableCell>
+      <TableCell className="hidden sm:table-cell">
+        <AgePill job={job} now={now} />
+      </TableCell>
       <TableCell>
         {summary ? (
-          <VerdictBadge verdict={summary.verdict} size="sm" />
+          <span className="flex items-center gap-2">
+            <FitMeter
+              fitLevel={summary.fitLevel}
+              fitBasis={summary.fitBasis}
+              labelClassName="max-sm:sr-only"
+            />
+            <VerdictIcon verdict={summary.verdict} className="relative z-10" />
+          </span>
         ) : (
           <span className="text-xs text-muted-foreground">Not assessed</span>
         )}
-      </TableCell>
-      <TableCell className="hidden md:table-cell">
-        {summary && <FitMeter fitLevel={summary.fitLevel} fitBasis={summary.fitBasis} />}
-      </TableCell>
-      <TableCell className="hidden text-xs text-muted-foreground tabular-nums sm:table-cell">
-        <time dateTime={job.createdAt.toISOString()}>{dateFormat.format(job.createdAt)}</time>
       </TableCell>
       <TableCell className="relative z-10 text-right">
         <JobStatusMenu
@@ -260,6 +267,41 @@ function JobRow({ job }: { job: JobOverview }) {
         />
       </TableCell>
     </TableRow>
+  );
+}
+
+/** Since the company posted the job (else since it was saved), tinted by freshness. */
+function AgePill({
+  job,
+  now,
+  compact,
+  className,
+}: {
+  job: JobOverview;
+  now: Date;
+  /** "~3w" instead of "Posted ~3w ago" (narrow screens). */
+  compact?: boolean;
+  className?: string;
+}) {
+  const { label, short, tone, tooltip } = jobAge(job, now);
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <time
+          dateTime={(job.postedAt ?? job.createdAt).toISOString()}
+          className={cn(
+            "relative z-10 inline-flex items-center rounded-full border font-medium whitespace-nowrap tabular-nums",
+            compact ? "h-4 px-1.5 text-[11px]" : "px-2 py-0.5 text-xs",
+            TONES[tone],
+            className,
+          )}
+        >
+          {compact ? short : label}
+          <span className="sr-only">. {tooltip}</span>
+        </time>
+      </TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
   );
 }
 

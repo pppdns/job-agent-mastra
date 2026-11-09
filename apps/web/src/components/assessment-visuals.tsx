@@ -56,7 +56,7 @@ export const VERDICT: Record<Recommendation, { tone: Tone; icon: LucideIcon }> =
   undecided: { tone: "muted", icon: CircleHelpIcon },
 };
 
-const FIT_TONE: Record<FitLevel, Tone> = {
+export const FIT_TONE: Record<FitLevel, Tone> = {
   strong: "success",
   good: "success",
   mixed: "warning",
@@ -106,8 +106,41 @@ export function VerdictBadge({
   );
 }
 
+/** A verdict as a quiet, uncolored icon (label on hover), for places where fit carries the color. */
+export function VerdictIcon({
+  verdict,
+  className,
+}: {
+  verdict: Recommendation;
+  className?: string;
+}) {
+  const Icon = VERDICT[verdict].icon;
+  const label = RECOMMENDATION_LABELS[verdict];
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          data-verdict={verdict}
+          className={cn("inline-flex shrink-0 text-muted-foreground", className)}
+        >
+          <Icon aria-hidden className="size-3.5" />
+          <span className="sr-only">{label}</span>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 /** Five segments, filled from the left; dashed and empty when fit wasn't judged. */
-export function FitMeter({ fitLevel, fitBasis }: Pick<AssessmentSummary, "fitLevel" | "fitBasis">) {
+export function FitMeter({
+  fitLevel,
+  fitBasis,
+  labelClassName,
+}: Pick<AssessmentSummary, "fitLevel" | "fitBasis"> & {
+  /** e.g. `max-sm:sr-only` to show only the meter on narrow screens. */
+  labelClassName?: string;
+}) {
   if (fitBasis === "role_only" || !fitLevel) {
     return (
       <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
@@ -116,7 +149,7 @@ export function FitMeter({ fitLevel, fitBasis }: Pick<AssessmentSummary, "fitLev
             <span key={l} className="h-2 w-3 rounded-sm border border-dashed" />
           ))}
         </span>
-        Fit not judged
+        <span className={labelClassName}>Fit not judged</span>
       </span>
     );
   }
@@ -136,7 +169,9 @@ export function FitMeter({ fitLevel, fitBasis }: Pick<AssessmentSummary, "fitLev
           />
         ))}
       </span>
-      <span className={TONES[tone].split(" ")[0]}>{FIT_LEVEL_LABELS[fitLevel]}</span>
+      <span className={cn(TONES[tone].split(" ")[0], labelClassName)}>
+        {FIT_LEVEL_LABELS[fitLevel]}
+      </span>
     </span>
   );
 }

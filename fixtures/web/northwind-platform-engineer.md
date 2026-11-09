@@ -4,6 +4,8 @@
 
 Lisbon, Portugal (Hybrid)
 
+Date posted: 2026-03-02
+
 ## About Northwind Robotics
 
 Northwind Robotics builds warehouse robots that move and sort parcels for mid-sized logistics companies. Our fleet software runs on thousands of robots across Europe, and the platform team keeps that software deployable, observable and safe.
