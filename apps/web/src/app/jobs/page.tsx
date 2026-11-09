@@ -27,13 +27,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { jobAge } from "@/lib/job-age";
+import { type Age, jobAge, stageAge } from "@/lib/job-age";
+import { fitMatters, quietStatus, showsStageAge } from "@/lib/job-emphasis";
 import {
   inTab,
   JOB_SORTS,
   JOB_TAB_LABELS,
   JOB_TABS,
   type JobListParams,
+  type JobTab,
   jobListHref,
   parseJobListParams,
   sortJobs,
@@ -96,7 +98,7 @@ async function JobList({ searchParams }: Pick<PageProps<"/jobs">, "searchParams"
             : "No jobs here."}
         </p>
       ) : (
-        <JobTable jobs={jobs} now={new Date()} />
+        <JobTable jobs={jobs} tab={params.tab} now={new Date()} />
       )}
     </div>
   );
@@ -186,20 +188,23 @@ function StatusTabs({
   );
 }
 
-function JobTable({ jobs, now }: { jobs: JobOverview[]; now: Date }) {
+/** Per-tab emphasis (`src/lib/job-emphasis.ts`): color marks decisions that are still open. */
+function JobTable({ jobs, tab, now }: { jobs: JobOverview[]; tab: JobTab; now: Date }) {
   return (
     <Table aria-label="Jobs" className="table-fixed">
       <TableHeader>
         <TableRow>
           <TableHead className="w-auto">Job</TableHead>
-          <TableHead className="hidden w-36 sm:table-cell">Age</TableHead>
+          <TableHead className="hidden w-40 sm:table-cell">
+            {showsStageAge(tab) ? "In stage" : "Age"}
+          </TableHead>
           <TableHead className="w-24 sm:w-44">Fit</TableHead>
           <TableHead className="w-32 text-right">Status</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {jobs.map((job) => (
-          <JobRow key={job.id} job={job} now={now} />
+          <JobRow key={job.id} job={job} tab={tab} now={now} />
         ))}
       </TableBody>
     </Table>
@@ -207,8 +212,10 @@ function JobTable({ jobs, now }: { jobs: JobOverview[]; now: Date }) {
 }
 
 /** One row; the title link covers the row, the status menu and tooltips sit above it. */
-function JobRow({ job, now }: { job: JobOverview; now: Date }) {
+function JobRow({ job, tab, now }: { job: JobOverview; tab: JobTab; now: Date }) {
   const { summary } = job;
+  const age = showsStageAge(tab) ? stageAge(job, now) : jobAge(job, now);
+  const fitColored = fitMatters(job);
   const title = job.title ?? "Untitled job";
   const meta = [job.company, job.location].filter(Boolean).join(" · ");
   return (
@@ -218,7 +225,7 @@ function JobRow({ job, now }: { job: JobOverview; now: Date }) {
           aria-hidden
           className={cn(
             "absolute inset-y-1 left-0 w-1 rounded-full",
-            summary?.fitLevel && summary.fitBasis === "with_profile"
+            fitColored && summary?.fitLevel && summary.fitBasis === "with_profile"
               ? TONE_FILL[FIT_TONE[summary.fitLevel]]
               : "bg-border",
           )}
@@ -232,7 +239,7 @@ function JobRow({ job, now }: { job: JobOverview; now: Date }) {
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           {meta && <span className="truncate">{meta}</span>}
           {summary?.salary && <SalaryLabel salary={summary.salary} className="[&>svg]:size-3.5" />}
-          <AgePill job={job} now={now} compact className="sm:hidden" />
+          <AgePill age={age} compact className="sm:hidden" />
           <JobFlags job={job} />
         </div>
         {summary && (
@@ -242,7 +249,7 @@ function JobRow({ job, now }: { job: JobOverview; now: Date }) {
         )}
       </TableCell>
       <TableCell className="hidden sm:table-cell">
-        <AgePill job={job} now={now} />
+        <AgePill age={age} />
       </TableCell>
       <TableCell>
         {summary ? (
@@ -251,6 +258,7 @@ function JobRow({ job, now }: { job: JobOverview; now: Date }) {
               fitLevel={summary.fitLevel}
               fitBasis={summary.fitBasis}
               labelClassName="max-sm:sr-only"
+              muted={!fitColored}
             />
             <VerdictIcon verdict={summary.verdict} className="relative z-10" />
           </span>
@@ -264,26 +272,24 @@ function JobRow({ job, now }: { job: JobOverview; now: Date }) {
           title={title}
           status={job.status}
           archived={job.archivedAt !== null}
+          quiet={quietStatus(tab)}
         />
       </TableCell>
     </TableRow>
   );
 }
 
-/** Since the company posted the job (else since it was saved), tinted by freshness. */
+/** The listing's age or time in stage (`jobAge` / `stageAge`), tinted by what it means. */
 function AgePill({
-  job,
-  now,
+  age: { label, short, tone, tooltip, date },
   compact,
   className,
 }: {
-  job: JobOverview;
-  now: Date;
+  age: Age;
   /** "~3w" instead of "Posted ~3w ago" (narrow screens). */
   compact?: boolean;
   className?: string;
 }) {
-  const { label, short, tone, tooltip } = jobAge(job, now);
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -297,9 +303,7 @@ function AgePill({
             className,
           )}
         >
-          <time dateTime={(job.postedAt ?? job.createdAt).toISOString()}>
-            {compact ? short : label}
-          </time>
+          <time dateTime={date.toISOString()}>{compact ? short : label}</time>
           <span className="sr-only">. {tooltip}</span>
         </button>
       </TooltipTrigger>

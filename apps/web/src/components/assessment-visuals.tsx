@@ -142,9 +142,12 @@ export function FitMeter({
   fitLevel,
   fitBasis,
   labelClassName,
+  muted,
 }: Pick<AssessmentSummary, "fitLevel" | "fitBasis"> & {
   /** e.g. `max-sm:sr-only` to show only the meter on narrow screens. */
   labelClassName?: string;
+  /** Grey instead of the fit color, once fit no longer drives a decision. */
+  muted?: boolean;
 }) {
   if (fitBasis === "role_only" || !fitLevel) {
     return (
@@ -159,7 +162,7 @@ export function FitMeter({
     );
   }
   const filled = FIT_LEVELS.length - FIT_LEVELS.indexOf(fitLevel);
-  const tone = FIT_TONE[fitLevel];
+  const tone = muted ? "muted" : FIT_TONE[fitLevel];
   return (
     <span
       className="inline-flex items-center gap-2 text-xs font-medium"

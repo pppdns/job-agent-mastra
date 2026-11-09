@@ -2,7 +2,7 @@
 
 import { JOB_STATUS_LABELS, JOB_STATUSES, type JobStatus } from "@copilot/shared";
 import { cn } from "cn";
-import { ArchiveIcon, ArchiveRestoreIcon, ChevronDownIcon } from "lucide-react";
+import { ArchiveIcon, ArchiveRestoreIcon, CheckIcon, ChevronDownIcon } from "lucide-react";
 import { useTransition } from "react";
 import { setJobArchivedAction, setJobStatusAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
@@ -17,16 +17,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 /**
- * Color by meaning for the user: neutral = untouched, blue = their move (apply), green = in
- * progress and getting stronger toward an offer, red = turned down, grey = set aside.
+ * Whose move it is, in one hue so it never competes with fit's colors: tinted = the user's move
+ * (apply, prepare, decide), quiet with a check = waiting on the employer, plain = untouched,
+ * muted = closed.
  */
 const STATUS_STYLE: Record<JobStatus, string> = {
   new: "",
   shortlisted: "border-info/40 bg-info/10 text-info",
-  applied: "border-success/40 text-success",
-  interviewing: "border-success/40 bg-success/10 text-success",
-  offer: "border-success/60 bg-success/20 font-semibold text-success",
-  rejected: "text-destructive",
+  applied: "text-muted-foreground",
+  interviewing: "border-info/40 bg-info/10 text-info",
+  offer: "border-info/60 bg-info/15 font-semibold text-info",
+  rejected: "text-muted-foreground",
   dismissed: "text-muted-foreground",
 };
 
@@ -36,11 +37,14 @@ export function JobStatusMenu({
   title,
   status,
   archived,
+  quiet,
 }: {
   jobId: string;
   title: string;
   status: JobStatus;
   archived: boolean;
+  /** Plain pill, e.g. on a tab where every job has this status. */
+  quiet?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   return (
@@ -51,8 +55,12 @@ export function JobStatusMenu({
           size="sm"
           disabled={pending}
           aria-label={`Status of ${title}: ${JOB_STATUS_LABELS[status]}${archived ? ", archived" : ""}`}
-          className={cn("h-7 gap-1 rounded-full px-2.5 text-xs", STATUS_STYLE[status])}
+          className={cn(
+            "h-7 gap-1 rounded-full px-2.5 text-xs",
+            archived ? "text-muted-foreground" : !quiet && STATUS_STYLE[status],
+          )}
         >
+          {status === "applied" && <CheckIcon className="size-3" />}
           {JOB_STATUS_LABELS[status]}
           <ChevronDownIcon className="size-3 opacity-60" />
         </Button>

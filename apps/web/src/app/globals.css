@@ -71,7 +71,7 @@
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  /* Signals: success = pursue/strengths/progress/fresh, warning = weaknesses/unknowns/old, info = consider/official/your move. */
+  /* Signals: success = pursue/strengths/good fit/fresh, warning = weaknesses/unknowns/old/follow up, info = consider/official/your move. */
   --success: oklch(0.596 0.145 163.225);
   --warning: oklch(0.666 0.179 58.318);
   --info: oklch(0.546 0.245 262.881);
