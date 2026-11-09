@@ -119,13 +119,18 @@ export function VerdictIcon({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span
+        {/* A button so keyboard users can open the tooltip with the verdict's label. */}
+        <button
+          type="button"
           data-verdict={verdict}
-          className={cn("inline-flex shrink-0 text-muted-foreground", className)}
+          className={cn(
+            "inline-flex shrink-0 rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+            className,
+          )}
         >
           <Icon aria-hidden className="size-3.5" />
           <span className="sr-only">{label}</span>
-        </span>
+        </button>
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>

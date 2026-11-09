@@ -287,18 +287,21 @@ function AgePill({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <time
-          dateTime={(job.postedAt ?? job.createdAt).toISOString()}
+        {/* A button so keyboard users can open the tooltip with the full dates. */}
+        <button
+          type="button"
           className={cn(
-            "relative z-10 inline-flex items-center rounded-full border font-medium whitespace-nowrap tabular-nums",
+            "relative z-10 inline-flex items-center rounded-full border font-medium whitespace-nowrap tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
             compact ? "h-4 px-1.5 text-[11px]" : "px-2 py-0.5 text-xs",
             TONES[tone],
             className,
           )}
         >
-          {compact ? short : label}
+          <time dateTime={(job.postedAt ?? job.createdAt).toISOString()}>
+            {compact ? short : label}
+          </time>
           <span className="sr-only">. {tooltip}</span>
-        </time>
+        </button>
       </TooltipTrigger>
       <TooltipContent>{tooltip}</TooltipContent>
     </Tooltip>
