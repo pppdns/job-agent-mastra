@@ -142,9 +142,12 @@ export function FitMeter({
   fitLevel,
   fitBasis,
   labelClassName,
+  muted,
 }: Pick<AssessmentSummary, "fitLevel" | "fitBasis"> & {
   /** e.g. `max-sm:sr-only` to show only the meter on narrow screens. */
   labelClassName?: string;
+  /** Grey instead of the fit color, once fit no longer drives a decision. */
+  muted?: boolean;
 }) {
   if (fitBasis === "role_only" || !fitLevel) {
     return (
@@ -159,7 +162,7 @@ export function FitMeter({
     );
   }
   const filled = FIT_LEVELS.length - FIT_LEVELS.indexOf(fitLevel);
-  const tone = FIT_TONE[fitLevel];
+  const tone = muted ? "muted" : FIT_TONE[fitLevel];
   return (
     <span
       className="inline-flex items-center gap-2 text-xs font-medium"
@@ -170,7 +173,15 @@ export function FitMeter({
         {FIT_LEVELS.map((l, i) => (
           <span
             key={l}
-            className={cn("h-2 w-3 rounded-sm", i < filled ? TONE_FILL[tone] : "bg-muted")}
+            className={cn(
+              "h-2 w-3 rounded-sm",
+              i >= filled
+                ? "bg-muted"
+                : // Opaque when muted: the meter must still read at ≥ 3:1 without its label.
+                  muted
+                  ? "bg-muted-foreground"
+                  : TONE_FILL[tone],
+            )}
           />
         ))}
       </span>

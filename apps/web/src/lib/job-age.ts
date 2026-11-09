@@ -32,6 +32,9 @@ export function compactAge(date: Date, now: Date): string {
 
 export type AgeTone = "success" | "muted" | "warning";
 
+/** An age pill: what it shows, its color, the full dates, and the date it counts from. */
+export type Age = { label: string; short: string; tone: AgeTone; tooltip: string; date: Date };
+
 /** Statuses where freshness still matters: the user hasn't applied yet. */
 const DECIDING: readonly JobStatus[] = ["new", "shortlisted"];
 
@@ -43,7 +46,7 @@ const DECIDING: readonly JobStatus[] = ["new", "shortlisted"];
 export function jobAge(
   job: Pick<JobOverview, "postedAt" | "postedBasis" | "createdAt" | "status" | "archivedAt">,
   now: Date,
-): { label: string; short: string; tone: AgeTone; tooltip: string } {
+): Age {
   const added = `Added ${formatDay(job.createdAt)}`;
   const posted =
     job.postedAt && job.postedBasis ? { at: job.postedAt, basis: job.postedBasis } : null;
@@ -67,5 +70,43 @@ export function jobAge(
     tooltip: posted
       ? `${postedVerb(posted.basis)} ${formatDay(posted.at, posted.basis)}${isApproximate(posted.basis) ? " (approximate)" : ""} · ${added}`
       : added,
+    date,
+  };
+}
+
+/** No reply this long after applying: worth a follow-up. */
+export const FOLLOW_UP_DAYS = 14;
+
+const STAGE_VERB: Partial<Record<JobStatus, string>> = {
+  applied: "Applied",
+  interviewing: "Interviews began",
+  offer: "Offer",
+};
+
+/**
+ * Time in the current pipeline stage ("Applied 12d ago"), for tabs where the user waits on the
+ * employer. An application with no change for `FOLLOW_UP_DAYS` is `warning`. Falls back to the
+ * listing age for other statuses or without a status change time.
+ */
+export function stageAge(
+  job: Pick<
+    JobOverview,
+    "postedAt" | "postedBasis" | "createdAt" | "status" | "statusChangedAt" | "archivedAt"
+  >,
+  now: Date,
+): Age {
+  const listing = jobAge(job, now);
+  const verb = STAGE_VERB[job.status];
+  const since = job.statusChangedAt;
+  if (!verb || !since) return listing;
+  const age = compactAge(since, now);
+  const days = (now.getTime() - since.getTime()) / DAY_MS;
+  const followUp = job.status === "applied" && !job.archivedAt && days >= FOLLOW_UP_DAYS;
+  return {
+    label: age === "today" ? `${verb} today` : `${verb} ${age} ago`,
+    short: age,
+    tone: followUp ? "warning" : "muted",
+    tooltip: `${verb} ${formatDay(since)}${followUp ? " · no change since: consider following up" : ""} · ${listing.tooltip}`,
+    date: since,
   };
 }

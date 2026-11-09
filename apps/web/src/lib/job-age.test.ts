@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compactAge, formatDay, jobAge } from "./job-age";
+import { compactAge, formatDay, jobAge, stageAge } from "./job-age";
 
 const DAY = 86_400_000;
 const now = new Date("2026-11-09T12:00:00Z");
@@ -29,14 +29,14 @@ describe("jobAge", () => {
   const createdAt = ago(2);
 
   it("uses the posted date when known, approximate for relative ages", () => {
-    expect(jobAge({ ...open, postedAt: ago(21), postedBasis: "relative", createdAt }, now)).toEqual(
-      {
-        label: "Posted ~3w ago",
-        short: "~3w",
-        tone: "muted",
-        tooltip: `Posted ~${formatDay(ago(21))} (approximate) · Added ${formatDay(createdAt)}`,
-      },
-    );
+    expect(
+      jobAge({ ...open, postedAt: ago(21), postedBasis: "relative", createdAt }, now),
+    ).toMatchObject({
+      label: "Posted ~3w ago",
+      short: "~3w",
+      tone: "muted",
+      tooltip: `Posted ~${formatDay(ago(21))} (approximate) · Added ${formatDay(createdAt)}`,
+    });
     expect(
       jobAge({ ...open, postedAt: ago(3), postedBasis: "reposted", createdAt }, now).label,
     ).toBe("Reposted ~3d ago");
@@ -45,7 +45,7 @@ describe("jobAge", () => {
   });
 
   it("falls back to when the job was added", () => {
-    expect(jobAge({ ...open, postedAt: null, postedBasis: null, createdAt }, now)).toEqual({
+    expect(jobAge({ ...open, postedAt: null, postedBasis: null, createdAt }, now)).toMatchObject({
       label: "Added 2d ago",
       short: "2d",
       tone: "success",
@@ -77,5 +77,28 @@ describe("jobAge", () => {
     expect(jobAge({ ...fresh, status: "new", archivedAt: ago(0) }, now).tone).toBe("muted");
     const old = { postedAt: null, postedBasis: null, createdAt: ago(60) };
     expect(jobAge({ ...old, status: "interviewing", archivedAt: null }, now).tone).toBe("muted");
+  });
+});
+
+describe("stageAge", () => {
+  const listing = { postedAt: null, postedBasis: null, createdAt: ago(40), archivedAt: null };
+
+  it("counts from the status change and flags applications to follow up", () => {
+    const applied = (days: number) =>
+      stageAge({ ...listing, status: "applied", statusChangedAt: ago(days) }, now);
+    expect(applied(3)).toMatchObject({ label: "Applied 3d ago", short: "3d", tone: "muted" });
+    expect(applied(15)).toMatchObject({ label: "Applied 2w ago", tone: "warning" });
+    expect(applied(15).tooltip).toContain("consider following up");
+    expect(applied(15).tooltip).toContain(`Added ${formatDay(ago(40))}`);
+    const interviewing = stageAge(
+      { ...listing, status: "interviewing", statusChangedAt: ago(20) },
+      now,
+    );
+    expect(interviewing).toMatchObject({ label: "Interviews began 2w ago", tone: "muted" });
+  });
+
+  it("falls back to the listing age without a stage", () => {
+    const fallback = stageAge({ ...listing, status: "new", statusChangedAt: null }, now);
+    expect(fallback.label).toBe("Added 1mo ago");
   });
 });
