@@ -16,14 +16,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-/** Pipeline stages get a hint of color; closed ones stay muted. */
+/**
+ * Color by meaning for the user: neutral = untouched, blue = their move (apply), green = in
+ * progress and getting stronger toward an offer, red = turned down, grey = set aside.
+ */
 const STATUS_STYLE: Record<JobStatus, string> = {
   new: "",
-  shortlisted: "border-info/40 text-info",
-  applied: "border-info/40 bg-info/10 text-info",
-  interviewing: "border-warning/40 bg-warning/10 text-warning",
-  offer: "border-success/40 bg-success/10 text-success",
-  rejected: "text-muted-foreground",
+  shortlisted: "border-info/40 bg-info/10 text-info",
+  applied: "border-success/40 text-success",
+  interviewing: "border-success/40 bg-success/10 text-success",
+  offer: "border-success/60 bg-success/20 font-semibold text-success",
+  rejected: "text-destructive",
   dismissed: "text-muted-foreground",
 };
 

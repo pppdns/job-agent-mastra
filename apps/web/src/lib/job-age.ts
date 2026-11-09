@@ -1,5 +1,5 @@
 import type { JobOverview } from "@copilot/db";
-import type { PostedBasis } from "@copilot/shared";
+import type { JobStatus, PostedBasis } from "@copilot/shared";
 
 const DAY_MS = 86_400_000;
 
@@ -30,14 +30,18 @@ export function compactAge(date: Date, now: Date): string {
   return `${Math.floor(days / 365)}y`;
 }
 
-export type AgeTone = "info" | "muted" | "warning";
+export type AgeTone = "success" | "muted" | "warning";
+
+/** Statuses where freshness still matters: the user hasn't applied yet. */
+const DECIDING: readonly JobStatus[] = ["new", "shortlisted"];
 
 /**
  * The job's age for the jobs table: since it was posted when a listing says so, otherwise since
- * it was saved. Fresh (≤ 7 days) is `info`, over 30 days `warning` (may already be filled).
+ * it was saved. While the user is still deciding, fresh (≤ 7 days) is `success` (apply early) and
+ * over 30 days `warning` (may already be filled); after applying, or once archived, it's `muted`.
  */
 export function jobAge(
-  job: Pick<JobOverview, "postedAt" | "postedBasis" | "createdAt">,
+  job: Pick<JobOverview, "postedAt" | "postedBasis" | "createdAt" | "status" | "archivedAt">,
   now: Date,
 ): { label: string; short: string; tone: AgeTone; tooltip: string } {
   const added = `Added ${formatDay(job.createdAt)}`;
@@ -52,7 +56,14 @@ export function jobAge(
     label: age === "today" ? `${verb} today` : `${verb} ${approx}${age} ago`,
     /** For narrow screens: "~3w", "today". */
     short: `${approx}${age}`,
-    tone: days <= 7 ? "info" : days <= 30 ? "muted" : "warning",
+    tone:
+      !DECIDING.includes(job.status) || job.archivedAt
+        ? "muted"
+        : days <= 7
+          ? "success"
+          : days <= 30
+            ? "muted"
+            : "warning",
     tooltip: posted
       ? `${postedVerb(posted.basis)} ${formatDay(posted.at, posted.basis)}${isApproximate(posted.basis) ? " (approximate)" : ""} · ${added}`
       : added,
