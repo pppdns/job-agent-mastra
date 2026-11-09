@@ -1,11 +1,13 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
-import { listJobs } from "./assessments";
+import { getJobDetail, listJobs } from "./assessments";
 import { createDb, type Db, migrateDb } from "./index";
 import {
   addSource,
+  backfillPostedDates,
   dedupeKey,
   findJobByUrl,
   latestListingSource,
@@ -14,6 +16,7 @@ import {
   setJobStatus,
   upsertJob,
 } from "./jobs";
+import { sources } from "./schema";
 
 let db: Db;
 
@@ -125,6 +128,86 @@ describe("latestListingSource", () => {
     });
     expect((await latestListingSource(db, job.id))?.content).toBe("listing");
     expect(await latestListingSource(db, "missing")).toBeUndefined();
+  });
+});
+
+describe("posted dates", () => {
+  const DAY = 86_400_000;
+  const readAt = new Date("2026-11-09T12:00:00Z");
+  const linkedIn = (age: string) =>
+    `# Senior Platform Engineer\n\n#### [Northwind Robotics](https://www.linkedin.com/company/northwind) Lisbon ${age}\n\nBody`;
+
+  it("stores the posting date a listing states when the source is saved", async () => {
+    const { job } = await upsertJob(db, northwind);
+    const { source } = await addSource(db, {
+      jobId: job.id,
+      kind: "linkedin",
+      provider: "tavily",
+      content: linkedIn("2 weeks ago"),
+      retrievedAt: readAt,
+    });
+    expect(source.postedAt).toEqual(new Date(readAt.getTime() - 14 * DAY));
+    expect(source.postedBasis).toBe("relative");
+    const { source: none } = await addSource(db, {
+      jobId: job.id,
+      kind: "pasted",
+      provider: "user",
+      content: "no date here",
+    });
+    expect(none).toMatchObject({ postedAt: null, postedBasis: "none" });
+  });
+
+  it("backfills sources saved before dates were parsed, once", async () => {
+    const { job } = await upsertJob(db, northwind);
+    const { source } = await addSource(db, {
+      jobId: job.id,
+      kind: "ats",
+      provider: "tavily",
+      content: "# Job\n\nDate posted: 2026-03-02",
+      retrievedAt: readAt,
+    });
+    await db
+      .update(sources)
+      .set({ postedAt: null, postedBasis: null })
+      .where(eq(sources.id, source.id));
+    expect(await backfillPostedDates(db)).toBe(1);
+    expect(await backfillPostedDates(db)).toBe(0);
+    const [overview] = await listJobs(db);
+    expect(overview).toMatchObject({
+      postedAt: new Date(Date.UTC(2026, 2, 2)),
+      postedBasis: "exact",
+    });
+  });
+
+  it("uses the latest dated listing source, never a research page", async () => {
+    const url = "https://jobs.example/northwind/1";
+    const { job } = await upsertJob(db, { ...northwind, canonicalUrl: url });
+    const add = (kind: "linkedin" | "web" | "ats", content: string, ms: number, src?: string) =>
+      addSource(db, {
+        jobId: job.id,
+        kind,
+        provider: "tavily",
+        url: src ?? null,
+        content,
+        retrievedAt: new Date(readAt.getTime() + ms),
+      });
+    await add("linkedin", linkedIn("3 weeks ago"), 0);
+    await add("linkedin", linkedIn("Reposted 1 week ago"), 1);
+    // Newer, but without a date: the dated one above still counts.
+    await add("ats", "# Job\n\nNo date", 2);
+    // Research page with a date: never the job's posting date.
+    await add("web", "# News\n\nPublished: 2026-11-01", 3, "https://news.example/x");
+
+    const expected = { at: new Date(readAt.getTime() + 1 - 7 * DAY), basis: "reposted" };
+    expect((await getJobDetail(db, job.id))?.posted).toEqual(expected);
+    const [overview] = await listJobs(db);
+    expect(overview).toMatchObject({ postedAt: expected.at, postedBasis: "reposted" });
+  });
+
+  it("is null when no listing states a date", async () => {
+    const { job } = await upsertJob(db, northwind);
+    expect((await getJobDetail(db, job.id))?.posted).toBeNull();
+    expect((await listJobs(db))[0]).toMatchObject({ postedAt: null, postedBasis: null });
   });
 });
 

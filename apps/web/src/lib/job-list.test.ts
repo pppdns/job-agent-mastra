@@ -15,6 +15,8 @@ const job = (id: string, summary?: Partial<AssessmentSummary>): JobOverview => (
   archivedAt: null,
   createdAt: new Date(0),
   updatedAt: new Date(0),
+  postedAt: null,
+  postedBasis: null,
   draftVersion: null,
   draftProfileVersion: null,
   profileStale: false,

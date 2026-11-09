@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { CLOSED_JOB_STATUSES, type JobStatus } from "@copilot/shared";
-import { and, desc, eq, inArray, like, or, sql } from "drizzle-orm";
+import { CLOSED_JOB_STATUSES, type JobStatus, listingPostedDate } from "@copilot/shared";
+import { and, desc, eq, inArray, isNull, like, or, sql } from "drizzle-orm";
 import type { Db } from "./index";
 import {
   type Job,
@@ -186,6 +186,7 @@ async function addSourceUnlocked(
   const truncated = input.content.length > MAX_SNAPSHOT_CHARS;
   const content = truncated ? input.content.slice(0, MAX_SNAPSHOT_CHARS) : input.content;
   const contentHash = createHash("sha256").update(content).digest("hex");
+  const retrievedAt = input.retrievedAt ?? new Date();
 
   const [inserted] = await db
     .insert(sources)
@@ -199,7 +200,8 @@ async function addSourceUnlocked(
       contentHash,
       truncated,
       threadId: input.threadId ?? null,
-      retrievedAt: input.retrievedAt ?? new Date(),
+      retrievedAt,
+      ...postedColumns(input.kind, content, retrievedAt),
     })
     .onConflictDoNothing({ target: [sources.jobId, sources.contentHash] })
     .returning();
@@ -212,9 +214,50 @@ async function addSourceUnlocked(
   return { source: existing, created: false };
 }
 
+function postedColumns(kind: string, content: string, retrievedAt: Date) {
+  const posted = listingPostedDate(kind, content, retrievedAt);
+  return { postedAt: posted?.postedAt ?? null, postedBasis: posted?.basis ?? ("none" as const) };
+}
+
 /**
- * The most recently read listing of a job, with its stored content. Research also stores the
- * pages it reads as `web` sources, so a `web` source only counts when it is the job's own URL.
+ * Parses the posting date of sources saved before it was stored (`posted_basis` null). Runs from
+ * `migrateDb`; once every row is parsed it matches nothing.
+ */
+export function backfillPostedDates(db: Db): Promise<number> {
+  return serializeWrites(db, async () => {
+    const rows = await db
+      .select({
+        id: sources.id,
+        kind: sources.kind,
+        content: sources.content,
+        retrievedAt: sources.retrievedAt,
+      })
+      .from(sources)
+      .where(isNull(sources.postedBasis));
+    if (rows.length === 0) return 0;
+    await db.transaction(async (tx) => {
+      for (const row of rows) {
+        await tx
+          .update(sources)
+          .set(postedColumns(row.kind, row.content, row.retrievedAt))
+          .where(eq(sources.id, row.id));
+      }
+    });
+    return rows.length;
+  });
+}
+
+/**
+ * Whether a source is a read of the job's listing. Research also stores the pages it reads as
+ * `web` sources, so a `web` source only counts when it is the job's own URL.
+ */
+export const isListingSource = (
+  source: Pick<Source, "kind" | "url">,
+  canonicalUrl: string | null,
+) => source.kind !== "web" || (source.url !== null && source.url === canonicalUrl);
+
+/**
+ * The most recently read listing of a job (see `isListingSource`), with its stored content.
  */
 export async function latestListingSource(db: Db, jobId: string): Promise<Source | undefined> {
   const job = await db.query.jobs.findFirst({ where: eq(jobs.id, jobId) });
@@ -223,7 +266,7 @@ export async function latestListingSource(db: Db, jobId: string): Promise<Source
     where: eq(sources.jobId, jobId),
     orderBy: desc(sources.retrievedAt),
   });
-  return rows.find((s) => s.kind !== "web" || (s.url !== null && s.url === job.canonicalUrl));
+  return rows.find((s) => isListingSource(s, job.canonicalUrl));
 }
 
 type Writer = Pick<Db, "run">;

@@ -34,7 +34,25 @@ test("a saved job's URL in a new chat is recognized without reading it again", a
     "Mock reply: save_job_draft",
   );
 
+  // The posting date the page states shows on the job page and as the age pill in the table.
+  const db = createClient({ url: e2eDb });
+  const { rows } = await db.execute({
+    sql: "SELECT job_id FROM app_sources WHERE url = ?",
+    args: [url],
+  });
+  db.close();
+  const jobPath = `/jobs/${String(rows[0]?.job_id)}`;
   const firstChat = page.url();
+  await page.goto(jobPath);
+  await expect(page.getByText("Posted 2 Mar 2026")).toBeVisible();
+  await expect(page.getByText(/^Added \d{1,2} \w+ \d{4}$/)).toBeVisible();
+  await page.goto("/jobs");
+  const row = page
+    .getByRole("table", { name: "Jobs" })
+    .getByRole("row")
+    .filter({ has: page.locator(`a[href="${jobPath}"]`) });
+  await expect(row).toContainText(/Posted \d+(mo|y) ago/);
+
   await page.goto("/");
   await expect(page).not.toHaveURL(firstChat);
   await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
