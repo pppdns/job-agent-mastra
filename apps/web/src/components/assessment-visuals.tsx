@@ -173,7 +173,15 @@ export function FitMeter({
         {FIT_LEVELS.map((l, i) => (
           <span
             key={l}
-            className={cn("h-2 w-3 rounded-sm", i < filled ? TONE_FILL[tone] : "bg-muted")}
+            className={cn(
+              "h-2 w-3 rounded-sm",
+              i >= filled
+                ? "bg-muted"
+                : // Opaque when muted: the meter must still read at ≥ 3:1 without its label.
+                  muted
+                  ? "bg-muted-foreground"
+                  : TONE_FILL[tone],
+            )}
           />
         ))}
       </span>
