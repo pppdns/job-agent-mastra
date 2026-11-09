@@ -6,13 +6,14 @@ import {
   assessmentSummary,
   type JobStatus,
   moneyAmounts,
+  type PostedBasis,
   SOURCED_EVIDENCE_CLASSES,
   salaryFiguresMissing,
 } from "@copilot/shared";
 import { desc, eq, inArray, max, sql } from "drizzle-orm";
 import { AssessmentError } from "./hash";
 import type { Db } from "./index";
-import { reindexJob } from "./jobs";
+import { isListingSource, reindexJob } from "./jobs";
 import { currentProfile, currentProfileVersion, resolveFactRef, unknownFactHint } from "./profile";
 import { claims, type JobDraft, jobDrafts, jobs, sources } from "./schema";
 import { serializeWrites } from "./write-lock";
@@ -164,6 +165,9 @@ export type JobOverview = {
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  /** When the company posted the job, from the latest listing snapshot that states it. */
+  postedAt: Date | null;
+  postedBasis: PostedBasis | null;
   /** Latest assessment version (null before the first assessment). */
   draftVersion: number | null;
   /** Profile version the latest draft used; compare with the current one for staleness. */
@@ -198,19 +202,27 @@ export async function listJobs(db: Db, ids?: string[]): Promise<JobOverview[]> {
       draftAssessment: sql<
         string | null
       >`(select d.assessment from app_job_drafts d where d.job_id = "app_jobs"."id" order by d.version desc limit 1)`,
+      // Latest dated listing source; same rule as isListingSource.
+      postedAtMs: sql<number | null>`(select s.posted_at from app_sources s ${datedListingSource})`,
+      postedBasis: sql<PostedBasis | null>`(select s.posted_basis from app_sources s ${datedListingSource})`,
     })
     .from(jobs);
   const rows = await (ids ? query.where(inArray(jobs.id, ids)) : query).orderBy(
     desc(jobs.updatedAt),
   );
-  const overviews = rows.map(({ draftAssessment, ...row }) => ({
+  const overviews = rows.map(({ draftAssessment, postedAtMs, ...row }) => ({
     ...row,
+    postedAt: postedAtMs === null ? null : new Date(postedAtMs),
     summary: summaryOf(draftAssessment),
     profileStale: row.draftProfileVersion !== null && row.draftProfileVersion !== profileVersion,
   }));
   // Keep search ranking when ids are given.
   return ids ? ids.flatMap((id) => overviews.filter((o) => o.id === id)) : overviews;
 }
+
+const datedListingSource = sql`where s.job_id = "app_jobs"."id" and s.posted_at is not null
+  and (s.kind != 'web' or s.url = "app_jobs"."canonical_url")
+  order by s.retrieved_at desc limit 1`;
 
 /** At-a-glance summary of a stored draft; null when there is none or it no longer parses. */
 function summaryOf(json: string | null): AssessmentSummary | null {
@@ -232,6 +244,8 @@ export async function getJobDetail(db: Db, jobId: string) {
         url: sources.url,
         truncated: sources.truncated,
         retrievedAt: sources.retrievedAt,
+        postedAt: sources.postedAt,
+        postedBasis: sources.postedBasis,
       })
       .from(sources)
       .where(eq(sources.jobId, jobId))
@@ -244,8 +258,14 @@ export async function getJobDetail(db: Db, jobId: string) {
     db.query.claims.findMany({ where: eq(claims.jobId, jobId), orderBy: desc(claims.createdAt) }),
   ]);
   const [draft, ...history] = drafts;
+  const dated = jobSources.find((s) => s.postedAt && isListingSource(s, job.canonicalUrl));
   return {
     job,
+    /** When the company posted the job, from the latest listing snapshot that states it. */
+    posted:
+      dated?.postedAt && dated.postedBasis && dated.postedBasis !== "none"
+        ? { at: dated.postedAt, basis: dated.postedBasis }
+        : null,
     claims: jobClaims,
     sources: jobSources,
     /** The current assessment. */

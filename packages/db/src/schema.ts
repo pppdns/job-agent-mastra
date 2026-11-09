@@ -1,5 +1,5 @@
 import type { Assessment, EvidenceClass, ProfileFactKind, ResearchTopic } from "@copilot/shared";
-import { JOB_STATUSES, PROFILE_FACT_KINDS } from "@copilot/shared";
+import { JOB_STATUSES, POSTED_BASES, PROFILE_FACT_KINDS } from "@copilot/shared";
 import { sql } from "drizzle-orm";
 import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -40,6 +40,7 @@ export const jobs = sqliteTable(
 
 export const SOURCE_KINDS = ["linkedin", "ats", "web", "pasted"] as const;
 export const SOURCE_PROVIDERS = ["tavily", "firecrawl", "user"] as const;
+const POSTED_BASIS_VALUES = [...POSTED_BASES, "none"] as const;
 
 /** A bounded snapshot of what was actually read for a job, with provenance. */
 export const sources = sqliteTable(
@@ -57,6 +58,10 @@ export const sources = sqliteTable(
     truncated: integer("truncated", { mode: "boolean" }).notNull(),
     threadId: text("thread_id"),
     retrievedAt: integer("retrieved_at", { mode: "timestamp_ms" }).notNull(),
+    /** When the company posted the job, as this snapshot states it (`listingPostedDate`). */
+    postedAt: integer("posted_at", { mode: "timestamp_ms" }),
+    /** How `postedAt` was read; `none` = parsed, no date; null = not parsed yet (backfill). */
+    postedBasis: text("posted_basis", { enum: POSTED_BASIS_VALUES }),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("app_sources_job_content_uq").on(t.jobId, t.contentHash)],

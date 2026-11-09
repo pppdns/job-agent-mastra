@@ -3,6 +3,7 @@ import { createClient } from "@libsql/client";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
+import { backfillPostedDates } from "./jobs";
 import { findWorkspaceRoot, resolveDatabaseUrl } from "./paths";
 import * as schema from "./schema";
 
@@ -38,9 +39,13 @@ export function createDb(url: string = resolveDatabaseUrl()) {
 
 export type Db = ReturnType<typeof createDb>;
 
-/** Applies pending Drizzle migrations (idempotent). Resolved from the workspace root so bundled code finds them. */
+/**
+ * Applies pending Drizzle migrations (idempotent), then data backfills that need app code.
+ * Migrations resolve from the workspace root so bundled code finds them.
+ */
 export async function migrateDb(db: Db): Promise<void> {
   await migrate(db, { migrationsFolder: join(findWorkspaceRoot(), "packages/db/drizzle") });
+  await backfillPostedDates(db);
 }
 
 /**

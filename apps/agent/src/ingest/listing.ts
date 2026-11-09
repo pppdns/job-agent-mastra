@@ -1,6 +1,8 @@
 // Pure parsing of provider markdown into listing fields, plus completeness rules.
 // Never treat a sign-in page, search page or snippet as a listing (see docs/spikes/extraction.md).
 
+import { RELATIVE_AGE } from "@copilot/shared";
+
 export const MAX_DESCRIPTION_CHARS = 20_000;
 export const MIN_LINKEDIN_DESCRIPTION_WORDS = 80;
 export const MIN_PAGE_WORDS = 150;
@@ -67,6 +69,9 @@ const LINKEDIN_NOISE = [
   /^Direct message the job poster/i,
 ];
 
+// The card's posting age and everything after it (applicant count); see listingPostedDate.
+const AGE_AND_REST = new RegExp(`\\s+${RELATIVE_AGE.source}.*$`, "i");
+
 /** Parses LinkedIn's public guest job page as returned by Tavily extract. */
 export function parseLinkedInPage(markdown: string): ParsedPage {
   const lines = markdown.split("\n");
@@ -92,7 +97,7 @@ export function parseLinkedInPage(markdown: string): ParsedPage {
   const title = lines[titleIndex]?.slice(2).trim();
   const company = card[1]?.trim();
   const location = cleanMarkdown(card[2] ?? "")
-    .replace(/\s+(Reposted\s+)?\d+\s+(minute|hour|day|week|month|year)s?\s+ago.*$/i, "")
+    .replace(AGE_AND_REST, "")
     .trim();
 
   const end = criteriaIndex >= 0 ? criteriaIndex : lines.length;
