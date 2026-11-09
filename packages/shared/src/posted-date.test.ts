@@ -40,6 +40,13 @@ describe("listingPostedDate: LinkedIn", () => {
     );
   });
 
+  it("reads an age on its own line right under the card", () => {
+    const split = `# Team Lead\n\n#### [Acme](https://uk.linkedin.com/company/acme?trk=x) London \n\n 1 week ago \n\n Be among the first 25 applicants \n\nBody\n\nLondon 3 days ago`;
+    expect(listingPostedDate("linkedin", split, readAt)?.postedAt).toEqual(
+      new Date(readAt.getTime() - 7 * DAY),
+    );
+  });
+
   it("ignores ages outside the job card (similar jobs) and non-listing pages", () => {
     const similar = `# Platform Engineer\n\n#### [Acme](https://www.linkedin.com/company/acme) London\n\nBody\n\nLondon, United Kingdom 5 days ago`;
     expect(listingPostedDate("linkedin", similar, readAt)).toBeNull();

@@ -11,6 +11,10 @@ export type PostedDate = { postedAt: Date; basis: PostedBasis };
 /** "3 weeks ago", "Reposted 1 day ago" (LinkedIn's job card age). */
 export const RELATIVE_AGE = /(Reposted\s+)?(\d+)\s+(minute|hour|day|week|month|year)s?\s+ago\b/i;
 
+const OWN_LINE_AGE = new RegExp(`^${RELATIVE_AGE.source}$`, "i");
+/** Lines under the LinkedIn card that can still hold its age (applicants, apply button). */
+const CARD_LINES_BELOW = 3;
+
 const DAY_MS = 86_400_000;
 const UNIT_MS: Record<string, number> = {
   minute: 60_000,
@@ -82,11 +86,21 @@ function linkedInAge(content: string, retrievedAt: Date): PostedDate | null {
   const lines = content.split("\n");
   const titleIndex = lines.findIndex((l) => /^# \S/.test(l));
   if (titleIndex < 0) return null;
-  const card = lines.slice(titleIndex + 1).find((l) => l.trim() !== "");
-  if (!card || !/^#### \[[^\]]+\]\(https?:\/\/[^)]*linkedin\.com\/company\//.test(card))
+  const cardIndex = lines.findIndex((l, i) => i > titleIndex && l.trim() !== "");
+  const card = lines[cardIndex];
+  if (!card || !/^#### \[[^\]]+\]\(https?:\/\/[^)]*linkedin\.com\/company\//.test(card)) {
     return null;
-  const match = card.match(RELATIVE_AGE);
-  return match ? relative(match, retrievedAt) : null;
+  }
+  const inline = card.match(RELATIVE_AGE);
+  if (inline) return relative(inline, retrievedAt);
+  // Some extracts put the age on its own line under the card ("\n\n 1 week ago \n\n").
+  const below = lines
+    .slice(cardIndex + 1)
+    .filter((l) => l.trim() !== "")
+    .slice(0, CARD_LINES_BELOW)
+    .map((l) => l.trim().match(OWN_LINE_AGE))
+    .find(Boolean);
+  return below ? relative(below, retrievedAt) : null;
 }
 
 /** First "Posted on <date>" / "Date posted: <date>" / "Posted N days ago" line. */
