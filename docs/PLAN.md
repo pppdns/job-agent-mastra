@@ -186,7 +186,7 @@ Scheduled ingestion from job boards, reported as an inbox plus an email digest. 
 - [x] Source adapters: Himalayas API and a generic Apify runner with a `valig/linkedin-jobs-scraper` definition (`skipJobId` for known ids, caps, monthly budget check); fixtures (`WEB_MODE=fixture`).
 - [x] `discover-jobs` workflow: fetch → postings → screen → jobs + board snapshot → run record; schedule only in the main checkout with `DISCOVERY_SCHEDULE=on`; one run at a time; interrupted sweep at startup; manual "Run now" and 7/30-day backfills (`POST /discovery/run`).
 - [x] UI: `/settings/search` (save re-screens), `/discovery` runs with per-source health, cost and what the screen dropped, source badges on jobs.
-- [ ] Verified: unit tests, e2e on fixture sources, one live run.
+- [x] Verified: unit tests, e2e on fixture sources, live runs of both sources ([verification.md](verification.md)).
 
 ### M14 — Scoring funnel + report
 - [x] Triage agent (fast model, no tools, budgeted; a named hard conflict caps the score in code), `assessJob` shared with re-score, top-N assessments, usage on a `discovery:<runId>` thread; triage scores, reasons and "New" badges on `/jobs`, funnel per run on `/discovery`, triage controls in the search settings.
