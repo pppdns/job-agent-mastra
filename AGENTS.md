@@ -14,7 +14,7 @@ pnpm workspaces + Turborepo, TypeScript, Mastra (agent server + Studio), Next.js
 - `apps/web` — Next.js UI; proxies to the agent server, runs approval actions. See [apps/web/AGENTS.md](apps/web/AGENTS.md)
 - `packages/shared` — constants, Zod schemas and types shared by both apps (assessment shape in `src/assessment.ts`)
 - `packages/db` — Drizzle schema, migrations, data-access functions, approval state machine. See [packages/db/AGENTS.md](packages/db/AGENTS.md)
-- `scripts/` — `agent-api.sh` (authenticated `mastra api`), `setup-env.sh`, `ports.sh` (per-checkout dev ports), `wait-for-idle.sh` (queue heavy tasks), `stop-dev.sh` (stop this checkout's servers), `sync-main.sh` (fast-forward local `main` to origin)
+- `scripts/` — `start-prod.sh` (container entrypoint), `fly-secrets.sh`, `agent-api.sh` (authenticated `mastra api`), `setup-env.sh`, `ports.sh` (per-checkout dev ports), `wait-for-idle.sh` (queue heavy tasks), `stop-dev.sh` (stop this checkout's servers), `sync-main.sh` (fast-forward local `main` to origin)
 - `fixtures/` — synthetic listings/pages for tests and evals (no third-party text)
 - `docs/` — plan, spikes, verification results
 
@@ -49,6 +49,7 @@ Simple, polished, functional: shadcn/ui (Radix Nova preset) defaults. Clear visu
 | `pnpm db:migrate` | Apply Drizzle migrations for app tables |
 | `pnpm dev` | Agent (http://127.0.0.1:4111, Studio) + web (http://127.0.0.1:3000); other ports in a worktree, see [Worktrees](#worktrees) |
 | `pnpm check` | Biome + typecheck + unit tests (pre-commit and Claude Stop hook run this) |
+| `pnpm fly:secrets` | Set the Fly app's secrets (asks for the login password; never prints values). Deploys run from GitHub on push to `main`: [docs/deploy.md](docs/deploy.md) |
 | `pnpm ngrok` | ngrok tunnel to the web app (basic auth required; login in `apps/web/.env.local` as `NGROK_BASIC_AUTH`, optional `NGROK_DOMAIN`). Run next to `pnpm dev` |
 | `pnpm e2e` | Playwright on an isolated mock stack; stop `pnpm dev` first |
 | `pnpm eval` | Live eval suite (real copilot + LLM judge, web fixtures, own `data/eval.db`); costs money. Report in `data/eval-report.md` |
@@ -97,3 +98,4 @@ Claude Code reads this `AGENTS.md` directly. Do not add a `CLAUDE.md` or `CLAUDE
 - [docs/architecture.md](docs/architecture.md) — how it works, with mermaid diagrams (agent logic, tools, approvals, memory, research); update it when flows change
 - [docs/PLAN.md](docs/PLAN.md) — agreed decisions and milestone plan
 - [docs/verification.md](docs/verification.md) — live vs offline verification results
+- [docs/deploy.md](docs/deploy.md) — Fly.io deployment, secrets, login, operating it
