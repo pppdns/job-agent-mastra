@@ -315,6 +315,30 @@ flowchart LR
 
 Details: [apps/agent/src/rescore/AGENTS.md](../apps/agent/src/rescore/AGENTS.md).
 
+## Job discovery
+
+A Mastra workflow (`discover-jobs`) fetches new postings from job boards twice a day, plus "Run now" and backfills from `/discovery`. Postings failing a deliberately permissive deterministic screen stay postings; passing ones are deduped into jobs. Each new job then gets a fast-model triage score (0–100 + reason; under the threshold it's hidden), the run's best matches get a full assessment, and the matches are emailed (Resend). Details: [apps/agent/src/discovery/AGENTS.md](../apps/agent/src/discovery/AGENTS.md).
+
+```mermaid
+flowchart LR
+  CRON["schedule 07:00/16:00<br/>(main checkout only)"] --> WF
+  RUN["/discovery: Run now · Backfill"] -->|POST /discovery/run| WF
+  subgraph WF[discover-jobs workflow]
+    C[claim-run<br/>one at a time] --> F[fetch-sources] --> X[finish-run]
+  end
+  F --> HIM[Himalayas API<br/>free]
+  F --> APIFY[Apify actor<br/>LinkedIn, per-run cap + monthly budget]
+  F --> SCR{screenPosting<br/>clear misfits only}
+  SCR -->|fails, with reasons| PO[(app_postings)]
+  SCR -->|passes| DD[dedupe: apply URL or<br/>company key + title] --> J[(app_jobs + board snapshot)]
+  J --> TRI[triage<br/>fast model, budgeted] --> ASS[assess best N<br/>main model] --> MAIL[email digest<br/>Resend]
+  SET["/settings/search"] -->|save → rescreenPostings| PO
+```
+
+- **Sources:** free official feeds are read directly. Boards without one use pay-per-event Apify actors, which include their proxies.
+- **Cost control:** runs are started by our code, with per-run caps and a 30-day budget check. Spend is recorded per source and run.
+- **Hidden jobs:** discovered jobs hidden by the screen (or, later, the triage threshold) are filtered by `visibleJobs` in `listJobs`. Chat tools and re-score therefore only see jobs worth showing.
+
 ## Durable runs: refresh, reconnect, stop
 
 Chat runs outlive the HTTP request. Closing the tab or refreshing never stops a run; Stop does.
@@ -347,7 +371,11 @@ erDiagram
   app_profile_versions ||--o{ app_profile_facts : contains
   app_profile_versions ||--o{ app_approvals : "change proposals (baseVersion)"
   app_runs ||--o{ app_run_events : "model + provider calls"
+  app_jobs ||--o{ app_postings : "seen on (boards)"
+  app_discovery_runs ||--o{ app_postings : "first seen in"
 ```
+
+`app_search_settings` is a single JSON row (`SearchSettings`). `app_discovery_runs` keeps per-source results as JSON.
 
 Mastra's own tables (threads, messages, working memory, observations, scores) live in the same libSQL file. Traces, logs and metrics go to DuckDB. Schema: [schema.ts](../packages/db/src/schema.ts).
 
@@ -361,6 +389,8 @@ Deterministic code enforces everything that matters; the model only proposes.
 | Auth | Deployed: password login on the web app (`APP_PASSWORD`, signed session cookie checked in `src/proxy.ts`), agent port never public ([deploy.md](deploy.md)). Servers bound to 127.0.0.1; every agent route behind `SimpleAuth` with `AGENT_SHARED_SECRET`; memory pinned to the user's resource |
 | Untrusted web text | URL guard on every fetch; page text marked untrusted; the UI renders replies without images or raw HTML |
 | Research spend | `ResearchBudget` aborts on tool calls, time or estimated USD |
+| Discovery spend | Per-run Apify caps (`maxTotalChargeUsd` on every actor run) and a 30-day budget check in `runDiscoverySources`; per-run model cap and triage cap (`DiscoveryBudget`); schedule only in the main checkout |
+| Scraped data | Every posting validated with `postingInputSchema`, size-capped, links stripped from descriptions; board hosts fixed per adapter; the triager has no tools and a named hard conflict caps its score in code; the digest escapes every value and links only to the app |
 | Data integrity | Zod schemas on tool input; `@copilot/db` rejects assessments citing other jobs' sources or stale profile versions; serialized writes |
 | Secrets | Server-side env only, validated at startup; `SensitiveDataFilter` on traces; redaction in usage events |
 

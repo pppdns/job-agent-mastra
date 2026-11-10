@@ -2,7 +2,8 @@
 # Sets the Fly app's secrets (app from fly.toml) without printing any value:
 # - APP_PASSWORD: asked for here (the web login; at least 12 characters)
 # - AGENT_SHARED_SECRET: freshly generated (production never shares the local one)
-# - AI_GATEWAY_API_KEY, TAVILY_API_KEY, FIRECRAWL_API_KEY: copied from apps/agent/.env
+# - AI_GATEWAY_API_KEY, TAVILY_API_KEY, FIRECRAWL_API_KEY and, when set, the discovery keys
+#   (APIFY_API_KEY, HIMALAYAS_API_KEY, RESEND_API_KEY, DIGEST_FROM, DIGEST_TO): from apps/agent/.env
 # Running it again rotates the password and the shared secret (signs you out) and restarts
 # the machine. Run it in your own terminal: `pnpm fly:secrets`.
 set -euo pipefail
@@ -27,7 +28,8 @@ read -rsp "Repeat it: " again; echo
 [[ "$password" != *$'\n'* ]] || { echo "password must be one line" >&2; exit 1; }
 
 names=(APP_PASSWORD AGENT_SHARED_SECRET)
-for name in AI_GATEWAY_API_KEY TAVILY_API_KEY FIRECRAWL_API_KEY; do
+for name in AI_GATEWAY_API_KEY TAVILY_API_KEY FIRECRAWL_API_KEY \
+  APIFY_API_KEY HIMALAYAS_API_KEY RESEND_API_KEY DIGEST_FROM DIGEST_TO; do
   if [[ -n "$(value_of "$name")" ]]; then names+=("$name"); else
     echo "note: $name is not set in apps/agent/.env; skipped" >&2
   fi

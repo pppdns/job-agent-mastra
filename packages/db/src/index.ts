@@ -3,12 +3,13 @@ import { createClient } from "@libsql/client";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
-import { backfillPostedDates } from "./jobs";
+import { backfillCompanyKeys, backfillPostedDates } from "./jobs";
 import { findWorkspaceRoot, resolveDatabaseUrl } from "./paths";
 import * as schema from "./schema";
 
 export * from "./assessments";
 export * from "./claims";
+export * from "./discovery";
 export { AssessmentError, hashPayload } from "./hash";
 export * from "./jobs";
 export { findWorkspaceRoot, resolveDatabaseUrl, resolveObservabilityPath } from "./paths";
@@ -18,9 +19,15 @@ export type {
   Approval,
   ApprovalStatus,
   Claim,
+  DiscoveryRun,
+  DiscoveryRunStatus,
+  DiscoveryTrigger,
+  FunnelResult,
   Job,
   JobDraft,
+  JobOrigin,
   NewRunEvent,
+  Posting,
   ProfileChangePayload,
   ProfileFact,
   Run,
@@ -28,6 +35,7 @@ export type {
   Source,
   SourceKind,
   SourceProvider,
+  SourceRunResult,
 } from "./schema";
 export * as schema from "./schema";
 export { canonicalWebUrl } from "./url";
@@ -46,6 +54,7 @@ export type Db = ReturnType<typeof createDb>;
 export async function migrateDb(db: Db): Promise<void> {
   await migrate(db, { migrationsFolder: join(findWorkspaceRoot(), "packages/db/drizzle") });
   await backfillPostedDates(db);
+  await backfillCompanyKeys(db);
 }
 
 /**

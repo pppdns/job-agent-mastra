@@ -1,9 +1,16 @@
 import { createHash, randomUUID } from "node:crypto";
-import { CLOSED_JOB_STATUSES, type JobStatus, listingPostedDate } from "@copilot/shared";
+import {
+  CLOSED_JOB_STATUSES,
+  companyKey,
+  type JobStatus,
+  listingPostedDate,
+  normalizeText,
+} from "@copilot/shared";
 import { and, desc, eq, inArray, isNull, like, or, sql } from "drizzle-orm";
 import type { Db } from "./index";
 import {
   type Job,
+  type JobOrigin,
   jobs,
   type Source,
   type SourceKind,
@@ -15,17 +22,9 @@ import { serializeWrites } from "./write-lock";
 
 export const MAX_SNAPSHOT_CHARS = 100_000;
 
-const normalize = (s: string) =>
-  s
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/\p{M}/gu, "")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim();
-
-/** Normalized "company|title", for listings without a stable id. */
+/** "company key|normalized title", for listings without a stable id (also across boards). */
 export const dedupeKey = (company: string, title: string) =>
-  `${normalize(company)}|${normalize(title)}`;
+  `${companyKey(company)}|${normalizeText(title)}`;
 
 export type ListingIdentity = {
   linkedinJobId?: string | null;
@@ -33,6 +32,13 @@ export type ListingIdentity = {
   company?: string | null;
   title?: string | null;
   location?: string | null;
+  /** Only used when the job is created. */
+  origin?: JobOrigin;
+};
+
+export type UpsertOptions = {
+  /** false: matching an existing job doesn't bump its `updatedAt` (discovery re-sightings). */
+  touch?: boolean;
 };
 
 /**
@@ -43,13 +49,16 @@ export type ListingIdentity = {
 export function upsertJob(
   db: Db,
   identity: ListingIdentity,
+  options: UpsertOptions = {},
 ): Promise<{ job: Job; created: boolean }> {
-  return serializeWrites(db, () => upsertJobUnlocked(db, identity));
+  return serializeWrites(db, () => upsertJobUnlocked(db, identity, options));
 }
 
-async function upsertJobUnlocked(
+/** Same as `upsertJob`, for callers already inside `serializeWrites` (not a transaction). */
+export async function upsertJobUnlocked(
   db: Db,
   identity: ListingIdentity,
+  options: UpsertOptions = {},
 ): Promise<{ job: Job; created: boolean }> {
   const key =
     identity.company && identity.title ? dedupeKey(identity.company, identity.title) : null;
@@ -83,7 +92,9 @@ async function upsertJobUnlocked(
           title: existing.title ?? identity.title ?? null,
           location: existing.location ?? identity.location ?? null,
           dedupeKey: existing.dedupeKey ?? key,
-          updatedAt: now,
+          companyKey:
+            existing.companyKey ?? (identity.company ? companyKey(identity.company) : null),
+          ...(options.touch === false ? {} : { updatedAt: now }),
         })
         .where(eq(jobs.id, existing.id))
         .returning();
@@ -102,6 +113,8 @@ async function upsertJobUnlocked(
         title: identity.title ?? null,
         location: identity.location ?? null,
         dedupeKey: key,
+        companyKey: identity.company ? companyKey(identity.company) : null,
+        origin: identity.origin ?? "chat",
         updatedAt: now,
       })
       .returning();
@@ -138,7 +151,7 @@ export async function findJobByUrl(
   const paths = [...wanted].map((u) => u.split(/[?#]/)[0] ?? u);
   const candidates = await db.query.sources.findMany({
     where: and(
-      inArray(sources.kind, ["linkedin", "ats"]),
+      inArray(sources.kind, ["linkedin", "ats", "board"]),
       or(
         ...paths.flatMap((p) => [
           eq(sources.url, p),
@@ -179,7 +192,8 @@ export function addSource(db: Db, input: NewSource): Promise<{ source: Source; c
   return serializeWrites(db, () => addSourceUnlocked(db, input));
 }
 
-async function addSourceUnlocked(
+/** Same as `addSource`, for callers already inside `serializeWrites`. */
+export async function addSourceUnlocked(
   db: Db,
   input: NewSource,
 ): Promise<{ source: Source; created: boolean }> {
@@ -241,6 +255,33 @@ export function backfillPostedDates(db: Db): Promise<number> {
           .update(sources)
           .set(postedColumns(row.kind, row.content, row.retrievedAt))
           .where(eq(sources.id, row.id));
+      }
+    });
+    return rows.length;
+  });
+}
+
+/**
+ * Fills `company_key` (and recomputes `dedupe_key` with it) for jobs saved before company keys
+ * existed. Runs from `migrateDb`; once every job with a company has a key it matches nothing.
+ */
+export function backfillCompanyKeys(db: Db): Promise<number> {
+  return serializeWrites(db, async () => {
+    const rows = await db
+      .select({ id: jobs.id, company: jobs.company, title: jobs.title })
+      .from(jobs)
+      .where(and(isNull(jobs.companyKey), sql`${jobs.company} IS NOT NULL`));
+    if (rows.length === 0) return 0;
+    await db.transaction(async (tx) => {
+      for (const row of rows) {
+        if (!row.company) continue;
+        await tx
+          .update(jobs)
+          .set({
+            companyKey: companyKey(row.company),
+            ...(row.title ? { dedupeKey: dedupeKey(row.company, row.title) } : {}),
+          })
+          .where(eq(jobs.id, row.id));
       }
     });
     return rows.length;

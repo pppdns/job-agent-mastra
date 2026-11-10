@@ -8,8 +8,14 @@ import { allScorers } from "../evals/scorers";
 import { copilotAgent } from "./agents/copilot";
 import { researcherAgent } from "./agents/researcher";
 import { chatResumeRoute, chatRoute, chatStopRoute } from "./routes/chat";
+import { discoveryRunRoute } from "./routes/discovery";
 import { threadMessagesRoute } from "./routes/thread-messages";
 import { createStorage } from "./storage";
+import {
+  DISCOVER_JOBS_SCHEDULE_ID,
+  discoverJobsWorkflow,
+  discoveryScheduleEnabled,
+} from "./workflows/discover-jobs";
 
 /** Mastra's default sensitive fields plus cookies and token variants; redacts matching keys in every span. */
 export const TRACE_SENSITIVE_FIELDS = [
@@ -42,6 +48,7 @@ const logger = new PinoLogger({ name: "copilot-agent", level: "info" });
 
 export const mastra = new Mastra({
   agents: { copilotAgent, researcherAgent },
+  workflows: { discoverJobsWorkflow },
   scorers: allScorers,
   storage: createStorage(),
   logger,
@@ -65,6 +72,17 @@ export const mastra = new Mastra({
       // returns 403 (or a mismatch error on /chat) for threads owned by anyone else.
       mapUserToResourceId: (user) => user.id,
     }),
-    apiRoutes: [chatRoute, chatResumeRoute, chatStopRoute, threadMessagesRoute],
+    apiRoutes: [chatRoute, chatResumeRoute, chatStopRoute, threadMessagesRoute, discoveryRunRoute],
   },
 });
+
+// Worktrees copy the main checkout's database, schedule row included: drop it where the
+// schedule is off, so only the main checkout's dev server ever fires discovery.
+if (!discoveryScheduleEnabled()) {
+  mastra.schedules
+    .get(DISCOVER_JOBS_SCHEDULE_ID)
+    .then((schedule) => (schedule ? mastra.schedules.delete(DISCOVER_JOBS_SCHEDULE_ID) : undefined))
+    .catch((error) =>
+      logger.warn("could not check the discovery schedule", { error: String(error) }),
+    );
+}

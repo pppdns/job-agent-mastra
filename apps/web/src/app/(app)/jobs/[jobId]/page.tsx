@@ -10,6 +10,7 @@ import {
   GlobeIcon,
   type LucideIcon,
   MapPinIcon,
+  NewspaperIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -19,8 +20,10 @@ import { AssessmentView } from "@/components/assessment-view";
 import { SalaryLabel, VerdictBadge } from "@/components/assessment-visuals";
 import { EvidenceList } from "@/components/evidence-list";
 import { JobStatusMenu } from "@/components/job-status-menu";
+import { MarkSeen } from "@/components/mark-seen";
 import { PageHeader } from "@/components/page-header";
 import { ResearchJobButtons } from "@/components/research-job-buttons";
+import { TriageScore } from "@/components/triage-score";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +37,7 @@ const SOURCE_LABELS = {
   ats: "Employer job posting",
   web: "Web page (research)",
   pasted: "Pasted text",
+  board: "Job board posting",
 } as const;
 
 const SOURCE_ICONS: Record<keyof typeof SOURCE_LABELS, LucideIcon> = {
@@ -41,6 +45,7 @@ const SOURCE_ICONS: Record<keyof typeof SOURCE_LABELS, LucideIcon> = {
   ats: Building2Icon,
   web: GlobeIcon,
   pasted: ClipboardPasteIcon,
+  board: NewspaperIcon,
 };
 
 const formatDate = (d: Date) =>
@@ -121,6 +126,13 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
             </span>
           )}
         </p>
+        {job.origin === "discovery" && (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            {job.seenAt === null && <MarkSeen jobId={job.id} />}
+            <TriageScore score={job.triageScore} />
+            {job.triageReason && <span className="text-muted-foreground">{job.triageReason}</span>}
+          </div>
+        )}
         {links.length > 0 && (
           <ul aria-label="Original listing" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
             {links.map((link) => (

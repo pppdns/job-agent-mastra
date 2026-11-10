@@ -94,7 +94,7 @@ export async function runRescore(input: { jobIds?: string[]; all?: boolean }, de
       const identity = { jobId: job.id, title: job.title, company: job.company };
       let result: RescoreResult;
       try {
-        result = await rescoreOne(job.id, profile, deps);
+        result = await assessJob(job.id, profile, deps);
       } catch (error) {
         if (deps.signal?.aborted) return;
         const reason =
@@ -121,9 +121,19 @@ export async function runRescore(input: { jobIds?: string[]; all?: boolean }, de
   };
 }
 
-type Profile = Awaited<ReturnType<typeof currentProfile>>;
+export type Profile = Awaited<ReturnType<typeof currentProfile>>;
 
-async function rescoreOne(jobId: string, profile: Profile, deps: RescoreDeps) {
+export type AssessDeps = Pick<
+  RescoreDeps,
+  "db" | "threadId" | "signal" | "tracingContext" | "recorder"
+>;
+
+/**
+ * One full assessment of a saved job against `profile` (structured output, no tools), saved as
+ * its next draft; one retry with the rule a rejected draft broke. Used by re-score and by
+ * discovery for the best new matches. Works for a job without an earlier draft.
+ */
+export async function assessJob(jobId: string, profile: Profile, deps: AssessDeps) {
   const detail = await getJobDetail(deps.db, jobId);
   if (!detail) throw new AssessmentError(`unknown job id ${jobId}`);
   const { job } = detail;
@@ -172,20 +182,39 @@ async function rescoreOne(jobId: string, profile: Profile, deps: RescoreDeps) {
       profileVersion: profile.version,
     });
 
-  let assessment = await generate(prompt);
+  const finish = finishOf(identity, detail.draft?.assessment);
+  const retry = (reason: string) =>
+    `${prompt}\n\nYour previous assessment was rejected: ${reason}\nFix that and return the full assessment again.`;
+  // One retry for either kind of rejection: the output schema (e.g. a headline over its length
+  // limit) or a saveDraft rule (like the copilot's tool loop); then the job fails.
+  let assessment: Assessment;
+  try {
+    assessment = await generate(prompt);
+  } catch (error) {
+    if (!isSchemaRejection(error) || deps.signal?.aborted) throw error;
+    assessment = await generate(retry((error as Error).message));
+    return finish(assessment, await save(assessment));
+  }
   let draft: Awaited<ReturnType<typeof save>>;
   try {
     draft = await save(assessment);
   } catch (error) {
-    // One retry with the rule the draft broke (like the copilot's tool loop); then the job fails.
     if (!(error instanceof AssessmentError) || deps.signal?.aborted) throw error;
-    assessment = await generate(
-      `${prompt}\n\nYour previous assessment was rejected: ${error.message}\nFix that and return the full assessment again.`,
-    );
+    assessment = await generate(retry(error.message));
     draft = await save(assessment);
   }
-  const before = detail.draft?.assessment;
-  return {
+  return finish(assessment, draft);
+}
+
+/** The model's structured output failed the schema (Mastra's validation error). */
+const isSchemaRejection = (error: unknown) =>
+  error instanceof Error && error.message.includes("Structured output validation failed");
+
+function finishOf(
+  identity: { jobId: string; title: string | null; company: string | null },
+  before: Assessment | undefined,
+) {
+  return (assessment: Assessment, draft: { id: string; version: number }) => ({
     ...identity,
     status: "saved" as const,
     draftId: draft.id,
@@ -196,5 +225,5 @@ async function rescoreOne(jobId: string, profile: Profile, deps: RescoreDeps) {
       fitLevel: assessment.fitLevel,
       headline: assessment.headline,
     },
-  };
+  });
 }

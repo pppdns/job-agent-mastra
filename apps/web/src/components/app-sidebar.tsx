@@ -1,4 +1,6 @@
+import { unseenMatchCount } from "@copilot/db";
 import { LogOutIcon } from "lucide-react";
+import { connection } from "next/server";
 import { Suspense } from "react";
 import { logoutAction } from "@/app/login/actions";
 import { NavLinks } from "@/components/nav-links";
@@ -17,6 +19,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { appDb } from "@/server/db";
 import { listThreads } from "@/server/threads";
 
 export function AppSidebar({ canSignOut = false }: { canSignOut?: boolean }) {
@@ -27,7 +30,7 @@ export function AppSidebar({ canSignOut = false }: { canSignOut?: boolean }) {
         <NewChatButton />
         {/* usePathname() needs a Suspense boundary under Cache Components. */}
         <Suspense fallback={<NavLinks />}>
-          <NavLinks active />
+          <ActiveNav />
         </Suspense>
       </SidebarHeader>
       <SidebarContent>
@@ -56,6 +59,12 @@ export function AppSidebar({ canSignOut = false }: { canSignOut?: boolean }) {
       ) : null}
     </Sidebar>
   );
+}
+
+async function ActiveNav() {
+  await connection(); // libsql is synchronous: keep this read out of prerendering
+  const newMatches = await unseenMatchCount(await appDb()).catch(() => 0);
+  return <NavLinks active newMatches={newMatches} />;
 }
 
 async function Threads() {

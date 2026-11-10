@@ -24,6 +24,7 @@
     "@mastra/memory": "^1.40.0",
     "@mastra/observability": "^1.23.0",
     "ai": "~7.0.159",
+    "node-html-markdown": "2.0.0",
     "zod": "catalog:"
   },
   "devDependencies": {

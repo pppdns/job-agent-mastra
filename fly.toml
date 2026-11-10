@@ -20,6 +20,8 @@ kill_timeout = "30s"
   # Private network only (for `fly proxy 4111`); the public service is port 3000 alone.
   AGENT_HOST = "::"
   WEB_PORT = "3000"
+  # Links in the discovery email digest.
+  APP_BASE_URL = "https://job-copilot-c456e8.fly.dev"
 
 [mounts]
   source = "copilot_data"

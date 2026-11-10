@@ -1,0 +1,202 @@
+import {
+  type Db,
+  finishDiscoveryRun,
+  getDiscoveryRun,
+  getSearchSettings,
+  knownExternalIds,
+  listDiscoveryRuns,
+  type PostingOutcome,
+  recordPosting,
+  recordSourceResult,
+  type SourceRunResult,
+  sourceSpendSince,
+  sourceStates,
+  startDiscoveryRun,
+} from "@copilot/db";
+import {
+  DISCOVERY_SOURCES,
+  type DiscoverySource,
+  type SearchSettings,
+  screenPosting,
+} from "@copilot/shared";
+import { linkedInMaxUsd } from "./sources/linkedin";
+import type { JobSource } from "./types";
+
+// One discovery run: claim the run (one at a time), ask each enabled source for what's new since
+// its last good run (or a backfill window), screen and store every posting, record per-source
+// results as they finish. A failing source never stops the others.
+
+const DAY_MS = 86_400_000;
+const HOUR_MS = 3_600_000;
+/** Paid sources stop for the rest of the month once the budget is spent (rolling 30 days). */
+const BUDGET_WINDOW_MS = 30 * DAY_MS;
+/** Re-ask an hour before the last good run ended, so nothing posted in between is missed. */
+const CURSOR_OVERLAP_MS = HOUR_MS;
+
+export const BACKFILL_DAYS = [7, 30] as const;
+
+export type DiscoveryTriggerInput = {
+  trigger: "schedule" | "manual";
+  /** Manual backfill: look this many days back and allow the sources' raised caps. */
+  lookbackDays?: number | null;
+};
+
+export type Claim = { runId: string } | { runId: null; skipped: string };
+
+export async function claimDiscoveryRun(
+  db: Db,
+  input: DiscoveryTriggerInput,
+  workflowRunId?: string,
+): Promise<Claim> {
+  const run = await startDiscoveryRun(db, {
+    trigger: input.trigger,
+    lookbackDays: input.lookbackDays ?? null,
+    workflowRunId,
+  });
+  return run ? { runId: run.id } : { runId: null, skipped: "another discovery run is running" };
+}
+
+const enabled = (settings: SearchSettings, source: DiscoverySource) =>
+  settings.sources[source].enabled;
+
+/** Per-run spend cap of a paid source. */
+const maxUsdOf = (source: DiscoverySource, settings: SearchSettings, backfill: boolean) =>
+  source === "linkedin" ? linkedInMaxUsd(settings, backfill) : 0;
+
+export async function runDiscoverySources(
+  db: Db,
+  runId: string,
+  sources: Record<DiscoverySource, JobSource>,
+  options: { now?: () => Date; signal?: AbortSignal } = {},
+): Promise<SourceRunResult[]> {
+  const now = options.now ?? (() => new Date());
+  const started = now();
+  const [settings, run, recent] = await Promise.all([
+    getSearchSettings(db),
+    getDiscoveryRun(db, runId),
+    listDiscoveryRuns(db, 20),
+  ]);
+  const lookbackDays = run?.lookbackDays ?? null;
+  const backfill = lookbackDays !== null;
+  const maxAgeDays = Math.max(settings.maxAgeDays, lookbackDays ?? 0);
+  const states = sourceStates(
+    recent.filter((r) => r.id !== runId),
+    DISCOVERY_SOURCES,
+  );
+  const paidIds = DISCOVERY_SOURCES.filter((id) => sources[id].paid);
+  let paidSpent = await sourceSpendSince(
+    db,
+    paidIds,
+    new Date(started.getTime() - BUDGET_WINDOW_MS),
+  );
+
+  const results: SourceRunResult[] = [];
+  for (const id of DISCOVERY_SOURCES) {
+    const source = sources[id];
+    const t0 = Date.now();
+    const base = {
+      source: id,
+      fetched: 0,
+      invalid: 0,
+      seen: 0,
+      filtered: 0,
+      newJobs: 0,
+      merged: 0,
+      costUsd: 0,
+      durationMs: 0,
+    } satisfies Omit<SourceRunResult, "status">;
+    const finish = async (result: SourceRunResult) => {
+      const final = { ...result, durationMs: Date.now() - t0 };
+      results.push(final);
+      await recordSourceResult(db, runId, final);
+    };
+
+    const unavailable = !enabled(settings, id)
+      ? "turned off in search settings"
+      : source.unavailable();
+    if (unavailable) {
+      await finish({ ...base, status: "skipped", message: unavailable });
+      continue;
+    }
+    const budget = settings.apifyMonthlyBudgetUsd;
+    const maxUsd = source.paid ? Math.min(maxUsdOf(id, settings, backfill), budget - paidSpent) : 0;
+    if (source.paid && maxUsd < 0.01) {
+      await finish({
+        ...base,
+        status: "skipped",
+        message: `monthly Apify budget reached (${paidSpent.toFixed(2)} of ${budget.toFixed(2)} USD in 30 days)`,
+      });
+      continue;
+    }
+
+    const lastOk = states.find((s) => s.source === id)?.lastOkAt;
+    const floor = started.getTime() - maxAgeDays * DAY_MS;
+    const since = new Date(
+      backfill || !lastOk ? floor : Math.max(floor, lastOk.getTime() - CURSOR_OVERLAP_MS),
+    );
+
+    try {
+      const knownIds = await knownExternalIds(
+        db,
+        id,
+        new Date(started.getTime() - BUDGET_WINDOW_MS),
+      );
+      const outcome = await source.fetch({
+        settings,
+        since,
+        backfill,
+        knownIds,
+        maxUsd,
+        signal: options.signal,
+      });
+      const counts: Record<PostingOutcome, number> = {
+        seen: 0,
+        filtered: 0,
+        new_job: 0,
+        merged: 0,
+      };
+      for (const posting of outcome.postings) {
+        const screen = screenPosting(settings, posting, now(), maxAgeDays);
+        counts[await recordPosting(db, { posting, screen, runId, now: now() })] += 1;
+      }
+      paidSpent += outcome.costUsd;
+      await finish({
+        ...base,
+        status: outcome.partial ? "partial" : "ok",
+        message: outcome.partial?.slice(0, 500),
+        ...(outcome.failures?.length ? { failures: outcome.failures.slice(0, 10) } : {}),
+        fetched: outcome.postings.length,
+        invalid: outcome.invalid,
+        seen: counts.seen,
+        filtered: counts.filtered,
+        newJobs: counts.new_job,
+        merged: counts.merged,
+        costUsd: outcome.costUsd,
+        since: since.toISOString(),
+      });
+    } catch (error) {
+      if (options.signal?.aborted) throw error;
+      console.error(`discovery source ${id} failed`, error);
+      await finish({
+        ...base,
+        status: "failed",
+        message: (error instanceof Error ? error.message : "failed").slice(0, 500),
+        since: since.toISOString(),
+      });
+    }
+  }
+  return results;
+}
+
+/** Ends the run: failed when every source that ran failed, otherwise completed. */
+export async function finishDiscovery(db: Db, runId: string, results: SourceRunResult[]) {
+  const ran = results.filter((r) => r.status !== "skipped");
+  const failed = ran.length > 0 && ran.every((r) => r.status === "failed");
+  await finishDiscoveryRun(
+    db,
+    runId,
+    failed ? "failed" : "completed",
+    failed ? "every source failed" : undefined,
+  );
+  return { status: failed ? ("failed" as const) : ("completed" as const) };
+}

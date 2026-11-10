@@ -17,7 +17,8 @@ const rank = <T>(list: readonly T[], value: T | undefined) =>
  * Jobs in the chosen order, newest (last updated) first for latest, also after a search,
  * whose results arrive in relevance order.
  * Best fit: fit level, then verdict, then fewer hard conflicts; unassessed and role-only
- * jobs go last. The sort is stable, so ties stay newest first.
+ * jobs go last, discovered ones among them by triage score. The sort is stable, so ties stay
+ * newest first.
  */
 export function sortJobs(jobs: JobOverview[], sort: JobSort): JobOverview[] {
   const newest = jobs.toSorted((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
@@ -27,7 +28,8 @@ export function sortJobs(jobs: JobOverview[], sort: JobSort): JobOverview[] {
     return (
       rank(FIT_LEVELS, x?.fitLevel) - rank(FIT_LEVELS, y?.fitLevel) ||
       rank(RECOMMENDATIONS, x?.verdict) - rank(RECOMMENDATIONS, y?.verdict) ||
-      (x?.counts.hardConflicts ?? 0) - (y?.counts.hardConflicts ?? 0)
+      (x?.counts.hardConflicts ?? 0) - (y?.counts.hardConflicts ?? 0) ||
+      (b.triageScore ?? -1) - (a.triageScore ?? -1)
     );
   });
 }

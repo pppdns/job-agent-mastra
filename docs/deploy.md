@@ -34,7 +34,7 @@ No value is printed or written to disk. Running it again rotates the password an
 
 GitHub holds one repo secret, `FLY_API_TOKEN`: a deploy token for this app only (`fly tokens create deploy`).
 
-Later: the job-discovery schedule needs `DISCOVERY_SCHEDULE = "on"` in `fly.toml` `[env]`, and the email digest needs `RESEND_API_KEY` as a secret.
+Discovery: `pnpm fly:secrets` also copies `APIFY_API_KEY`, `HIMALAYAS_API_KEY`, `RESEND_API_KEY`, `DIGEST_FROM` and `DIGEST_TO` when they are set locally, and `APP_BASE_URL` in `fly.toml` points digest links here. The schedule stays off on Fly for now: `discoveryScheduleEnabled()` also requires no `DATABASE_URL` and the main port, which Fly doesn't meet. Turning it on needs that check relaxed (PLAN M17). Manual runs from `/discovery` work.
 
 ## Deploys
 

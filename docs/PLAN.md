@@ -167,6 +167,46 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - [x] `/profile` edits apply right away (`editProfile`, checked against the version the page showed). Profile changes the copilot proposes in a chat still need approval (guards against injected memory changes).
 - [x] Verified: db tests (history, direct edits, stale edit refused, edit makes an older chat proposal stale), migration on a copy of the dev DB, e2e `assessments.spec.ts` (v1 → v2 with history, no approve controls), updated profile/rescore/listing/research specs.
 
+## Job discovery (agreed 2026-11-10)
+
+Scheduled ingestion from job boards, reported as an inbox plus an email digest. This supersedes the brief's "automatic job discovery" out-of-scope line.
+
+| Area | Choice | Why |
+| --- | --- | --- |
+| Scheduler | Mastra scheduled workflow `discover-jobs` (`schedule.cron`, state in libSQL, Studio `/workflows/schedules`), twice a day; "Run now" for gaps | Native, traced, no extra service; needs a long-lived process (local `pnpm dev`, later a host) |
+| Funnel | Deterministic screen → Haiku triage score (0–100 + reason) → full Sonnet assessment for the top N per run | About $1–2/day instead of $10–20 for assessing everything |
+| Criteria | Structured search settings (one JSON row) for the screen and source queries; triage and assessment read the profile facts | Deterministic filters must be predictable and debuggable (reasons are stored) |
+| Volume | Postings failing the screen stay in `app_postings` and never become jobs; jobs under the triage threshold are hidden by one predicate | Chat tools, FTS, re-score keep working on jobs worth seeing |
+| Dedupe | Posting (source, external id) → off-board apply URL → company key + title; ATS id later | Same job on several boards becomes one job with several postings |
+| Sources | Official free feeds read directly (Himalayas, WWR, RemoteOK, Remotive, NoDesk); other boards via pay-per-event Apify actors (LinkedIn, HiringCafe, Welcome to the Jungle, Wellfound, Dice, Built In, YC, Jobgether), started by our workflow with per-run caps and a monthly budget (default $100). No proxy setup: pay-per-event actors include it | Free and sanctioned where a feed exists; maintained scrapers elsewhere; accepted ToS risk for personal use |
+
+### M13 — Discovery foundation (Himalayas direct + LinkedIn via Apify, no LLM)
+- [x] `app_postings`, `app_search_settings`, `app_discovery_runs`; `app_jobs` gains `origin`, `company_key`, triage, `kept_at`, `seen_at`; dedupe key uses the company key (backfill).
+- [x] Shared search settings, posting schema, `screenPosting` (reasons; permissive: titles never have to match, unknowns pass), `companyKey`.
+- [x] Source adapters: Himalayas API and a generic Apify runner with a `valig/linkedin-jobs-scraper` definition (`skipJobId` for known ids, caps, monthly budget check); fixtures (`WEB_MODE=fixture`).
+- [x] `discover-jobs` workflow: fetch → postings → screen → jobs + board snapshot → run record; schedule only in the main checkout with `DISCOVERY_SCHEDULE=on`; one run at a time; interrupted sweep at startup; manual "Run now" and 7/30-day backfills (`POST /discovery/run`).
+- [x] UI: `/settings/search` (save re-screens), `/discovery` runs with per-source health, cost and what the screen dropped, source badges on jobs.
+- [ ] Verified: unit tests, e2e on fixture sources, one live run.
+
+### M14 — Scoring funnel + report
+- [x] Triage agent (fast model, no tools, budgeted; a named hard conflict caps the score in code), `assessJob` shared with re-score, top-N assessments, usage on a `discovery:<runId>` thread; triage scores, reasons and "New" badges on `/jobs`, funnel per run on `/discovery`, triage controls in the search settings.
+- [x] Resend email digest (skipped without matches or config); "new matches" badge on the Jobs nav item, cleared when a job is opened.
+- [x] Triage eval (match, hard conflict, injection) live 3/3. Not yet: a live scheduled fire in the main checkout.
+
+### M15 — UI for daily volume + companies
+- [ ] Paging and tab counts in SQL; New tab as an inbox (score sort, unseen, filters, bulk shortlist/dismiss); "Screened out" tab with reasons and "Keep anyway".
+- [ ] Job page triage card, "Assess fully", "Seen on" postings; `app_companies` and a company page.
+
+### M16 — More sources
+- [ ] Direct feeds: We Work Remotely, RemoteOK (followed link-back), Remotive (attribution), NoDesk. Apify definitions: HiringCafe, Welcome to the Jungle, Wellfound, Dice, Built In, YC, Jobgether. Per-source match rate, duplicate rate and cost per match.
+
+### M17 — Hosting
+- [x] Fly.io: one always-on machine with a volume (agent + web), password login, daily volume snapshots, SQLite on the volume. See "Deployment — Fly.io" below and [deploy.md](deploy.md).
+- [ ] Turn the discovery schedule on there (`DISCOVERY_SCHEDULE`, discovery secrets).
+
+### M18 — ATS enrichment
+- [ ] Compare the `fantastic-jobs/career-site-job-listing-feed` actor with a hand-built Greenhouse/Lever/Ashby/Workable resolver; `ats_key` as the strongest dedupe key. Skipped boards: TrueUp, Tech Jobs for Good, Arc.dev, JustRemote, PowerToFly, Climatebase, Levels.fyi (no maintained actor), FlexJobs (paid login), AIJobs.net (shut down).
+
 ### Deployment — Fly.io (2026-11-10)
 - [x] Password login page (`APP_PASSWORD`, signed 30-day cookie, per-client throttle); off when unset.
 - [x] One image runs both servers ([Dockerfile](../Dockerfile), [scripts/start-prod.sh](../scripts/start-prod.sh)); `fly.toml`: one always-on machine, `/data` volume, agent and Studio only through `fly proxy`.

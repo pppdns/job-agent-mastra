@@ -45,6 +45,13 @@ export default defineConfig({
         // Research runs read synthetic pages from fixtures/web.
         WEB_MODE: "fixture",
         FIRECRAWL_API_KEY: "",
+        // Discovery reads fixtures/sources (WEB_MODE=fixture); never schedules or pays.
+        APIFY_API_KEY: "",
+        HIMALAYAS_API_KEY: "",
+        DISCOVERY_SCHEDULE: "off",
+        // No digest email from e2e.
+        RESEND_API_KEY: "",
+        DIGEST_TO: "",
       },
     },
     {
