@@ -197,7 +197,7 @@ describe("digest", () => {
       [match(), match({ id: "j2", triageScore: 70 })],
       "http://127.0.0.1:3000/",
     );
-    expect(digest.subject).toBe("2 new job matches, best: Founding <Engineer> (88)");
+    expect(digest.subject).toBe("🎯 2 new job matches, best: Founding <Engineer> (88)");
     expect(digest.html).not.toContain("<script>");
     expect(digest.html).toContain("Founding &lt;Engineer&gt;");
     expect(digest.html).toContain("Kite &amp; Co");
@@ -345,7 +345,7 @@ describe("problems and alerts", () => {
     const alert = await sendDigest(http, config, [], first);
     expect(alert).toMatchObject({ status: "sent", alert: true, problemKeys: ["linkedin:failed"] });
     expect(sent[0]?.subject).toBe(
-      "Job discovery needs a look: LinkedIn failed: Apify run r1 failed",
+      "⚠️ Job discovery needs a look: LinkedIn failed: Apify run r1 failed",
     );
 
     // The same failure with another run id in its message: still the same problem.

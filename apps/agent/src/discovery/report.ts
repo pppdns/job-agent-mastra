@@ -120,12 +120,16 @@ function problemsBlock(problems: string[], base: string) {
   };
 }
 
+/** Subject prefixes, so the emails stand out in the inbox: matches vs problems only. */
+export const DIGEST_EMOJI = "🎯";
+export const ALERT_EMOJI = "⚠️";
+
 /** The problems-only email of a run without matches. */
 export function buildAlert(problems: string[], baseUrl: string): Digest {
   const base = baseUrl.replace(/\/+$/, "");
   const block = problemsBlock(problems, base);
   return {
-    subject: `Job discovery needs a look: ${problems[0]}`.slice(0, 150),
+    subject: `${ALERT_EMOJI} Job discovery needs a look: ${problems[0]}`.slice(0, 150),
     text: `The latest discovery run found no new matches.\n\n${block.text}`,
     html: `<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.4;color:#111"><p>The latest discovery run found no new matches.</p>${block.html}</div>`,
   };
@@ -141,8 +145,8 @@ export function buildDigest(
   const top = shown[0];
   const subject =
     matches.length === 1
-      ? `1 new job match: ${top?.title ?? "untitled"} (${top?.triageScore})`
-      : `${matches.length} new job matches, best: ${top?.title ?? "untitled"} (${top?.triageScore})`;
+      ? `${DIGEST_EMOJI} 1 new job match: ${top?.title ?? "untitled"} (${top?.triageScore})`
+      : `${DIGEST_EMOJI} ${matches.length} new job matches, best: ${top?.title ?? "untitled"} (${top?.triageScore})`;
   const line = (m: DigestMatch) => ({
     title: m.title ?? "Untitled job",
     meta: [m.company, m.location].filter(Boolean).join(" · "),
