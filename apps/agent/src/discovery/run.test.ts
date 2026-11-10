@@ -197,6 +197,9 @@ describe("runDiscoverySources", () => {
     });
     await run({ careersites }, 7);
     expect(careersites.contexts).toHaveLength(2);
+    // More skipped runs than the recent-run window still don't trigger another pull.
+    for (let i = 0; i < 20; i++) await run({ careersites });
+    expect(careersites.contexts).toHaveLength(2);
   });
 
   it("merges the same ATS job from two boards under different URL forms", async () => {

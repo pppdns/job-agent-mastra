@@ -3,6 +3,7 @@ import {
   type DiscoverySource,
   normalizeText,
   type PostingInput,
+  screenPosting,
 } from "@copilot/shared";
 import {
   CooldownError,
@@ -33,7 +34,8 @@ export type ActorBoard = {
   parse(raw: unknown): PostingInput | null;
   /**
    * Keep one posting per company and title within a run (a feed listing the same role once per
-   * office would otherwise become one job per office).
+   * office would otherwise become one job per office): the first variant that passes the screen,
+   * else the first one, so an eligible office is never dropped for an ineligible one.
    */
   onePerTitle?: boolean;
 };
@@ -54,7 +56,8 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
       const failures: string[] = [];
       const notes: string[] = [];
       let succeeded = 0;
-      const titles = new Set<string>();
+      /** Company + title → the kept variant's id, and whether it passes the screen. */
+      const titles = new Map<string, { id: string; pass: boolean }>();
       for (const search of searches) {
         const remaining = context.maxUsd - costUsd;
         if (remaining < 0.01) {
@@ -79,8 +82,11 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
             }
             if (board.onePerTitle) {
               const key = `${companyKey(posting.company)}|${normalizeText(posting.title)}`;
-              if (titles.has(key)) continue;
-              titles.add(key);
+              const pass = screenPosting(context.settings, posting).pass;
+              const kept = titles.get(key);
+              if (kept && (kept.pass || !pass)) continue;
+              if (kept) byId.delete(kept.id);
+              titles.set(key, { id: posting.externalId, pass });
             }
             // Kept whatever its date (it's paid for): the screen's age limit drops old ones.
             byId.set(posting.externalId, posting);

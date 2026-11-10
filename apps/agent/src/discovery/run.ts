@@ -1,5 +1,6 @@
 import {
   type Db,
+  discoveryRunsSince,
   finishDiscoveryRun,
   getDiscoveryRun,
   getSearchSettings,
@@ -131,7 +132,17 @@ export async function runDiscoverySources(
     }
     const lastOk = states.find((s) => s.source === id)?.lastOkAt;
     const minHours = minHoursOf(id, settings);
-    const hoursSince = lastOk ? (started.getTime() - lastOk.getTime()) / HOUR_MS : null;
+    // Read from every run in the interval, not the last 20 (skipped runs would push it out).
+    const lastPull =
+      minHours > 0 && !backfill
+        ? sourceStates(
+            (await discoveryRunsSince(db, new Date(started.getTime() - minHours * HOUR_MS))).filter(
+              (r) => r.id !== runId,
+            ),
+            [id],
+          )[0]?.lastOkAt
+        : null;
+    const hoursSince = lastPull ? (started.getTime() - lastPull.getTime()) / HOUR_MS : null;
     if (!backfill && minHours > 0 && hoursSince !== null && hoursSince < minHours) {
       await finish({
         ...base,

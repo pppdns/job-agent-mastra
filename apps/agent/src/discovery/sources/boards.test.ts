@@ -311,9 +311,12 @@ describe("Company career sites", () => {
       aiWorkArrangementFilter: ["Remote OK", "Remote Solely"],
       removeAgency: true,
     });
-    // The same role listed once per office becomes one posting.
+    // The same role listed once per office becomes one posting: an eligible office wins over an
+    // earlier one the screen would drop.
+    const india = { ...item, id: 1, ai_remote_location_derived: ["India"] };
     const runner: ApifyRunner = async () => ({
       items: [
+        india,
         item,
         { ...item, id: 2, locations_derived: ["Berlin"] },
         { ...item, id: 3, title: "Other" },
