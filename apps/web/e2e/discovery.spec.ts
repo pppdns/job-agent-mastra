@@ -43,7 +43,9 @@ test("run discovery, see screened jobs, loosen the screen", async ({ page }) => 
     .join("\n");
   await excludes.fill(kept);
   await page.getByRole("button", { name: "Save and re-screen" }).click();
-  await expect(page.getByRole("status")).toContainText("1 new job let through");
+  await expect(
+    page.getByRole("form", { name: "Search settings" }).getByRole("status"),
+  ).toContainText("1 new job let through");
   await page.goto("/jobs?q=Pebblework");
   await expect(
     page.getByRole("table", { name: "Jobs" }).getByText("Software Engineering Intern"),
