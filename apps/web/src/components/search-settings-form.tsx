@@ -380,6 +380,48 @@ export function SearchSettingsForm({ settings }: { settings: SearchSettings }) {
               />
             </Field>
           </div>
+          <div className="grid items-end gap-3 sm:grid-cols-[1fr_8rem_8rem_8rem]">
+            <div className="flex flex-col gap-0.5">
+              <Check
+                name="careersitesEnabled"
+                label="Company career sites"
+                checked={settings.sources.careersites.enabled}
+              />
+              <span className="pl-6 text-xs text-muted-foreground">
+                Greenhouse, Lever, Ashby, Workday and ~50 more ATS; $0.002 per job, at least 200 per
+                run (about $0.40), repeats billed too
+              </span>
+            </div>
+            <Field label="Jobs per run">
+              <Input
+                name="careersitesLimit"
+                type="number"
+                min={200}
+                max={1000}
+                step={50}
+                defaultValue={settings.sources.careersites.limit}
+              />
+            </Field>
+            <Field label="Max USD per run">
+              <Input
+                name="careersitesMaxUsdPerRun"
+                type="number"
+                min={0.01}
+                max={20}
+                step={0.01}
+                defaultValue={settings.sources.careersites.maxUsdPerRun}
+              />
+            </Field>
+            <Field label="Hours between runs">
+              <Input
+                name="careersitesMinHoursBetweenRuns"
+                type="number"
+                min={0}
+                max={168}
+                defaultValue={settings.sources.careersites.minHoursBetweenRuns}
+              />
+            </Field>
+          </div>
         </div>
         <Field
           label="Monthly Apify budget (USD)"

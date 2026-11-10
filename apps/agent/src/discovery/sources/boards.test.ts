@@ -5,10 +5,12 @@ import { createActorSource, windowFor } from "./actor-source";
 import type { ApifyRunner } from "./apify";
 import {
   builtInBoard,
+  careerSitesBoard,
   diceBoard,
   hiringCafeBoard,
   jobgetherBoard,
   parseBuiltInItem,
+  parseCareerSiteItem,
   parseDiceItem,
   parseHiringCafeItem,
   parseNomadRow,
@@ -255,6 +257,79 @@ describe("HiringCafe", () => {
   });
 });
 
+describe("Company career sites", () => {
+  const item = {
+    id: 2459270789,
+    date_posted: "2026-11-10T11:55:40.183",
+    title: "Senior Forward Deployed AI Engineer",
+    organization: "Fernhollow AI GmbH",
+    url: "https://fernhollow.jobs.personio.com/job/2882669",
+    locations_derived: ["Karlsruhe, Baden-Württemberg, Germany"],
+    ai_work_arrangement: "Remote OK",
+    ai_remote_location_derived: ["Germany"],
+    ai_salary_currency: "EUR",
+    ai_salary_min_value: 75_000,
+    ai_salary_max_value: 95_000,
+    ai_salary_unit_text: "YEAR",
+    ai_experience_level: "5-10",
+    ai_employment_type: ["FULL_TIME"],
+    description_text: "Lead customer projects. [More](https://x.example)",
+  };
+
+  it("maps items: ATS URL as apply link, AI-read pay and remote region, zone-less UTC dates", () => {
+    expect(parseCareerSiteItem(item)).toMatchObject({
+      source: "careersites",
+      externalId: "2459270789",
+      applyUrl: "https://fernhollow.jobs.personio.com/job/2882669",
+      company: "Fernhollow AI GmbH",
+      remote: true,
+      regions: ["Germany"],
+      location: "Remote (Germany)",
+      salaryMin: 75_000,
+      salaryMax: 95_000,
+      salaryPeriod: "year",
+      salaryText: "EUR 75,000–95,000 per year",
+      seniority: "5-10 years",
+      employmentType: "FULL_TIME",
+      postedAt: new Date("2026-11-10T11:55:40.183Z"),
+      description: "Lead customer projects. More",
+    });
+    expect(parseCareerSiteItem({ ...item, ai_work_arrangement: "Hybrid" })).toMatchObject({
+      remote: false,
+      regions: [],
+      location: "Karlsruhe, Baden-Württemberg, Germany",
+    });
+    expect(parseCareerSiteItem({ ...item, url: "ftp://x" })).toBeNull();
+  });
+
+  it("asks for remote roles by title without agencies or Jobgether, one posting per title", async () => {
+    expect(careerSitesBoard.searches(context())[0]?.input).toMatchObject({
+      limit: 200,
+      titleSearch: DEFAULT_SEARCH_SETTINGS.queries,
+      titleExclusionSearch: DEFAULT_SEARCH_SETTINGS.titleExclude,
+      organizationExclusionSearch: ["Jobgether"],
+      aiWorkArrangementFilter: ["Remote OK", "Remote Solely"],
+      removeAgency: true,
+    });
+    // The same role listed once per office becomes one posting: an eligible office wins over an
+    // earlier one the screen would drop.
+    const india = { ...item, id: 1, ai_remote_location_derived: ["India"] };
+    const runner: ApifyRunner = async () => ({
+      items: [
+        india,
+        item,
+        { ...item, id: 2, locations_derived: ["Berlin"] },
+        { ...item, id: 3, title: "Other" },
+      ],
+      costUsd: 0.4,
+    });
+    const outcome = await createActorSource(careerSitesBoard, runner).fetch(
+      context({ maxUsd: 0.45 }),
+    );
+    expect(outcome.postings.map((p) => p.externalId)).toEqual(["2459270789", "3"]);
+  });
+});
+
 describe("actor sources", () => {
   const row = (id: string, postedAt: string) => ({
     id,
@@ -272,6 +347,8 @@ describe("actor sources", () => {
       return {
         items: [row("1", "2026-11-10T00:00:00Z"), row("2", "2026-11-01T00:00:00Z"), {}],
         costUsd: 0.03,
+        runId: `run-${calls.length}`,
+        datasetId: `ds-${calls.length}`,
       };
     };
     const outcome = await createActorSource(diceBoard, runner).fetch(context({ maxUsd: 0.07 }));
@@ -282,6 +359,11 @@ describe("actor sources", () => {
     const yc = await createActorSource(ycombinatorBoard, runner).fetch(context());
     expect(yc.postings.map((p) => p.externalId)).toEqual(["1", "2"]);
     expect(yc.invalid).toBe(1);
+    expect(yc.providerRuns).toEqual([{ label: "all phrases", runId: "run-4", datasetId: "ds-4" }]);
+    expect(yc.raw).toEqual({
+      invalid: [{}],
+      sample: [expect.objectContaining({ id: "1" }), expect.objectContaining({ id: "2" })],
+    });
   });
 
   it("says why it can't run without a key, and stops on an exhausted account", async () => {

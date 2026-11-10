@@ -28,6 +28,8 @@ export const jobs = sqliteTable(
     id: text("id").primaryKey(),
     linkedinJobId: text("linkedin_job_id").unique(),
     canonicalUrl: text("canonical_url").unique(),
+    /** `atsKey(url)` of an ATS job URL (`greenhouse:acme:123`): the strongest dedupe key. */
+    atsKey: text("ats_key").unique(),
     company: text("company"),
     title: text("title"),
     location: text("location"),
@@ -279,7 +281,37 @@ export type SourceRunResult = {
   durationMs: number;
   /** Lower bound of the posting dates asked for (ISO), so the next run continues from here. */
   since?: string;
+  /** Apify runs of this source in this run (one per search), to look up their datasets. */
+  providerRuns?: { label: string; runId: string; datasetId: string }[];
 };
+
+export const RAW_ITEM_KINDS = ["invalid", "sample"] as const;
+
+/**
+ * Raw provider items as a source received them, for checking and replaying parsers later: every
+ * item that failed parsing (capped per run) and a few valid ones per source and run. Third-party
+ * data, never shown as instructions; pruned after `RAW_ITEM_RETENTION_DAYS`.
+ */
+export const rawItems = sqliteTable(
+  "app_raw_items",
+  {
+    id: text("id").primaryKey(),
+    runId: text("run_id")
+      .notNull()
+      .references(() => discoveryRuns.id, { onDelete: "cascade" }),
+    source: text("source", { enum: DISCOVERY_SOURCES }).notNull(),
+    kind: text("kind", { enum: RAW_ITEM_KINDS }).notNull(),
+    /** The item as JSON (an oversized one is replaced by its keys and size). */
+    payload: text("payload").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [
+    index("app_raw_items_run_idx").on(t.runId),
+    index("app_raw_items_source_kind_idx").on(t.source, t.kind, t.createdAt),
+  ],
+);
+
+export type RawItem = typeof rawItems.$inferSelect;
 
 /** What a run did after fetching: triage, full assessments of the best matches, the digest. */
 export type FunnelResult = {

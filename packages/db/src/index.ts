@@ -3,11 +3,12 @@ import { createClient } from "@libsql/client";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
-import { backfillCompanyKeys, backfillPostedDates } from "./jobs";
+import { backfillAtsKeys, backfillCompanyKeys, backfillPostedDates } from "./jobs";
 import { findWorkspaceRoot, resolveDatabaseUrl } from "./paths";
 import * as schema from "./schema";
 
 export * from "./assessments";
+export * from "./ats";
 export * from "./claims";
 export * from "./discovery";
 export { AssessmentError, hashPayload } from "./hash";
@@ -15,6 +16,7 @@ export * from "./job-list";
 export * from "./jobs";
 export { findWorkspaceRoot, resolveDatabaseUrl, resolveObservabilityPath } from "./paths";
 export * from "./profile";
+export * from "./raw-items";
 export * from "./runs";
 export type {
   Approval,
@@ -56,6 +58,7 @@ export async function migrateDb(db: Db): Promise<void> {
   await migrate(db, { migrationsFolder: join(findWorkspaceRoot(), "packages/db/drizzle") });
   await backfillPostedDates(db);
   await backfillCompanyKeys(db);
+  await backfillAtsKeys(db);
 }
 
 /**

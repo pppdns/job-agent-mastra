@@ -174,6 +174,30 @@ Live models, offline web (fixtures). Judge scores are evidence, not truth. Detai
 - Offline: unit tests for every parser, the RSS reader, region parsing, the feed and actor loops, source stats; e2e runs discovery on fixture feeds (cross-board merges, screen reasons from the new boards, source badges).
 - Not yet exercised: a full scheduled run with every source on Fly (the first one after this deploy).
 
+## ATS enrichment (M18, 2026-11-10)
+
+Live probe of `fantastic-jobs/career-site-job-listing-feed` (one run, $0.401, 4 s): the five default phrases, remote only, `limit: 200`.
+
+| | |
+| --- | --- |
+| Order / window | Newest first; 200 jobs covered 5 days (20 < 1 day, 50 1–3 days, 130 3–7 days) |
+| ATS mix | Zoho 45, Ashby 33, Lever 30, Workable 28, Greenhouse 22, Workday 14, others 28 |
+| Copies | 106 distinct company + title: one role listed per office (39× from one agency), and Jobgether reposting on its own Lever board |
+| Through our parser and screen (replayed) | 106 postings (one per title), 0 invalid, 63 pass (42 "remote only from" elsewhere), 40 with an ATS key, 35 with stated pay |
+
+Compared with the alternatives:
+
+- **The same vendor's `career-site-job-listing-api`** has a time range, so no repeats, but costs $0.012 per job. At about 40 new jobs a day that's ~$0.48 a day, the same as one feed pull, without the feed's built-in catch-up.
+- **A hand-built Greenhouse/Lever/Ashby/Workable resolver** (their free public job APIs) can only re-read jobs we already link to. From the saved M16 probes, few board items link to these four ATS at all (HiringCafe always does, We Work Remotely and Remotive rarely, Remote OK never), and those boards already give full descriptions. So it adds no jobs.
+
+Picked: the feed as the "Company career sites" source, run at most every 20 h (~$12 a month). The probe input had no agency, Jobgether or title-exclude filters, which the source now sends. `ats_key` is read from URLs for free. Unit tests cover the URL forms, cross-board merges under different URL forms, the backfill and the once-a-day skip.
+
+**Live run** of the real source through `runDiscoverySources` (temp database, no LLM funnel; $0.40):
+- 200 items became 117 postings, 0 of them invalid.
+- 39 were screened out; the other 78 became new jobs, 30 of those with an ATS key.
+- A second run straight after was skipped: "last good run 0 h ago (runs at most every 20 h)".
+- It recorded $0.001 because Apify's `usageTotalUsd` lags right after a run finishes (it read $0.401 20 s later). `runCost` now takes the larger of that and the final charged-event counts × prices. Earlier runs of every paid board may have recorded less than they cost, so the monthly budget check saw too little spend.
+
 ## Sentry (2026-11-10)
 
 Live, on local production builds (bundled agent run like `start-prod.sh`, `next build` + `next start`) with the DSN and `environment=verification`. All three errors reached project `job-copilot`:

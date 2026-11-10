@@ -177,7 +177,7 @@ Scheduled ingestion from job boards, reported as an inbox plus an email digest. 
 | Funnel | Deterministic screen → Haiku triage score (0–100 + reason) → full Sonnet assessment for the top N per run | About $1–2/day instead of $10–20 for assessing everything |
 | Criteria | Structured search settings (one JSON row) for the screen and source queries; triage and assessment read the profile facts | Deterministic filters must be predictable and debuggable (reasons are stored) |
 | Volume | Postings failing the screen stay in `app_postings` and never become jobs; jobs under the triage threshold are hidden by one predicate | Chat tools, FTS, re-score keep working on jobs worth seeing |
-| Dedupe | Posting (source, external id) → off-board apply URL → company key + title; ATS id later | Same job on several boards becomes one job with several postings |
+| Dedupe | Posting (source, external id) → ATS key (M18) → off-board apply URL → company key + title | Same job on several boards becomes one job with several postings |
 | Sources | Official free feeds read directly (Himalayas, WWR, RemoteOK, Remotive, NoDesk); other boards via pay-per-event Apify actors (LinkedIn, HiringCafe, Welcome to the Jungle, Wellfound, Dice, Built In, YC, Jobgether), started by our workflow with per-run caps and a monthly budget (default $100). No proxy setup: pay-per-event actors include it | Free and sanctioned where a feed exists; maintained scrapers elsewhere; accepted ToS risk for personal use |
 
 ### M13 — Discovery foundation (Himalayas direct + LinkedIn via Apify, no LLM)
@@ -210,7 +210,8 @@ Scheduled ingestion from job boards, reported as an inbox plus an email digest. 
 - [x] Sentry error reporting (production only; [deploy.md](deploy.md#sentry)).
 
 ### M18 — ATS enrichment
-- [ ] Compare the `fantastic-jobs/career-site-job-listing-feed` actor with a hand-built Greenhouse/Lever/Ashby/Workable resolver; `ats_key` as the strongest dedupe key. Skipped boards: TrueUp, Tech Jobs for Good, Arc.dev, JustRemote, PowerToFly, Climatebase, Levels.fyi (no maintained actor), FlexJobs (paid login), AIJobs.net (shut down).
+- [x] Compared the `fantastic-jobs/career-site-job-listing-feed` actor with a hand-built Greenhouse/Lever/Ashby/Workable resolver ([verification](verification.md#ats-enrichment-m18-2026-11-10)). Picked the feed as a new source ("Company career sites", at most once a day, ~$0.40 a run): the resolver finds no new jobs, only re-reads ones we already link to.
+- [x] `ats_key` (`greenhouse|lever|ashby|workable:<company>:<id>`, read from any URL form) as the strongest dedupe key, backfilled for existing jobs; the feed's postings are stored as `ats` sources. Skipped boards: TrueUp, Tech Jobs for Good, Arc.dev, JustRemote, PowerToFly, Climatebase, Levels.fyi (no maintained actor), FlexJobs (paid login), AIJobs.net (shut down).
 
 ### Deployment — Fly.io (2026-11-10)
 - [x] Password login page (`APP_PASSWORD`, signed 30-day cookie, per-client throttle); off when unset.

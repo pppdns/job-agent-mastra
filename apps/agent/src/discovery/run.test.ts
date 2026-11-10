@@ -8,6 +8,7 @@ import {
   getDiscoveryRun,
   listJobs,
   migrateDb,
+  rawItemsOf,
   recordSourceResult,
   saveSearchSettings,
   startDiscoveryRun,
@@ -185,6 +186,77 @@ describe("runDiscoverySources", () => {
     expect(backfill?.backfill).toBe(true);
     expect(Date.now() - (backfill?.since.getTime() ?? 0)).toBeGreaterThan(29 * 86_400_000);
     expect(linkedin.contexts[2]?.maxUsd).toBeCloseTo(2);
+  });
+
+  it("runs the career-sites feed at most once a day, except for a backfill", async () => {
+    const careersites = stub("careersites", async () => ({ postings: [] }), { paid: true });
+    await run({ careersites });
+    const { results } = await run({ careersites });
+    expect(results[0]).toMatchObject({
+      status: "skipped",
+      message: "last good run 0 h ago (runs at most every 20 h)",
+    });
+    await run({ careersites }, 7);
+    expect(careersites.contexts).toHaveLength(2);
+    // More skipped runs than the recent-run window still don't trigger another pull.
+    for (let i = 0; i < 20; i++) await run({ careersites });
+    expect(careersites.contexts).toHaveLength(2);
+  });
+
+  it("merges the same ATS job from two boards under different URL forms", async () => {
+    const uuid = "9f47da32-dd07-46ea-94ea-1e77d661af92";
+    const careersites = stub(
+      "careersites",
+      async () => ({
+        postings: [
+          posting("careersites", {
+            url: `https://jobs.ashbyhq.com/quillfeather/${uuid}`,
+            applyUrl: `https://jobs.ashbyhq.com/quillfeather/${uuid}`,
+            title: "Founding Engineer (Remote, EU)",
+          }),
+        ],
+      }),
+      { paid: true },
+    );
+    const hiringcafe = stub(
+      "hiringcafe",
+      async () => ({
+        postings: [
+          posting("hiringcafe", {
+            applyUrl: `https://jobs.ashbyhq.com/quillfeather/${uuid}/application`,
+          }),
+        ],
+      }),
+      { paid: true },
+    );
+    const { results } = await run({ hiringcafe, careersites });
+    expect(results.map((r) => [r.newJobs, r.merged])).toEqual([
+      [1, 0],
+      [0, 1],
+    ]);
+    expect(await listJobs(db)).toHaveLength(1);
+  });
+
+  it("keeps raw items and Apify run ids for later parser checks", async () => {
+    const linkedin: JobSource = {
+      id: "linkedin",
+      paid: true,
+      unavailable: () => null,
+      fetch: async () => ({
+        postings: [posting("linkedin")],
+        invalid: 1,
+        costUsd: 0.01,
+        raw: { invalid: [{ broken: true }], sample: [{ id: "linkedin-1" }] },
+        providerRuns: [{ label: '"AI Engineer"', runId: "run1", datasetId: "ds1" }],
+      }),
+    };
+    const { results } = await run({ linkedin });
+    expect(results[0]?.providerRuns).toEqual([
+      { label: '"AI Engineer"', runId: "run1", datasetId: "ds1" },
+    ]);
+    expect((await rawItemsOf(db, "linkedin")).map((r) => r.item)).toEqual(
+      expect.arrayContaining([{ broken: true }, { id: "linkedin-1" }]),
+    );
   });
 
   it("passes known board ids so paid sources can skip them", async () => {
