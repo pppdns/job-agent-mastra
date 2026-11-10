@@ -17,6 +17,8 @@ const job = (id: string, summary?: Partial<AssessmentSummary>): JobOverview => (
   updatedAt: new Date(0),
   postedAt: null,
   postedBasis: null,
+  origin: "chat",
+  triageScore: null,
   draftVersion: null,
   draftProfileVersion: null,
   profileStale: false,

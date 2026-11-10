@@ -10,12 +10,13 @@ import {
   SOURCED_EVIDENCE_CLASSES,
   salaryFiguresMissing,
 } from "@copilot/shared";
-import { desc, eq, inArray, max, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, max, sql } from "drizzle-orm";
+import { getSearchSettings, visibleJobs } from "./discovery";
 import { AssessmentError } from "./hash";
 import type { Db } from "./index";
 import { isListingSource, reindexJob } from "./jobs";
 import { currentProfile, currentProfileVersion, resolveFactRef, unknownFactHint } from "./profile";
-import { claims, type JobDraft, jobDrafts, jobs, sources } from "./schema";
+import { claims, type JobDraft, type JobOrigin, jobDrafts, jobs, sources } from "./schema";
 import { serializeWrites } from "./write-lock";
 
 /**
@@ -176,12 +177,29 @@ export type JobOverview = {
   profileStale: boolean;
   /** Verdict, fit and counts of the latest draft. */
   summary: AssessmentSummary | null;
+  origin: JobOrigin;
+  triageScore: number | null;
 };
 
-/** Jobs with their latest assessment version, newest first (optionally only `ids`). */
-export async function listJobs(db: Db, ids?: string[]): Promise<JobOverview[]> {
+export type ListJobsOptions = {
+  /** Also return discovered jobs the screen or triage hides (see `visibleJobs`). */
+  includeHidden?: boolean;
+};
+
+/**
+ * Jobs with their latest assessment version, newest first (optionally only `ids`). Discovered
+ * jobs the screen or triage threshold hides are left out unless `includeHidden`.
+ */
+export async function listJobs(
+  db: Db,
+  ids?: string[],
+  options: ListJobsOptions = {},
+): Promise<JobOverview[]> {
   if (ids?.length === 0) return [];
-  const profileVersion = await currentProfileVersion(db);
+  const [profileVersion, settings] = await Promise.all([
+    currentProfileVersion(db),
+    getSearchSettings(db),
+  ]);
   const query = db
     .select({
       id: jobs.id,
@@ -193,6 +211,8 @@ export async function listJobs(db: Db, ids?: string[]): Promise<JobOverview[]> {
       archivedAt: jobs.archivedAt,
       createdAt: jobs.createdAt,
       updatedAt: jobs.updatedAt,
+      origin: jobs.origin,
+      triageScore: jobs.triageScore,
       draftVersion: sql<
         number | null
       >`(select max(version) from app_job_drafts d where d.job_id = "app_jobs"."id")`,
@@ -207,9 +227,10 @@ export async function listJobs(db: Db, ids?: string[]): Promise<JobOverview[]> {
       postedBasis: sql<PostedBasis | null>`(select s.posted_basis from app_sources s ${datedListingSource})`,
     })
     .from(jobs);
-  const rows = await (ids ? query.where(inArray(jobs.id, ids)) : query).orderBy(
-    desc(jobs.updatedAt),
-  );
+  const visible = options.includeHidden ? undefined : visibleJobs(settings.triageThreshold);
+  const rows = await query
+    .where(and(ids ? inArray(jobs.id, ids) : undefined, visible))
+    .orderBy(desc(jobs.updatedAt));
   const overviews = rows.map(({ draftAssessment, postedAtMs, ...row }) => ({
     ...row,
     postedAt: postedAtMs === null ? null : new Date(postedAtMs),
