@@ -145,10 +145,10 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 ### M9 — Security pass, eval suite, docs
 - Prompt-injection fixtures (memory change, credential reveal, approval bypass); SSRF/redirect tests; confirm web content can never create an approved state.
 - [x] Scorers registered in Studio; live scoring on copilot turns (code checks always, LLM judge on 10%); `pnpm eval`: 12 behaviour cases as Mastra datasets/experiments on fixtures with code gates + `openai/gpt-6.1-sol` judges, own eval DB, report with judge model; traces via `pnpm eval:studio` ([apps/agent/src/evals/AGENTS.md](../apps/agent/src/evals/AGENTS.md)).
-- [x] Multi-chat scenarios as live evals (`scenarios.eval.ts`): memory across chats without leakage, compaction keeps the approved profile and pending approvals, comparisons with stale assessments. Deterministic Vitest covers the same mechanics offline (`memory.test.ts`, `compaction.test.ts`).
+- [x] Multi-chat scenarios as live evals (`scenarios.eval.ts`): memory across chats without leakage, compaction keeps the approved profile and pending approvals, comparisons with stale assessments. Deterministic Vitest covers the same mechanics offline (`memory.test.ts`, `compaction.test.ts`, `saved-jobs-stale.test.ts`).
 - `docs/verification.md`: offline vs live results, latency, usage, cost.
 - [x] README (setup, keys, commands, limitations) + [docs/architecture.md](architecture.md) (mermaid walkthrough).
-- [ ] `docs/lessons.md`.
+- [x] [`docs/lessons.md`](lessons.md): lessons and Mastra-specific decisions (2026-11-10).
 
 ### M10 — Job tracking (simple CRM) + learning preferences early
 - [x] `app_jobs.status` (`new → shortlisted → applied → interviewing → offer`, `rejected`, `dismissed`) with `status_changed_at` and `archived_at`; closing statuses archive, reopening unarchives, manual (un)archive keeps the status. Re-score skips archived jobs.
