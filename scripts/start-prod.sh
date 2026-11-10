@@ -37,13 +37,15 @@ fi
 # the database cleanly instead of being killed after the timeout.
 stop() {
   kill -TERM $(jobs -p) 2>/dev/null || true
-  wait
+  wait || true
   exit 0
 }
 trap stop TERM INT
 
-wait -n
-echo "start-prod: a server exited; stopping" >&2
+# `|| status=$?`: under `set -e` a crashed server would otherwise skip the cleanup below.
+status=0
+wait -n || status=$?
+echo "start-prod: a server exited (status $status); stopping the other" >&2
 kill -TERM $(jobs -p) 2>/dev/null || true
-wait
+wait || true
 exit 1

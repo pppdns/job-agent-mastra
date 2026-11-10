@@ -67,8 +67,13 @@ export function verifySessionToken(
 /** Only same-site paths, so `?next=` can't send the browser to another host after login. */
 export function safeNextPath(next: unknown): string {
   if (typeof next !== "string" || !next.startsWith("/") || next.startsWith("//")) return "/";
-  if (next.includes("\\") || next.startsWith("/login")) return "/";
-  return next;
+  // URL parsing drops tabs/newlines and treats "\\" like "/", which could turn this into "//host".
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: rejecting control characters is the point
+  if (next.includes("\\") || /[\u0000-\u001f\u007f]/.test(next)) return "/";
+  const base = "http://copilot.invalid";
+  const url = new URL(next, base);
+  if (url.origin !== base || url.pathname.startsWith("/login")) return "/";
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 export interface LoginThrottle {

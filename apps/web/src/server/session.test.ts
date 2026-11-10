@@ -69,6 +69,9 @@ describe("safeNextPath", () => {
     expect(safeNextPath("/\\evil.example")).toBe("/");
     expect(safeNextPath("/login")).toBe("/");
     expect(safeNextPath(null)).toBe("/");
+    expect(safeNextPath("/\t/evil.example")).toBe("/");
+    expect(safeNextPath("/\n/evil.example")).toBe("/");
+    expect(safeNextPath("/%2F/evil.example")).toBe("/%2F/evil.example");
   });
 });
 

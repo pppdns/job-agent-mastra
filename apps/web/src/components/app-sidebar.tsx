@@ -20,9 +20,10 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { appDb } from "@/server/db";
+import { loginEnabled } from "@/server/session";
 import { listThreads } from "@/server/threads";
 
-export function AppSidebar({ canSignOut = false }: { canSignOut?: boolean }) {
+export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader>
@@ -43,21 +44,30 @@ export function AppSidebar({ canSignOut = false }: { canSignOut?: boolean }) {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      {canSignOut ? (
-        <SidebarFooter>
-          <form action={logoutAction}>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton type="submit">
-                  <LogOutIcon />
-                  Sign out
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </form>
-        </SidebarFooter>
-      ) : null}
+      <Suspense fallback={null}>
+        <SignOut />
+      </Suspense>
     </Sidebar>
+  );
+}
+
+/** Runtime check: the image is built without APP_PASSWORD, so a prerendered value would be wrong. */
+async function SignOut() {
+  await connection();
+  if (!loginEnabled()) return null;
+  return (
+    <SidebarFooter>
+      <form action={logoutAction}>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton type="submit">
+              <LogOutIcon />
+              Sign out
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </form>
+    </SidebarFooter>
   );
 }
 
