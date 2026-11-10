@@ -123,3 +123,10 @@ Live models, offline web (fixtures). Judge scores are evidence, not truth. Detai
 - Migration `0010` on a copy of the dev DB: 23 snapshot approvals and 20 snapshots dropped; 8 profile versions, their approvals and 37 assessment versions kept.
 - Browser (worktree DB): job page shows "Assessment v10" and "Version history · 9 earlier"; `/profile` edits without an approval step.
 - Not exercised live: the copilot's wording with the new prompt (no `propose_job_snapshot`), `pnpm eval`.
+
+## Fly.io deployment + password login (2026-11-10)
+
+- Offline: `pnpm check` incl. `session.test.ts` (token round-trip, expiry, tampering, password/secret change ends sessions, `next` sanitizing, throttle) and `proxy.test.ts` (no login when `APP_PASSWORD` is unset; redirect to `/login?next=`, 401 on `/api/*`, forged cookie rejected, valid session passes). Local `pnpm dev` without `APP_PASSWORD`: `/`, `/jobs`, `/profile` unchanged, no sign-out button.
+- Live on Fly (`job-copilot-c456e8`, fra): image built on Fly's remote builder (591 MB). Both servers start, migrations run, the health check passes. `/` → `/login`, `/jobs` → `/login?next=%2Fjobs`, `/api/run-status` → 401. Port 4111 isn't reachable publicly. Through `fly proxy` Studio loads, and the API without a token returns 401.
+- Data: an online `sqlite3 .backup` of the local DB (integrity ok) was uploaded as `/data/copilot.db.import` (sha256 matched) and swapped in at startup. Production reads 34 jobs and 87 threads, as locally. It survives `fly machine restart`; after the signal trap the machine shuts down cleanly ("Main child exited normally", volume unmounts).
+- Not exercised yet: signing in with the real password and a live chat turn in production (needs the user's password), a deploy from the GitHub Action (needs `FLY_API_TOKEN`), the local `docker run` (skipped: machine overloaded; the Fly build covers the image).
