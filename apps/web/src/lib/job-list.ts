@@ -1,40 +1,15 @@
-import type { JobOverview } from "@copilot/db";
-import { FIT_LEVELS, JOB_STATUS_LABELS, RECOMMENDATIONS } from "@copilot/shared";
+import { DISCOVERY_SOURCES, type DiscoverySource, JOB_STATUS_LABELS } from "@copilot/shared";
+
+// URL state of /jobs: tab, search, sort, discovery filters and page. Filtering, ordering and
+// counting happen in SQL (`listJobsPage`, `jobTabCounts` in @copilot/db).
 
 export const JOB_SORTS = { latest: "Latest", fit: "Best fit" } as const;
 export type JobSort = keyof typeof JOB_SORTS;
 
-/** The `?sort=` value, falling back to latest for anything unknown. */
-export function parseJobSort(value: string | undefined): JobSort {
-  return value === "fit" ? "fit" : "latest";
-}
+/** Rows per page. */
+export const JOBS_PAGE_SIZE = 50;
 
-/** Rank of a list value, with missing values last. */
-const rank = <T>(list: readonly T[], value: T | undefined) =>
-  value === undefined ? list.length : list.indexOf(value);
-
-/**
- * Jobs in the chosen order, newest (last updated) first for latest, also after a search,
- * whose results arrive in relevance order.
- * Best fit: fit level, then verdict, then fewer hard conflicts; unassessed and role-only
- * jobs go last, discovered ones among them by triage score. The sort is stable, so ties stay
- * newest first.
- */
-export function sortJobs(jobs: JobOverview[], sort: JobSort): JobOverview[] {
-  const newest = jobs.toSorted((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
-  if (sort === "latest") return newest;
-  return newest.toSorted((a, b) => {
-    const [x, y] = [a.summary, b.summary];
-    return (
-      rank(FIT_LEVELS, x?.fitLevel) - rank(FIT_LEVELS, y?.fitLevel) ||
-      rank(RECOMMENDATIONS, x?.verdict) - rank(RECOMMENDATIONS, y?.verdict) ||
-      (x?.counts.hardConflicts ?? 0) - (y?.counts.hardConflicts ?? 0) ||
-      (b.triageScore ?? -1) - (a.triageScore ?? -1)
-    );
-  });
-}
-
-/** Status tabs on /jobs: active = everything not archived. */
+/** Status tabs on /jobs: active = everything not archived; screened = what discovery hid. */
 export const JOB_TABS = [
   "active",
   "new",
@@ -43,51 +18,85 @@ export const JOB_TABS = [
   "interviewing",
   "offer",
   "archived",
+  "screened",
 ] as const;
 export type JobTab = (typeof JOB_TABS)[number];
 
 export const JOB_TAB_LABELS: Record<JobTab, string> = {
   active: "Active",
   archived: "Archived",
+  screened: "Screened out",
   ...JOB_STATUS_LABELS,
 };
 
-export type JobListParams = { tab: JobTab; q: string; sort: JobSort };
+/** The New tab is the inbox of discovered matches: best first. Everything else: latest first. */
+export const defaultSort = (tab: JobTab): JobSort => (tab === "new" ? "fit" : "latest");
+
+export const MIN_SCORE_OPTIONS = [60, 75, 90] as const;
+export const POSTED_WITHIN_OPTIONS = [1, 7, 30] as const;
+
+export type JobListParams = {
+  tab: JobTab;
+  q: string;
+  sort: JobSort;
+  source?: DiscoverySource;
+  minScore?: number;
+  postedWithinDays?: number;
+  unseen: boolean;
+  /** 1-based. */
+  page: number;
+};
 
 const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
 
-/** `?tab=&q=&sort=` with safe fallbacks (active, no search, latest). */
+const oneOf = <T extends number>(options: readonly T[], value: string | undefined) =>
+  options.find((o) => String(o) === value);
+
+/** `?tab=&q=&sort=&source=&min=&posted=&unseen=&page=` with safe fallbacks. */
 export function parseJobListParams(
   params: Record<string, string | string[] | undefined>,
 ): JobListParams {
-  const tab = first(params.tab);
+  const tab = JOB_TABS.find((t) => t === first(params.tab)) ?? "active";
+  const sort = first(params.sort);
+  const page = Number.parseInt(first(params.page) ?? "1", 10);
   return {
-    tab: JOB_TABS.find((t) => t === tab) ?? "active",
+    tab,
     q: (first(params.q) ?? "").trim().slice(0, 200),
-    sort: parseJobSort(first(params.sort)),
+    sort: sort === "fit" || sort === "latest" ? sort : defaultSort(tab),
+    source: DISCOVERY_SOURCES.find((s) => s === first(params.source)),
+    minScore: oneOf(MIN_SCORE_OPTIONS, first(params.min)),
+    postedWithinDays: oneOf(POSTED_WITHIN_OPTIONS, first(params.posted)),
+    unseen: first(params.unseen) === "1",
+    page: Number.isFinite(page) && page > 1 ? Math.min(page, 1_000) : 1,
   };
 }
 
 /** The /jobs URL for these params, leaving out defaults. */
-export function jobListHref({ tab, q, sort }: JobListParams): string {
+export function jobListHref(params: JobListParams): string {
   const search = new URLSearchParams();
-  if (tab !== "active") search.set("tab", tab);
-  if (q) search.set("q", q);
-  if (sort !== "latest") search.set("sort", sort);
+  if (params.tab !== "active") search.set("tab", params.tab);
+  if (params.q) search.set("q", params.q);
+  if (params.sort !== defaultSort(params.tab)) search.set("sort", params.sort);
+  if (params.source) search.set("source", params.source);
+  if (params.minScore) search.set("min", String(params.minScore));
+  if (params.postedWithinDays) search.set("posted", String(params.postedWithinDays));
+  if (params.unseen) search.set("unseen", "1");
+  if (params.page > 1) search.set("page", String(params.page));
   const query = search.toString();
   return query ? `/jobs?${query}` : "/jobs";
 }
 
-/** Whether a job belongs on a tab. Status tabs show only jobs that aren't archived. */
-export function inTab(job: Pick<JobOverview, "status" | "archivedAt">, tab: JobTab): boolean {
-  if (tab === "archived") return job.archivedAt !== null;
-  if (job.archivedAt !== null) return false;
-  return tab === "active" || job.status === tab;
+/** Same list with another tab, sort or filter: back to page 1 (and the tab's default sort). */
+export function withParams(params: JobListParams, change: Partial<JobListParams>): string {
+  const tabChanged = change.tab !== undefined && change.tab !== params.tab;
+  return jobListHref({
+    ...params,
+    ...(tabChanged ? { sort: defaultSort(change.tab as JobTab) } : {}),
+    page: 1,
+    ...change,
+  });
 }
 
-/** Number of jobs on each tab. */
-export function tabCounts(jobs: Pick<JobOverview, "status" | "archivedAt">[]) {
-  return Object.fromEntries(
-    JOB_TABS.map((tab) => [tab, jobs.filter((j) => inTab(j, tab)).length]),
-  ) as Record<JobTab, number>;
-}
+/** Whether any discovery filter is on. */
+export const hasFilters = (p: JobListParams) =>
+  Boolean(p.source || p.minScore || p.postedWithinDays || p.unseen);

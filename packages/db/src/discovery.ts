@@ -316,6 +316,22 @@ async function promote(db: Db, row: Posting, now: Date): Promise<boolean> {
 
 const postingInputOf = (row: Posting): PostingInput => ({ ...row });
 
+/**
+ * "Keep anyway" on a posting the screen dropped: it becomes a job (deduped like any passing
+ * posting) that stays visible whatever the screen or triage say. Returns the job id.
+ */
+export function keepPosting(db: Db, postingId: string): Promise<string | null> {
+  return serializeWrites(db, async () => {
+    const row = await db.query.postings.findFirst({ where: eq(postings.id, postingId) });
+    if (!row) return null;
+    if (!row.jobId) await promote(db, row, new Date());
+    const promoted = await db.query.postings.findFirst({ where: eq(postings.id, postingId) });
+    if (!promoted?.jobId) return null;
+    await db.update(jobs).set({ keptAt: new Date() }).where(eq(jobs.id, promoted.jobId));
+    return promoted.jobId;
+  });
+}
+
 export type RescreenResult = { checked: number; promoted: number; hidden: number; shown: number };
 
 /** When and how a posting arrived: age is judged as of then, with its run's backfill window. */

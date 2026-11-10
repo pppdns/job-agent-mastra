@@ -178,6 +178,8 @@ export type JobOverview = {
   /** Verdict, fit and counts of the latest draft. */
   summary: AssessmentSummary | null;
   origin: JobOrigin;
+  /** `companyKey(company)`: links jobs of one company (company page). */
+  companyKey: string | null;
   triageScore: number | null;
   triageReason: string | null;
   /** When the user first opened a discovered job (null = a new, unseen match). */
@@ -203,52 +205,73 @@ export async function listJobs(
     currentProfileVersion(db),
     getSearchSettings(db),
   ]);
-  const query = db
-    .select({
-      id: jobs.id,
-      title: jobs.title,
-      company: jobs.company,
-      location: jobs.location,
-      status: jobs.status,
-      statusChangedAt: jobs.statusChangedAt,
-      archivedAt: jobs.archivedAt,
-      createdAt: jobs.createdAt,
-      updatedAt: jobs.updatedAt,
-      origin: jobs.origin,
-      triageScore: jobs.triageScore,
-      triageReason: jobs.triageReason,
-      seenAt: jobs.seenAt,
-      draftVersion: sql<
-        number | null
-      >`(select max(version) from app_job_drafts d where d.job_id = "app_jobs"."id")`,
-      draftProfileVersion: sql<
-        number | null
-      >`(select d.profile_version from app_job_drafts d where d.job_id = "app_jobs"."id" order by d.version desc limit 1)`,
-      draftAssessment: sql<
-        string | null
-      >`(select d.assessment from app_job_drafts d where d.job_id = "app_jobs"."id" order by d.version desc limit 1)`,
-      // Latest dated listing source; same rule as isListingSource.
-      postedAtMs: sql<number | null>`(select s.posted_at from app_sources s ${datedListingSource})`,
-      postedBasis: sql<PostedBasis | null>`(select s.posted_basis from app_sources s ${datedListingSource})`,
-    })
-    .from(jobs);
   const visible = options.includeHidden ? undefined : visibleJobs(settings.triageThreshold);
-  const rows = await query
+  const rows = await db
+    .select(overviewColumns)
+    .from(jobs)
     .where(and(ids ? inArray(jobs.id, ids) : undefined, visible))
     .orderBy(desc(jobs.updatedAt));
-  const overviews = rows.map(({ draftAssessment, postedAtMs, ...row }) => ({
-    ...row,
-    postedAt: postedAtMs === null ? null : new Date(postedAtMs),
-    summary: summaryOf(draftAssessment),
-    profileStale: row.draftProfileVersion !== null && row.draftProfileVersion !== profileVersion,
-  }));
+  const overviews = rows.map((row) => toOverview(row, profileVersion));
   // Keep search ranking when ids are given.
   return ids ? ids.flatMap((id) => overviews.filter((o) => o.id === id)) : overviews;
 }
 
-const datedListingSource = sql`where s.job_id = "app_jobs"."id" and s.posted_at is not null
+const DATED_LISTING_SOURCE = `where s.job_id = "app_jobs"."id" and s.posted_at is not null
   and (s.kind != 'web' or s.url = "app_jobs"."canonical_url")
   order by s.retrieved_at desc limit 1`;
+
+/** The latest assessment of the row's job (JSON text), for selects and ordering. */
+export const latestAssessmentSql = sql<
+  string | null
+>`(select d.assessment from app_job_drafts d where d.job_id = "app_jobs"."id" order by d.version desc limit 1)`;
+
+/** Columns of a `JobOverview` row (before `toOverview`). */
+export const overviewColumns = {
+  id: jobs.id,
+  title: jobs.title,
+  company: jobs.company,
+  companyKey: jobs.companyKey,
+  location: jobs.location,
+  status: jobs.status,
+  statusChangedAt: jobs.statusChangedAt,
+  archivedAt: jobs.archivedAt,
+  createdAt: jobs.createdAt,
+  updatedAt: jobs.updatedAt,
+  origin: jobs.origin,
+  triageScore: jobs.triageScore,
+  triageReason: jobs.triageReason,
+  seenAt: jobs.seenAt,
+  draftVersion: sql<
+    number | null
+  >`(select max(version) from app_job_drafts d where d.job_id = "app_jobs"."id")`,
+  draftProfileVersion: sql<
+    number | null
+  >`(select d.profile_version from app_job_drafts d where d.job_id = "app_jobs"."id" order by d.version desc limit 1)`,
+  draftAssessment: latestAssessmentSql,
+  // Latest dated listing source; same rule as isListingSource.
+  postedAtMs: sql<
+    number | null
+  >`(select s.posted_at from app_sources s ${sql.raw(DATED_LISTING_SOURCE)})`,
+  postedBasis: sql<PostedBasis | null>`(select s.posted_basis from app_sources s ${sql.raw(DATED_LISTING_SOURCE)})`,
+};
+
+type OverviewRow = Omit<JobOverview, "postedAt" | "summary" | "profileStale"> & {
+  draftAssessment: string | null;
+  postedAtMs: number | null;
+};
+
+/** A selected `overviewColumns` row as a `JobOverview`. */
+export function toOverview(
+  { draftAssessment, postedAtMs, ...row }: OverviewRow,
+  profileVersion: number,
+): JobOverview {
+  return {
+    ...row,
+    postedAt: postedAtMs === null ? null : new Date(postedAtMs),
+    summary: summaryOf(draftAssessment),
+    profileStale: row.draftProfileVersion !== null && row.draftProfileVersion !== profileVersion,
+  };
+}
 
 /** At-a-glance summary of a stored draft; null when there is none or it no longer parses. */
 function summaryOf(json: string | null): AssessmentSummary | null {

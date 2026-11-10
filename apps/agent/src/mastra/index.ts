@@ -8,7 +8,7 @@ import { allScorers } from "../evals/scorers";
 import { copilotAgent } from "./agents/copilot";
 import { researcherAgent } from "./agents/researcher";
 import { chatResumeRoute, chatRoute, chatStopRoute } from "./routes/chat";
-import { discoveryRunRoute } from "./routes/discovery";
+import { assessJobRoute, discoveryRunRoute } from "./routes/discovery";
 import { threadMessagesRoute } from "./routes/thread-messages";
 import { createStorage } from "./storage";
 import {

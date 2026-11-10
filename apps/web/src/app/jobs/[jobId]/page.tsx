@@ -1,5 +1,9 @@
-import { getJobDetail } from "@copilot/db";
-import { JOB_STATUS_LABELS, suggestedResearchTopics } from "@copilot/shared";
+import { getJobDetail, jobPostings } from "@copilot/db";
+import {
+  DISCOVERY_SOURCE_LABELS,
+  JOB_STATUS_LABELS,
+  suggestedResearchTopics,
+} from "@copilot/shared";
 import {
   BriefcaseIcon,
   Building2Icon,
@@ -20,6 +24,7 @@ import { AssessmentView } from "@/components/assessment-view";
 import { SalaryLabel, VerdictBadge } from "@/components/assessment-visuals";
 import { EvidenceList } from "@/components/evidence-list";
 import { JobStatusMenu } from "@/components/job-status-menu";
+import { AssessButton } from "@/components/keep-buttons";
 import { MarkSeen } from "@/components/mark-seen";
 import { PageHeader } from "@/components/page-header";
 import { ResearchJobButtons } from "@/components/research-job-buttons";
@@ -71,8 +76,10 @@ export default function JobPage({ params }: PageProps<"/jobs/[jobId]">) {
 async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">) {
   const { jobId } = await params;
   await connection();
-  const detail = await getJobDetail(await appDb(), jobId);
+  const db = await appDb();
+  const detail = await getJobDetail(db, jobId);
   if (!detail) notFound();
+  const postings = await jobPostings(db, jobId);
   const { job, sources, draft, history, profileVersion, profileStale, claims, posted } = detail;
   const links = listingLinks(job.canonicalUrl, sources);
 
@@ -95,7 +102,16 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
           {job.company && (
             <span className="inline-flex items-center gap-1.5">
               <Building2Icon className="size-4" />
-              {job.company}
+              {job.companyKey ? (
+                <Link
+                  href={`/companies/${encodeURIComponent(job.companyKey)}`}
+                  className="hover:underline"
+                >
+                  {job.company}
+                </Link>
+              ) : (
+                job.company
+              )}
             </span>
           )}
           {job.location && (
@@ -126,13 +142,7 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
             </span>
           )}
         </p>
-        {job.origin === "discovery" && (
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            {job.seenAt === null && <MarkSeen jobId={job.id} />}
-            <TriageScore score={job.triageScore} />
-            {job.triageReason && <span className="text-muted-foreground">{job.triageReason}</span>}
-          </div>
-        )}
+        {job.origin === "discovery" && job.seenAt === null && <MarkSeen jobId={job.id} />}
         {links.length > 0 && (
           <ul aria-label="Original listing" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
             {links.map((link) => (
@@ -155,6 +165,25 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
           </ul>
         )}
       </div>
+
+      {job.origin === "discovery" && (
+        <Card aria-label="Triage">
+          <CardHeader>
+            <CardTitle className="flex flex-wrap items-center gap-2">
+              Quick triage <TriageScore score={job.triageScore} />
+            </CardTitle>
+            <CardDescription>
+              {job.triageReason ??
+                "Not triaged yet: the next discovery run scores it against your profile."}
+            </CardDescription>
+            {!draft && (
+              <div className="pt-1">
+                <AssessButton jobId={job.id} />
+              </div>
+            )}
+          </CardHeader>
+        </Card>
+      )}
 
       {draft && (
         <Card aria-label="Current assessment">
@@ -216,6 +245,33 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
             the ones it cites.
           </p>
           <EvidenceList claims={claims} sources={sources} />
+        </section>
+      )}
+
+      {postings.length > 0 && (
+        <section className="flex flex-col gap-2" aria-label="Seen on">
+          <h2 className="font-semibold">Seen on</h2>
+          <ul className="flex flex-col gap-1.5 text-sm">
+            {postings.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-baseline gap-x-2">
+                <a
+                  href={p.url}
+                  target="_blank"
+                  rel="noopener"
+                  className="font-medium hover:underline"
+                >
+                  {DISCOVERY_SOURCE_LABELS[p.source]}
+                </a>
+                <span className="text-muted-foreground">
+                  {p.title} · first seen {formatDate(p.firstSeenAt)}
+                  {p.screenReasons ? ` · screened out: ${p.screenReasons.join("; ")}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-muted-foreground">
+            Postings from job boards, with credit to each source. Apply through the board's link.
+          </p>
         </section>
       )}
 
