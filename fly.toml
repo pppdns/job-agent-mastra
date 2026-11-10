@@ -17,6 +17,8 @@ kill_timeout = "30s"
 
 [env]
   NODE_ENV = "production"
+  # Server-rendered times (pages, the agents' "today") in the user's zone, not the machine's UTC.
+  TZ = "Europe/Budapest"
   LLM_MODE = "live"
   DATABASE_URL = "file:/data/copilot.db"
   AGENT_PORT = "4111"
