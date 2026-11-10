@@ -6,6 +6,8 @@ import {
   type JobSource,
   rawSampler,
   SourceError,
+  timeLeftMs,
+  timeLimitFailure,
 } from "../types";
 
 // A free feed source: a few fixed requests per run (a JSON API or RSS feeds), each returning raw
@@ -54,8 +56,14 @@ export function createFeedSource(options: {
       let invalid = 0;
       let cooledDown = false;
       const raws = rawSampler();
+      let timedOut = false;
       for (const [i, request] of requests.entries()) {
         if (i > 0) await sleep(pauseMs, context.signal);
+        if (timeLeftMs(context) <= 0) {
+          failures.push(timeLimitFailure(requests.length - i, requests.length));
+          timedOut = true;
+          break;
+        }
         try {
           for (const raw of await request.load(context.signal)) {
             const posting = options.parse(raw);
@@ -77,9 +85,9 @@ export function createFeedSource(options: {
         }
       }
       const allFailed = failures.length > 0 && failures.length === requests.length;
-      if (byId.size === 0 && (allFailed || cooledDown)) {
+      if (byId.size === 0 && (allFailed || cooledDown || timedOut)) {
         throw new SourceError(
-          `${allFailed ? "every request failed" : "stopped"} (${failures[0] ?? ""})`,
+          `${allFailed && !timedOut ? "every request failed" : "stopped"} (${failures[0] ?? ""})`,
         );
       }
       return {

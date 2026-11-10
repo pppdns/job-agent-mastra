@@ -10,8 +10,18 @@ export type FetchContext = {
   knownIds: string[];
   /** Most this source may spend in this run (USD). */
   maxUsd: number;
+  /** Wall-clock end of this source's time in the run: no new request or search starts after it. */
+  deadline?: Date;
   signal?: AbortSignal;
 };
+
+/** Milliseconds left before the source's deadline (Infinity without one). */
+export const timeLeftMs = (context: Pick<FetchContext, "deadline">, now = Date.now()) =>
+  context.deadline ? context.deadline.getTime() - now : Number.POSITIVE_INFINITY;
+
+/** The failure a source reports when its deadline stopped it before every search ran. */
+export const timeLimitFailure = (skipped: number, total: number) =>
+  `time limit reached, ${skipped} of ${total} searches not run`;
 
 export type FetchOutcome = {
   postings: PostingInput[];

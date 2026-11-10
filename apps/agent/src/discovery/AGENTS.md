@@ -18,7 +18,7 @@ flowchart LR
   - **Claim** allows one run at a time. A second trigger is skipped, and the route answers 409.
   - **Fetch** calls `runDiscoverySources` (`run.ts`). Every source runs, and its result is recorded as soon as that source finishes. A failing source never stops the others.
   - **Finish** marks the run `failed` only when every source that ran failed.
-  - **Interrupted runs:** runs left `running` by a crash are swept to `interrupted` at startup (`getAppDb`).
+  - **Interrupted runs:** runs left `running` by a crash or a restart (a deploy) are swept to `interrupted` at startup (`getAppDb`). Nothing needs resetting: sources that finished keep their results, the others ask again from their last good run, untriaged jobs are triaged by the next run. Apify runs it started go on until their own timeout.
 - **Schedule:** `0 7,16 * * *` in `DISCOVERY_TZ`.
   - It is declared only when `discoveryScheduleEnabled()`: `DISCOVERY_SCHEDULE=on`, and either the production image (`NODE_ENV=production`, the Fly machine) or the main checkout's dev server (port 4111, no `DATABASE_URL` override). Never on in both: two schedules, two bills and emails.
   - Worktrees, e2e and evals never schedule. They copy `.env` and the database, so this check matters.
@@ -32,6 +32,7 @@ flowchart LR
   - **`since`:** the source's last fully good (`ok`) run minus 1 h, never further back than `maxAgeDays` (or the backfill window). A `partial` run (one search failed, or the spend cap stopped the searches) doesn't move it, so the next run asks for that window again; known postings are skipped (LinkedIn gets up to 3,000 known ids as `skipJobId`, so repeats aren't billed).
   - **`knownIds`:** board ids stored in the last 30 days, so a paid source can skip them.
   - **`maxUsd`:** the source's per-run cap, never more than what's left of `apifyMonthlyBudgetUsd` (spend summed from `app_discovery_runs` over 30 days).
+  - **Time limit:** `SOURCE_TIME_LIMIT_MS` (20 min; sources run one after another). An Apify search starts only with 2+ min left and its actor timeout is shortened to fit; feeds and Himalayas start no request past it. What didn't run is a failure ("time limit reached, N of M searches not run", emailed), the source is `partial`, so the next run asks again. Searches run in the same order every time, so a source that keeps hitting it needs fewer phrases.
   - **Skipped** (`skipped` with a reason) when the source is off in the settings, unavailable (no key), or over budget.
 - **Sources** (`sources/`): each implements `JobSource` (`types.ts`).
   - **Pure parsing:** `parse…` functions validate every item against `postingInputSchema`. Bad items are counted as `invalid`, not stored. Descriptions become link-free markdown (`text.ts`).

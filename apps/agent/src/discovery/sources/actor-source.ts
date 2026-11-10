@@ -13,6 +13,8 @@ import {
   type ProviderRun,
   rawSampler,
   SourceError,
+  timeLeftMs,
+  timeLimitFailure,
 } from "../types";
 import type { ActorPrices, ApifyRunner } from "./apify";
 
@@ -43,6 +45,10 @@ export type ActorBoard = {
 };
 
 const RUN_TIMEOUT_SECS = 300;
+/** A search needs at least this much of the source's time left to start. */
+const MIN_SEARCH_SECS = 120;
+/** The runner may wait this long past an actor's timeout (its own deadline plus one poll). */
+const RUNNER_SLACK_SECS = 120;
 
 export function createActorSource(board: ActorBoard, runActor: ApifyRunner | null): JobSource {
   return {
@@ -62,16 +68,25 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
       const providerRuns: ProviderRun[] = [];
       /** Company + title → the kept variant's id, and whether it passes the screen. */
       const titles = new Map<string, { id: string; pass: boolean }>();
-      for (const search of searches) {
+      for (const [i, search] of searches.entries()) {
         const remaining = context.maxUsd - costUsd;
         if (remaining < 0.01) {
           notes.push(`spend cap reached after ${costUsd.toFixed(2)} USD`);
           break;
         }
+        const leftSecs = Math.floor(timeLeftMs(context) / 1_000);
+        if (leftSecs < MIN_SEARCH_SECS) {
+          failures.push(timeLimitFailure(searches.length - i, searches.length));
+          break;
+        }
         try {
           const result = await runActor(board.actorId, search.input, {
             maxUsd: remaining,
-            timeoutSecs: board.timeoutSecs ?? RUN_TIMEOUT_SECS,
+            // Shortened so the run ends (TIMED-OUT keeps its items) within the source's time.
+            timeoutSecs: Math.min(
+              board.timeoutSecs ?? RUN_TIMEOUT_SECS,
+              Math.max(60, leftSecs - RUNNER_SLACK_SECS),
+            ),
             prices: board.prices,
             signal: context.signal,
           });

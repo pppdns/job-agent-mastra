@@ -36,6 +36,12 @@ const HOUR_MS = 3_600_000;
 const BUDGET_WINDOW_MS = 30 * DAY_MS;
 /** Re-ask an hour before the last good run ended, so nothing posted in between is missed. */
 const CURSOR_OVERLAP_MS = HOUR_MS;
+/**
+ * Most time one source may take in a run. Sources run one after another, so a slow board
+ * (HiringCafe: ~2 min per phrase, up to ~11 min when Apify stalls) can't hold up the others or
+ * keep the run "running" for hours. Past it the source keeps what it has (partial).
+ */
+export const SOURCE_TIME_LIMIT_MS = 20 * 60_000;
 
 export const BACKFILL_DAYS = [7, 30] as const;
 
@@ -184,6 +190,7 @@ export async function runDiscoverySources(
         backfill,
         knownIds,
         maxUsd,
+        deadline: new Date(Date.now() + SOURCE_TIME_LIMIT_MS),
         signal: options.signal,
       });
       const counts: Record<PostingOutcome, number> = {

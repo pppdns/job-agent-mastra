@@ -229,4 +229,19 @@ describe("feed sources", () => {
       partial: "some requests failed: a: x",
     });
   });
+  it("starts no request after the source's time is up", async () => {
+    const load = async () => [1];
+    const source = createFeedSource({
+      id: "remotive",
+      pauseMs: 0,
+      parse: () => posting,
+      requests: () => [
+        { label: "a", load },
+        { label: "b", load },
+      ],
+    });
+    await expect(source.fetch(context({ deadline: new Date(Date.now() - 1) }))).rejects.toThrow(
+      "stopped (time limit reached, 2 of 2 searches not run)",
+    );
+  });
 });

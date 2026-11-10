@@ -7,6 +7,8 @@ import {
   type JobSource,
   rawSampler,
   SourceError,
+  timeLeftMs,
+  timeLimitFailure,
 } from "../types";
 import type { HttpJson } from "./http";
 
@@ -114,10 +116,18 @@ export function createHimalayasSource(
       const failed: string[] = [];
       let requests = 0;
       let cooledDown = false;
-      for (const query of settings.queries) {
+      let timedOut = false;
+      for (const [q, query] of settings.queries.entries()) {
+        if (timeLeftMs(context) <= 0) {
+          failed.push(timeLimitFailure(settings.queries.length - q, settings.queries.length));
+          timedOut = true;
+          break;
+        }
         try {
           for (let page = 1; page <= maxPages; page++) {
             if (requests++ > 0) await sleep(pauseMs, signal);
+            // Out of time mid-search: keep the pages read so far.
+            if (page > 1 && timeLeftMs(context) <= 0) break;
             const url = new URL(SEARCH_URL);
             url.searchParams.set("q", query);
             url.searchParams.set("sort", "recent");
@@ -155,8 +165,10 @@ export function createHimalayasSource(
         }
       }
       const allFailed = failed.length > 0 && failed.length === settings.queries.length;
-      if (byId.size === 0 && (allFailed || cooledDown)) {
-        throw new SourceError(`${allFailed ? "every search failed" : "stopped"} (${failed[0]})`);
+      if (byId.size === 0 && (allFailed || cooledDown || timedOut)) {
+        throw new SourceError(
+          `${allFailed && !timedOut ? "every search failed" : "stopped"} (${failed[0]})`,
+        );
       }
       return {
         postings: [...byId.values()],
