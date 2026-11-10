@@ -9,7 +9,7 @@ import {
 } from "@copilot/shared";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
-import { listJobs } from "./assessments";
+import { listJobs, saveDraft } from "./assessments";
 import {
   countAwaitingTriage,
   digestMatches,
@@ -334,6 +334,19 @@ describe("triage and matches", () => {
     expect(toAssess).toEqual([{ id: a?.id, triageScore: 90 }]);
     const matches = await digestMatches(db, { since: start, threshold: 60 });
     expect(matches.map((m) => m.triageScore)).toEqual([90, 65]);
+    const source = await latestListingSource(db, a?.id ?? "");
+    await saveDraft(db, {
+      jobId: a?.id ?? "",
+      assessment: {
+        headline: "Strong remote founding role",
+        overview: "o",
+        fitBasis: "role_only",
+        strengths: [{ text: "s", evidence: "official", sourceIds: [source?.id ?? ""] }],
+        recommendation: { verdict: "pursue", rationale: "r" },
+      },
+    });
+    const withHeadline = await digestMatches(db, { since: start, threshold: 60 });
+    expect(withHeadline[0]?.headline).toBe("Strong remote founding role");
     expect(matches[0]?.sources).toEqual(["himalayas"]);
     // Below the threshold: hidden from the list, not a match.
     expect(await listJobs(db)).toHaveLength(2);

@@ -388,7 +388,7 @@ export function rescreenPostings(
  */
 export const visibleJobs = (triageThreshold: number) => sql`(
   ${jobs.origin} = 'chat' OR ${jobs.keptAt} IS NOT NULL OR ${jobs.status} != 'new' OR (
-    EXISTS (SELECT 1 FROM app_postings p WHERE p.job_id = ${jobs.id} AND p.screen_reasons IS NULL)
+    EXISTS (SELECT 1 FROM app_postings p WHERE p.job_id = "app_jobs"."id" AND p.screen_reasons IS NULL)
     AND (${jobs.triageScore} IS NULL OR ${jobs.triageScore} >= ${triageThreshold})
   )
 )`;
@@ -439,10 +439,13 @@ export async function screenedOutSince(db: Db, since: Date) {
     .limit(200);
 }
 
-/** A discovered job still worth a look: untouched (`new`, not archived), with a passing posting. */
+/**
+ * A discovered job still worth a look: untouched (`new`, not archived), with a passing posting
+ * or kept by the user (a kept posting keeps its screen reasons but is triaged like any other).
+ */
 const openDiscovered = sql`${jobs.origin} = 'discovery' AND ${jobs.status} = 'new'
   AND ${jobs.archivedAt} IS NULL
-  AND EXISTS (SELECT 1 FROM app_postings p WHERE p.job_id = ${jobs.id} AND p.screen_reasons IS NULL)`;
+  AND (${jobs.keptAt} IS NOT NULL OR EXISTS (SELECT 1 FROM app_postings p WHERE p.job_id = "app_jobs"."id" AND p.screen_reasons IS NULL))`;
 
 export type TriageCandidate = { id: string; title: string | null; company: string | null };
 
@@ -535,7 +538,7 @@ export async function digestMatches(
       headline: sql<
         string | null
       >`(select json_extract(d.assessment, '$.headline') from app_job_drafts d
-        where d.job_id = ${jobs.id} order by d.version desc limit 1)`,
+        where d.job_id = "app_jobs"."id" order by d.version desc limit 1)`,
     })
     .from(jobs)
     .where(

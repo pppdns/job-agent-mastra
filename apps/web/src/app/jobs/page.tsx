@@ -46,6 +46,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { type Age, jobAge, stageAge } from "@/lib/job-age";
 import { fitMatters, quietStatus, showsStageAge } from "@/lib/job-emphasis";
 import {
+  defaultSort,
   hasFilters,
   JOB_SORTS,
   JOB_TAB_LABELS,
@@ -168,6 +169,18 @@ async function JobPage({
     limit: JOBS_PAGE_SIZE,
     offset: (params.page - 1) * JOBS_PAGE_SIZE,
   });
+  if (jobs.length === 0 && total > 0) {
+    // Past the last page (e.g. after dismissing the last jobs of a page).
+    const last = Math.ceil(total / JOBS_PAGE_SIZE);
+    return (
+      <p className="py-6 text-center text-sm text-muted-foreground">
+        No jobs on this page.{" "}
+        <Link href={jobListHref({ ...params, page: last })} className="underline">
+          Go to page {last}
+        </Link>
+      </p>
+    );
+  }
   if (jobs.length === 0) {
     return (
       <p className="py-6 text-center text-sm text-muted-foreground">
@@ -187,7 +200,8 @@ async function JobPage({
     companyJobCounts(db, [...new Set(jobs.flatMap((j) => (j.companyKey ? [j.companyKey] : [])))]),
   ]);
   return (
-    <JobSelection>
+    // Keyed by the list's URL: a new page, tab, search or filter starts with nothing selected.
+    <JobSelection key={jobListHref(params)}>
       <BulkBar />
       <JobTable
         jobs={jobs}
@@ -241,13 +255,14 @@ async function ScreenedOut({ params }: { params: JobListParams }) {
   const more = below.total > offset + JOBS_PAGE_SIZE || dropped.total > offset + JOBS_PAGE_SIZE;
   return (
     <div className="flex flex-col gap-6">
-      <section aria-label="Below the triage threshold" className="flex flex-col gap-2">
+      <section aria-label="Hidden from your list" className="flex flex-col gap-2">
         <h2 className="font-medium">
-          Below the triage threshold{" "}
+          Hidden from your list{" "}
           <span className="text-sm font-normal text-muted-foreground">{below.total}</span>
         </h2>
         <p className="text-sm text-muted-foreground">
-          Discovered jobs the quick triage scored under your threshold (set in the{" "}
+          Discovered jobs the quick triage scored under your threshold, or whose postings no longer
+          pass the screen after a settings change (both set in the{" "}
           <Link href="/settings/search" className="underline">
             search settings
           </Link>
@@ -273,8 +288,12 @@ async function ScreenedOut({ params }: { params: JobListParams }) {
                   <span className="text-muted-foreground">
                     {[job.company, job.location].filter(Boolean).join(" · ")}
                   </span>
-                  {job.triageReason && (
-                    <span className="block text-xs text-muted-foreground">{job.triageReason}</span>
+                  {(job.screenReasons ?? job.triageReason) && (
+                    <span className="block text-xs text-muted-foreground">
+                      {job.screenReasons
+                        ? `Screened out: ${job.screenReasons.join("; ")}`
+                        : job.triageReason}
+                    </span>
                   )}
                 </span>
                 <KeepButton kind="job" id={job.id} />
@@ -353,8 +372,17 @@ function SearchForm({ params }: { params: JobListParams }) {
           aria-label="Search jobs"
           className="pl-8"
         />
+        {/* Keep tab, sort and filters; a new search starts on page 1. */}
         {params.tab !== "active" && <input type="hidden" name="tab" value={params.tab} />}
-        {params.sort !== "latest" && <input type="hidden" name="sort" value={params.sort} />}
+        {params.sort !== defaultSort(params.tab) && (
+          <input type="hidden" name="sort" value={params.sort} />
+        )}
+        {params.source && <input type="hidden" name="source" value={params.source} />}
+        {params.minScore && <input type="hidden" name="min" value={params.minScore} />}
+        {params.postedWithinDays && (
+          <input type="hidden" name="posted" value={params.postedWithinDays} />
+        )}
+        {params.unseen && <input type="hidden" name="unseen" value="1" />}
       </form>
     </search>
   );

@@ -5,12 +5,19 @@ import { DEFAULT_SEARCH_SETTINGS, type PostingInput, screenPosting } from "@copi
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { listJobs, saveDraft } from "./assessments";
-import { keepPosting, recordPosting, saveTriage, startDiscoveryRun } from "./discovery";
+import {
+  jobsAwaitingTriage,
+  keepPosting,
+  recordPosting,
+  saveTriage,
+  startDiscoveryRun,
+} from "./discovery";
 import { createDb, type Db, migrateDb } from "./index";
 import {
   assessedJobCounts,
   belowThresholdJobs,
   companyJobCounts,
+  companyJobs,
   jobTabCounts,
   keepJob,
   listJobsPage,
@@ -174,6 +181,23 @@ describe("screened out, keep anyway, bulk, re-triage", () => {
     expect((await screenedOutPostings(db, { since: new Date(0), limit: 10 })).total).toBe(0);
   });
 
+  it("triages kept postings, and lists jobs whose postings all fail after a re-screen", async () => {
+    await discovered("intern", null, { title: "Software Intern" });
+    const dropped = await screenedOutPostings(db, { since: new Date(0), limit: 10 });
+    const kept = await keepPosting(db, dropped.postings[0]?.id ?? "");
+    expect((await jobsAwaitingTriage(db, 10)).map((j) => j.id)).toContain(kept);
+
+    const job = await discovered("blocked", 80, { company: "Mole" });
+    await db
+      .update(postings)
+      .set({ screenReasons: ["company Mole is blocked"] })
+      .where(eq(postings.jobId, job));
+    const hidden = await belowThresholdJobs(db, { limit: 10 });
+    expect(hidden.jobs.find((j) => j.id === job)?.screenReasons).toEqual([
+      "company Mole is blocked",
+    ]);
+  });
+
   it("sets a status on many jobs, counts assessed and per-company jobs", async () => {
     const a = await discovered("a", 80, { company: "Kite GmbH" });
     const b = await discovered("b", 80, { company: "Kite", title: "Other" });
@@ -193,5 +217,17 @@ describe("screened out, keep anyway, bulk, re-triage", () => {
     const [row] = await db.select().from(jobs).where(eq(jobs.id, a));
     expect(row?.triageScore).toBeNull();
     expect(await staleTriageCount(db)).toBe(0);
+  });
+});
+
+describe("subqueries in select fields", () => {
+  it("company pages flag hidden roles, digests carry assessment headlines", async () => {
+    const shown = await discovered("shown", 80, { company: "Kite" });
+    const hidden = await discovered("hidden", 20, { company: "Kite", title: "Hidden role" });
+    const roles = await companyJobs(db, "kite");
+    expect(Object.fromEntries(roles.map((r) => [r.id, r.hidden]))).toEqual({
+      [shown]: false,
+      [hidden]: true,
+    });
   });
 });

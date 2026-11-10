@@ -81,7 +81,7 @@ function tabCondition(tab: JobListTab): SQL | undefined {
 function filterConditions(filters: JobListFilters, now: Date): (SQL | undefined)[] {
   return [
     filters.source
-      ? sql`exists (select 1 from app_postings p where p.job_id = ${jobs.id} and p.source = ${filters.source})`
+      ? sql`exists (select 1 from app_postings p where p.job_id = "app_jobs"."id" and p.source = ${filters.source})`
       : undefined,
     filters.minScore !== undefined ? gte(matchScoreSql, filters.minScore) : undefined,
     filters.postedWithinDays !== undefined
@@ -195,7 +195,7 @@ export async function assessedJobCounts(db: Db): Promise<{ active: number; stale
       and(
         visibleJobs(settings.triageThreshold),
         isNull(jobs.archivedAt),
-        sql`exists (select 1 from app_job_drafts d where d.job_id = ${jobs.id})`,
+        sql`exists (select 1 from app_job_drafts d where d.job_id = "app_jobs"."id")`,
       ),
     );
   return { active: row?.active ?? 0, stale: row?.stale ?? 0 };
@@ -212,35 +212,51 @@ export async function setJobsStatus(db: Db, jobIds: string[], status: JobStatus)
 }
 
 /**
- * Discovered jobs below the triage threshold (hidden from the list), best first: the
- * "Screened out" tab, where the user can keep one anyway.
+ * Discovered jobs the list hides, still untouched and not kept: scored under the triage
+ * threshold, or with every posting now failing the screen (after a settings change). Best score
+ * first; `screenReasons` says why the screen fails them. The "Screened out" tab, where the user
+ * can keep one anyway.
  */
 export async function belowThresholdJobs(
   db: Db,
   input: { limit: number; offset?: number },
-): Promise<{ jobs: JobOverview[]; total: number }> {
+): Promise<{ jobs: (JobOverview & { screenReasons: string[] | null })[]; total: number }> {
   const [profileVersion, settings] = await Promise.all([
     currentProfileVersion(db),
     getSearchSettings(db),
   ]);
+  // "app_jobs"."id" spelled out: inside select fields Drizzle renders ${jobs.id} unqualified,
+  // which the subquery would read as the posting's own id.
+  const passing = sql`exists (select 1 from app_postings q where q.job_id = "app_jobs"."id" and q.screen_reasons is null)`;
   const where = and(
     eq(jobs.origin, "discovery"),
     eq(jobs.status, "new"),
     isNull(jobs.archivedAt),
     isNull(jobs.keptAt),
-    lt(jobs.triageScore, settings.triageThreshold),
+    sql`(not ${passing} or ${jobs.triageScore} < ${settings.triageThreshold})`,
   );
   const [rows, [totals]] = await Promise.all([
     db
-      .select(overviewColumns)
+      .select({
+        ...overviewColumns,
+        screenReasons: sql<
+          string | null
+        >`(case when ${passing} then null else (select p.screen_reasons from app_postings p where p.job_id = "app_jobs"."id" order by p.first_seen_at desc limit 1) end)`,
+      })
       .from(jobs)
       .where(where)
-      .orderBy(desc(jobs.triageScore), desc(jobs.triagedAt))
+      .orderBy(sql`${jobs.triageScore} is null`, desc(jobs.triageScore), desc(jobs.triagedAt))
       .limit(input.limit)
       .offset(input.offset ?? 0),
     db.select({ n: count() }).from(jobs).where(where),
   ]);
-  return { jobs: rows.map((r) => toOverview(r, profileVersion)), total: totals?.n ?? 0 };
+  return {
+    jobs: rows.map(({ screenReasons, ...r }) => ({
+      ...toOverview(r, profileVersion),
+      screenReasons: screenReasons ? (JSON.parse(screenReasons) as string[]) : null,
+    })),
+    total: totals?.n ?? 0,
+  };
 }
 
 /** Postings the screen dropped (never became jobs), newest first, with their reasons. */
@@ -347,12 +363,11 @@ export async function companyJobs(
     .select({
       ...overviewColumns,
       visible: sql<number>`${visibleJobs(settings.triageThreshold)}`,
-      claimCount: sql<number>`(select count(*) from app_claims c where c.job_id = ${jobs.id})`,
+      claimCount: sql<number>`(select count(*) from app_claims c where c.job_id = "app_jobs"."id")`,
     })
     .from(jobs)
     .where(eq(jobs.companyKey, key))
-    .orderBy(desc(jobs.updatedAt))
-    .limit(200);
+    .orderBy(desc(jobs.updatedAt));
   return rows.map(({ visible, claimCount, ...row }) => ({
     ...toOverview(row, profileVersion),
     hidden: !visible,
