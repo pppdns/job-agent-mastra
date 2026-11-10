@@ -7,7 +7,7 @@ import {
   latestListingSource,
   saveTriage,
 } from "@copilot/db";
-import { type SearchSettings, type Triage, triageSchema } from "@copilot/shared";
+import { type SearchSettings, shortReason, type Triage, triageSchema } from "@copilot/shared";
 import type { TracingContext } from "@mastra/core/observability";
 import { env } from "../env";
 import { triagerAgent } from "../mastra/agents/triager";
@@ -98,8 +98,8 @@ export async function triageJobs(deps: TriageDeps): Promise<TriageOutcome> {
         await saveTriage(db, job.id, {
           score: triage.score,
           reason: triage.hardConflict
-            ? `${triage.reason} (conflict: ${triage.hardConflict})`.slice(0, 400)
-            : triage.reason,
+            ? `${shortReason(triage.reason, 200)} (conflict: ${shortReason(triage.hardConflict, 150)})`
+            : shortReason(triage.reason),
           profileVersion: profile.version,
         });
         triaged += 1;

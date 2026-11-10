@@ -182,20 +182,39 @@ export async function assessJob(jobId: string, profile: Profile, deps: AssessDep
       profileVersion: profile.version,
     });
 
-  let assessment = await generate(prompt);
+  const finish = finishOf(identity, detail.draft?.assessment);
+  const retry = (reason: string) =>
+    `${prompt}\n\nYour previous assessment was rejected: ${reason}\nFix that and return the full assessment again.`;
+  // One retry for either kind of rejection: the output schema (e.g. a headline over its length
+  // limit) or a saveDraft rule (like the copilot's tool loop); then the job fails.
+  let assessment: Assessment;
+  try {
+    assessment = await generate(prompt);
+  } catch (error) {
+    if (!isSchemaRejection(error) || deps.signal?.aborted) throw error;
+    assessment = await generate(retry((error as Error).message));
+    return finish(assessment, await save(assessment));
+  }
   let draft: Awaited<ReturnType<typeof save>>;
   try {
     draft = await save(assessment);
   } catch (error) {
-    // One retry with the rule the draft broke (like the copilot's tool loop); then the job fails.
     if (!(error instanceof AssessmentError) || deps.signal?.aborted) throw error;
-    assessment = await generate(
-      `${prompt}\n\nYour previous assessment was rejected: ${error.message}\nFix that and return the full assessment again.`,
-    );
+    assessment = await generate(retry(error.message));
     draft = await save(assessment);
   }
-  const before = detail.draft?.assessment;
-  return {
+  return finish(assessment, draft);
+}
+
+/** The model's structured output failed the schema (Mastra's validation error). */
+const isSchemaRejection = (error: unknown) =>
+  error instanceof Error && error.message.includes("Structured output validation failed");
+
+function finishOf(
+  identity: { jobId: string; title: string | null; company: string | null },
+  before: Assessment | undefined,
+) {
+  return (assessment: Assessment, draft: { id: string; version: number }) => ({
     ...identity,
     status: "saved" as const,
     draftId: draft.id,
@@ -206,5 +225,5 @@ export async function assessJob(jobId: string, profile: Profile, deps: AssessDep
       fitLevel: assessment.fitLevel,
       headline: assessment.headline,
     },
-  };
+  });
 }

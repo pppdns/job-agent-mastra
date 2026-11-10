@@ -6,6 +6,7 @@ import {
   parseSearchSettings,
   type SearchSettings,
 } from "./search-settings";
+import { shortReason } from "./triage";
 
 const now = new Date("2026-11-10T12:00:00Z");
 
@@ -177,5 +178,15 @@ describe("postingSnapshot", () => {
     expect(text).toContain("Salary: €80,000–€100,000/year");
     expect(text).toContain("Posted: 2026-11-09");
     expect(text).toContain("Source: Himalayas");
+  });
+});
+
+describe("shortReason", () => {
+  it("keeps short reasons and cuts long ones at a word with an ellipsis", () => {
+    expect(shortReason("Good fit.")).toBe("Good fit.");
+    const long = "word ".repeat(100);
+    const cut = shortReason(long, 50);
+    expect(cut.length).toBeLessThanOrEqual(50);
+    expect(cut.endsWith("word…")).toBe(true);
   });
 });
