@@ -1,5 +1,5 @@
 import { DEFAULT_SEARCH_SETTINGS, screenPosting } from "@copilot/shared";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FetchContext } from "../types";
 import { createActorSource, windowFor } from "./actor-source";
 import type { ApifyRunner } from "./apify";
@@ -364,6 +364,30 @@ describe("actor sources", () => {
       invalid: [{}],
       sample: [expect.objectContaining({ id: "1" }), expect.objectContaining({ id: "2" })],
     });
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("fits each search into the source's time and stops starting searches when it runs out", async () => {
+    const start = Date.now();
+    let elapsed = 0;
+    vi.spyOn(Date, "now").mockImplementation(() => start + elapsed);
+    const timeouts: number[] = [];
+    const slow: ApifyRunner = async (_actor, _input, { timeoutSecs }) => {
+      timeouts.push(timeoutSecs);
+      elapsed += 9 * 60_000;
+      return { items: [], costUsd: 0.01 };
+    };
+    const outcome = await createActorSource(hiringCafeBoard, slow).fetch(
+      context({ maxUsd: 1, deadline: new Date(start + 10 * 60_000) }),
+    );
+    // 600 s left: the actor's 600 s timeout is cut to leave room for the runner's own wait.
+    expect(timeouts).toEqual([480]);
+    const total = DEFAULT_SEARCH_SETTINGS.queries.length;
+    expect(outcome.failures).toEqual([
+      `time limit reached, ${total - 1} of ${total} searches not run`,
+    ]);
+    expect(outcome.partial).toContain("time limit reached");
   });
 
   it("says why it can't run without a key, and stops on an exhausted account", async () => {
