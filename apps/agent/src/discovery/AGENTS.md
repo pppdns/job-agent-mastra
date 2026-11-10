@@ -5,13 +5,16 @@ Fetches new postings from job boards, screens them, and stores the passing ones 
 ```mermaid
 flowchart LR
   T["schedule (main checkout) / POST /discovery/run"] --> C[claim-run]
-  C --> F[fetch-sources] --> X[finish-run]
+  C --> F[fetch-sources] --> TR[triage] --> AS[assess-top-matches] --> R[report] --> X[finish-run]
   F -->|each source| S[source.fetch] --> P[recordPosting]
   P -->|screen fails| PO[(app_postings only)]
   P -->|passes| J[(app_jobs + board snapshot)]
+  TR -->|fast model, 0–100 + reason| J
+  AS -->|main model, best N| D[(app_job_drafts)]
+  R -->|Resend| E[email digest]
 ```
 
-- **Workflow:** `src/mastra/workflows/discover-jobs.ts` (`discover-jobs`). Its steps are claim, then fetch, then finish.
+- **Workflow:** `src/mastra/workflows/discover-jobs.ts` (`discover-jobs`). Its steps are claim, fetch, triage, assess, report, then finish.
   - **Claim** allows one run at a time. A second trigger is skipped, and the route answers 409.
   - **Fetch** calls `runDiscoverySources` (`run.ts`). Every source runs, and its result is recorded as soon as that source finishes. A failing source never stops the others.
   - **Finish** marks the run `failed` only when every source that ran failed.
@@ -47,6 +50,13 @@ flowchart LR
     - Proxies are part of the event price, so there is nothing to configure.
   - **Fixtures:** with `WEB_MODE=fixture`, `sources/index.ts` serves `fixtures/sources/` (dates shifted to "a day ago") instead of the live APIs.
 - **Adding a board:** write a `JobSource` (an Apify actor needs an input builder plus an item parser, like `linkedin.ts`). Then add its id to `DISCOVERY_SOURCES` with a label, plus its settings under `sources`, a fixture and tests.
+- **Funnel** (`funnel.ts`, after fetching). Each step records the run's `funnel` as it finishes; an unexpected error is recorded as `stoppedBy` instead of failing the run.
+  - **Triage** (`triage.ts`): `triagerAgent` (fast model, no tools, structured `triageSchema`) scores every untouched discovered job without a score, newest first, 5 at a time, up to `maxTriagePerRun`. The prompt puts the marker, profile and criteria first (cacheable) and the untrusted posting last. App code caps the score at 39 when the model names a hard conflict. A failed call leaves the job "triage pending" for the next run.
+  - **Assess** (`assess.ts`): the run's best matches (triaged in this run, at or above `triageThreshold`, no draft yet), best first, up to `maxAssessmentsPerRun`, through `assessJob` (shared with re-score; `saveDraft` rules apply).
+  - **Budget** (`budget.ts`): per run, `maxLlmUsdPerRun` and `maxTriagePerRun`. Triage reserves $0.002 per call and settles with real tokens; assessments reserve $0.08. What stopped it goes into `stoppedBy`.
+  - **Usage:** every model call is an `app_run_events` row under the `app_runs` row whose id is the discovery run id and whose thread is `discovery:<runId>`. The funnel's `llmUsd` is summed from those events.
+  - **Report** (`report.ts`): the run's matches (`digestMatches`) go to `DIGEST_TO` through Resend (`RESEND_API_KEY`, `DIGEST_FROM`, links to `APP_BASE_URL`). Skipped without matches or config; every value is HTML-escaped and links point only to the app. Resend's default test sender (`onboarding@resend.dev`) only delivers to the Resend account's own address.
+  - **Mock model:** a prompt starting with `TRIAGE_MARKER` gets a deterministic triage (88 for "Founding", 35 for "intern", else 70), so e2e runs the whole funnel offline.
 - **Storage and screening** (`@copilot/db` `discovery.ts`, `@copilot/shared` `screening.ts`): see [packages/db/AGENTS.md](../../../../packages/db/AGENTS.md#discovery).
   - The screen is deliberately permissive: it never requires a title match, and unknown fields pass.
-  - Triage and assessment (M14) do the real filtering.
+  - Triage and assessment do the real filtering.

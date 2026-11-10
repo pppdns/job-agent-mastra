@@ -317,7 +317,7 @@ Details: [apps/agent/src/rescore/AGENTS.md](../apps/agent/src/rescore/AGENTS.md)
 
 ## Job discovery
 
-A Mastra workflow (`discover-jobs`) fetches new postings from job boards twice a day, plus "Run now" and backfills from `/discovery`. Postings failing a deliberately permissive deterministic screen stay postings; passing ones are deduped into jobs. Triage and top-N assessment follow in M14. Details: [apps/agent/src/discovery/AGENTS.md](../apps/agent/src/discovery/AGENTS.md).
+A Mastra workflow (`discover-jobs`) fetches new postings from job boards twice a day, plus "Run now" and backfills from `/discovery`. Postings failing a deliberately permissive deterministic screen stay postings; passing ones are deduped into jobs. Each new job then gets a fast-model triage score (0–100 + reason; under the threshold it's hidden), the run's best matches get a full assessment, and the matches are emailed (Resend). Details: [apps/agent/src/discovery/AGENTS.md](../apps/agent/src/discovery/AGENTS.md).
 
 ```mermaid
 flowchart LR
@@ -331,6 +331,7 @@ flowchart LR
   F --> SCR{screenPosting<br/>clear misfits only}
   SCR -->|fails, with reasons| PO[(app_postings)]
   SCR -->|passes| DD[dedupe: apply URL or<br/>company key + title] --> J[(app_jobs + board snapshot)]
+  J --> TRI[triage<br/>fast model, budgeted] --> ASS[assess best N<br/>main model] --> MAIL[email digest<br/>Resend]
   SET["/settings/search"] -->|save → rescreenPostings| PO
 ```
 
@@ -388,8 +389,8 @@ Deterministic code enforces everything that matters; the model only proposes.
 | Auth | Servers bound to 127.0.0.1; every agent route behind `SimpleAuth` with `AGENT_SHARED_SECRET`; memory pinned to the user's resource |
 | Untrusted web text | URL guard on every fetch; page text marked untrusted; the UI renders replies without images or raw HTML |
 | Research spend | `ResearchBudget` aborts on tool calls, time or estimated USD |
-| Discovery spend | Per-run Apify caps (`maxTotalChargeUsd` on every actor run) and a 30-day budget check in `runDiscoverySources`; schedule only in the main checkout |
-| Scraped data | Every posting validated with `postingInputSchema`, size-capped, links stripped from descriptions; board hosts fixed per adapter |
+| Discovery spend | Per-run Apify caps (`maxTotalChargeUsd` on every actor run) and a 30-day budget check in `runDiscoverySources`; per-run model cap and triage cap (`DiscoveryBudget`); schedule only in the main checkout |
+| Scraped data | Every posting validated with `postingInputSchema`, size-capped, links stripped from descriptions; board hosts fixed per adapter; the triager has no tools and a named hard conflict caps its score in code; the digest escapes every value and links only to the app |
 | Data integrity | Zod schemas on tool input; `@copilot/db` rejects assessments citing other jobs' sources or stale profile versions; serialized writes |
 | Secrets | Server-side env only, validated at startup; `SensitiveDataFilter` on traces; redaction in usage events |
 
