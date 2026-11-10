@@ -16,7 +16,7 @@ Why not Vercel: the app needs a persistent disk (libSQL + DuckDB files), long st
 
 ## How it runs
 
-- [scripts/start-prod.sh](../scripts/start-prod.sh) is the container entrypoint. It refuses to start without `APP_PASSWORD` (at least 12 characters), `AGENT_SHARED_SECRET` and `AI_GATEWAY_API_KEY`. It then starts the bundled agent and `next start`, and exits when either one dies, so Fly restarts the machine.
+- [scripts/start-prod.sh](../scripts/start-prod.sh) is the container entrypoint. It runs the bundled agent from the repo root: `mastra build` writes its own `pnpm-workspace.yaml` into `.mastra/output`, and `findWorkspaceRoot()` would stop there and miss the migrations. It refuses to start without `APP_PASSWORD` (at least 12 characters), `AGENT_SHARED_SECRET` and `AI_GATEWAY_API_KEY`. It then starts the bundled agent and `next start`, and exits when either one dies, so Fly restarts the machine.
 - Migrations run on first database use in both processes. There's no release step, which would run on a machine without the volume.
 - `auto_stop_machines = "off"`: scheduled workflows need the process up. Size is `shared-cpu-1x` with 1 GB RAM plus 1 GB swap, about $6–8/month with the 3 GB volume.
 - **Login** (`APP_PASSWORD` set): `/login` takes only a password. A hidden fixed username lets password managers save it. The session is a 30-day HttpOnly cookie signed with `AGENT_SHARED_SECRET` (`apps/web/src/server/session.ts`, checked in `src/proxy.ts`). Changing the password signs every session out. Ten failures from one client lock it out for 10 minutes. Locally `APP_PASSWORD` is unset and nothing changes.
@@ -39,7 +39,7 @@ Discovery: `pnpm fly:secrets` also copies `APIFY_API_KEY`, `HIMALAYAS_API_KEY`, 
 ## Deploys
 
 - **Normal:** merge to `main`. [.github/workflows/deploy.yml](../.github/workflows/deploy.yml) runs `pnpm check`, then `flyctl deploy --remote-only` (built on Fly's builders). Expect a few seconds of downtime per deploy, since there's one machine.
-- **Manual:** `fly deploy` from a clean checkout, or "Run workflow" on the Deploy action.
+- **Manual:** "Run workflow" on the Deploy action. Agents never run `fly deploy` from a worktree: there is one machine, so a branch deploy replaces whatever `main` (or another session) just shipped. Only for an outage fix, and say so; then merge it right away.
 - **Rollback:** `fly releases --image`, then `fly deploy --image <previous image>`.
 
 ## Operating
