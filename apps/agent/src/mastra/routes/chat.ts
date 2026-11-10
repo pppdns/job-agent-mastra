@@ -8,6 +8,7 @@ import type { MastraModelOutput } from "@mastra/core/stream";
 import { createUIMessageStreamResponse, type UIMessageChunk } from "ai";
 import { z } from "zod";
 import { env } from "../../env";
+import { reportError } from "../../sentry";
 import { RunRecorder, registerRecorder, releaseRecorder } from "../../usage/recorder";
 import { THREAD_CONTEXT_KEY } from "../agents/copilot";
 import { getAppDb } from "../app-db";
@@ -138,7 +139,10 @@ export const chatRoute = registerApiRoute("/chat", {
     let traceId: string | undefined;
     const ended = async (status: "completed" | "cancelled" | "failed", error?: unknown) => {
       releaseRecorder(recorder);
-      if (error) recorder.error("run", String(error));
+      if (error) {
+        recorder.error("run", String(error));
+        reportError(error, { area: "chat" });
+      }
       await recorder.flush();
       if (!recorder.runId) return;
       try {
