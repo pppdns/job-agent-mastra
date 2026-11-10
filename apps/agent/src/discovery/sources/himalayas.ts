@@ -117,12 +117,13 @@ export function createHimalayasSource(
       let requests = 0;
       let cooledDown = false;
       let timedOut = false;
-      for (const [q, query] of settings.queries.entries()) {
+      for (const [i, query] of settings.queries.entries()) {
         if (timeLeftMs(context) <= 0) {
-          failed.push(timeLimitFailure(settings.queries.length - q, settings.queries.length));
+          failed.push(timeLimitFailure(settings.queries.length - i, settings.queries.length));
           timedOut = true;
           break;
         }
+        context.onProgress?.(i, settings.queries.length, `"${query}"`);
         try {
           for (let page = 1; page <= maxPages; page++) {
             if (requests++ > 0) await sleep(pauseMs, signal);

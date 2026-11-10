@@ -64,6 +64,7 @@ export function createFeedSource(options: {
           timedOut = true;
           break;
         }
+        context.onProgress?.(i, requests.length, request.label);
         try {
           for (const raw of await request.load(context.signal)) {
             const posting = options.parse(raw);

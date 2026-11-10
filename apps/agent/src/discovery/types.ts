@@ -13,6 +13,8 @@ export type FetchContext = {
   /** Wall-clock end of this source's time in the run: no new request or search starts after it. */
   deadline?: Date;
   signal?: AbortSignal;
+  /** Called before each search or request (`done` of `total` finished), for live progress. */
+  onProgress?: (done: number, total: number, label?: string) => void;
 };
 
 /** Milliseconds left before the source's deadline (Infinity without one). */

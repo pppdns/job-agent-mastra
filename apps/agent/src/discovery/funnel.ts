@@ -19,6 +19,7 @@ import { env } from "../env";
 import { RunRecorder } from "../usage/recorder";
 import { assessTopMatches } from "./assess";
 import { DiscoveryBudget } from "./budget";
+import { createProgress } from "./progress";
 import { ALERT_REPEAT_MS, runProblems, sendDigest } from "./report";
 import { httpJson } from "./sources/http";
 import { triageJobs } from "./triage";
@@ -106,7 +107,16 @@ export function reportStep(db: Db, runId: string, funnel: FunnelResult) {
 
 async function triage(db: Db, runId: string, context: StepContext) {
   const { recorder, budget } = await stateOf(db, runId);
-  const outcome = await triageJobs({ db, budget, recorder, ...context });
+  const progress = createProgress(db, runId);
+  progress.step("triage");
+  const outcome = await triageJobs({
+    db,
+    budget,
+    recorder,
+    ...context,
+    onProgress: (done, total) => progress.work(done, total),
+  });
+  await progress.flush();
   const funnel: FunnelResult = {
     ...EMPTY_FUNNEL,
     triaged: outcome.triaged,
@@ -123,6 +133,8 @@ async function triage(db: Db, runId: string, context: StepContext) {
 async function assess(db: Db, runId: string, funnel: FunnelResult, context: StepContext) {
   const { recorder, budget } = await stateOf(db, runId);
   const run = await getDiscoveryRun(db, runId);
+  const progress = createProgress(db, runId);
+  progress.step("assess");
   const outcome = await assessTopMatches({
     db,
     since: run?.startedAt ?? new Date(),
@@ -130,7 +142,9 @@ async function assess(db: Db, runId: string, funnel: FunnelResult, context: Step
     threadId: discoveryThreadId(runId),
     recorder,
     ...context,
+    onProgress: (done, total) => progress.work(done, total),
   });
+  await progress.flush();
   const next: FunnelResult = {
     ...funnel,
     assessed: outcome.assessed,
@@ -143,6 +157,8 @@ async function assess(db: Db, runId: string, funnel: FunnelResult, context: Step
 }
 
 async function report(db: Db, runId: string, funnel: FunnelResult) {
+  const progress = createProgress(db, runId);
+  progress.step("report");
   const [run, settings, recent, lastDay] = await Promise.all([
     getDiscoveryRun(db, runId),
     getSearchSettings(db),
@@ -168,6 +184,7 @@ async function report(db: Db, runId: string, funnel: FunnelResult) {
     lastDay.filter((r) => r.id !== runId),
   );
   const next: FunnelResult = { ...funnel, digest };
+  await progress.flush();
   await recordFunnel(db, runId, next);
   return next;
 }

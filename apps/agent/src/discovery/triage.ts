@@ -74,6 +74,8 @@ export type TriageDeps = {
   signal?: AbortSignal;
   /** The model call; injectable for tests. */
   triage?: (prompt: string, deps: TriageDeps) => Promise<Triage>;
+  /** Called after each job (`done` of `total` in this run's queue). */
+  onProgress?: (done: number, total: number) => void;
 };
 
 export type TriageOutcome = { triaged: number; failed: number; pending: number; matched: number };
@@ -83,6 +85,8 @@ export async function triageJobs(deps: TriageDeps): Promise<TriageOutcome> {
   const call = deps.triage ?? triageWithModel;
   const [profile, settings] = await Promise.all([currentProfile(db), getSearchSettings(db)]);
   const queue = await jobsAwaitingTriage(db, settings.maxTriagePerRun);
+  const total = queue.length;
+  deps.onProgress?.(0, total);
   let triaged = 0;
   let failed = 0;
   let matched = 0;
@@ -109,6 +113,7 @@ export async function triageJobs(deps: TriageDeps): Promise<TriageOutcome> {
         failed += 1;
         console.error("triage failed", job.id, error instanceof Error ? error.message : error);
       }
+      deps.onProgress?.(triaged + failed, total);
     }
   };
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));

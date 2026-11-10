@@ -28,6 +28,8 @@ export type AssessTopDeps = {
   signal?: AbortSignal;
   /** The assessment call; injectable for tests. */
   assess?: (jobId: string, profile: Profile) => Promise<unknown>;
+  /** Called after each job (`done` of `total` candidates). */
+  onProgress?: (done: number, total: number) => void;
 };
 
 export async function assessTopMatches(deps: AssessTopDeps): Promise<AssessOutcome> {
@@ -40,6 +42,8 @@ export async function assessTopMatches(deps: AssessTopDeps): Promise<AssessOutco
     threshold: settings.triageThreshold,
     limit: settings.maxAssessmentsPerRun,
   });
+  const total = queue.length;
+  deps.onProgress?.(0, total);
   let assessed = 0;
   let failed = 0;
   const worker = async () => {
@@ -53,6 +57,7 @@ export async function assessTopMatches(deps: AssessTopDeps): Promise<AssessOutco
         failed += 1;
         if (!(error instanceof AssessmentError)) console.error("assessment failed", job.id, error);
       }
+      deps.onProgress?.(assessed + failed, total);
     }
   };
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));

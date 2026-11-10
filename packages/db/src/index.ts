@@ -24,6 +24,7 @@ export type {
   Claim,
   DiscoveryRun,
   DiscoveryRunStatus,
+  DiscoveryStep,
   DiscoveryTrigger,
   FunnelResult,
   Job,
@@ -35,12 +36,14 @@ export type {
   ProfileFact,
   Run,
   RunEvent,
+  RunProgress,
   Source,
   SourceKind,
   SourceProvider,
   SourceRunResult,
 } from "./schema";
 export * as schema from "./schema";
+export { DISCOVERY_STEPS } from "./schema";
 export { canonicalWebUrl } from "./url";
 
 export function createDb(url: string = resolveDatabaseUrl()) {

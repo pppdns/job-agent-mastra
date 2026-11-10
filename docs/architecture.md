@@ -375,7 +375,7 @@ erDiagram
   app_discovery_runs ||--o{ app_postings : "first seen in"
 ```
 
-`app_search_settings` is a single JSON row (`SearchSettings`). `app_discovery_runs` keeps per-source results as JSON.
+`app_search_settings` is a single JSON row (`SearchSettings`). `app_discovery_runs` keeps per-source results as JSON, plus a live `progress` (step, current source, counts) while a run is going, which `/discovery` shows.
 
 Mastra's own tables (threads, messages, working memory, observations, scores) live in the same libSQL file. Traces, logs and metrics go to DuckDB. Schema: [schema.ts](../packages/db/src/schema.ts).
 
