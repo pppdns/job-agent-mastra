@@ -1,7 +1,19 @@
 import { z } from "zod";
 
+/** Surrounding whitespace (incl. \r) and quotes pasted along with a key. */
+const cleanKey = (v: unknown) =>
+  typeof v === "string"
+    ? v
+        .trim()
+        .replace(/^(["'])(.*)\1$/, "$2")
+        .trim()
+    : v;
+
 /** Optional secret; an empty string counts as unset (e2e blanks keys that `mastra dev` would load from .env). */
-const optionalKey = z.preprocess((v) => (v === "" ? undefined : v), z.string().min(1).optional());
+const optionalKey = z.preprocess((v) => {
+  const key = cleanKey(v);
+  return key === "" ? undefined : key;
+}, z.string().min(1).optional());
 
 const envSchema = z.object({
   LLM_MODE: z.enum(["live", "mock"]).default("live"),

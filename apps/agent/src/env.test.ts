@@ -29,3 +29,13 @@ describe("loadEnv", () => {
     expect(env.TAVILY_API_KEY).toBeUndefined();
   });
 });
+
+describe("optional keys", () => {
+  it("drops whitespace, carriage returns and quotes pasted with a key", () => {
+    const base = { AGENT_SHARED_SECRET: "x".repeat(24), LLM_MODE: "mock" };
+    expect(loadEnv({ ...base, APIFY_API_KEY: ' "apify_api_abc"\r' }).APIFY_API_KEY).toBe(
+      "apify_api_abc",
+    );
+    expect(loadEnv({ ...base, APIFY_API_KEY: "  " }).APIFY_API_KEY).toBeUndefined();
+  });
+});
