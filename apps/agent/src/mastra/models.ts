@@ -7,6 +7,9 @@ import { env } from "../env";
 
 export type ModelRole = "main" | "fast";
 
+/** Starts every triage prompt (the mock model answers it with a triage, not an assessment). */
+export const TRIAGE_MARKER = "Triage this job posting.";
+
 /**
  * Native AI Gateway provider (not the `vercel/` router string), so provider-specific
  * usage such as cache and reasoning tokens is preserved.
@@ -157,12 +160,29 @@ function mockTurn({
     toolCallId: `mock-${toolName}-${prompt.length}`,
   });
 
+  // Triager (structured output): a deterministic score from the posting's title.
+  if (responseFormat?.type === "json" && lastUserText(prompt).includes(TRIAGE_MARKER)) {
+    const title = lastUserText(prompt).match(/^Title: (.+)$/m)?.[1] ?? "";
+    const score = /intern/i.test(title) ? 35 : /founding/i.test(title) ? 88 : 70;
+    return {
+      kind: "text",
+      text: JSON.stringify({ score, reason: `Mock triage of ${title}.`, hardConflict: null }),
+    };
+  }
+
   // Rescorer (structured output): a with_profile assessment citing the listing source.
   if (responseFormat?.type === "json") {
     const sourceId = lastUserText(prompt).match(/Listing \(source id ([^,)]+)/)?.[1] ?? "";
     // with_profile drafts must cite a profile fact in a fit point (inference).
     const factId = lastUserText(prompt).match(/\[fact:([^\]]+)\]/)?.[1];
     const base = MOCK_ASSESSMENT(sourceId);
+    // Without profile facts, fit can't be judged: a role_only assessment (as the rules demand).
+    if (!factId) {
+      return {
+        kind: "text",
+        text: JSON.stringify({ ...base, headline: "Mock assessment without a profile" }),
+      };
+    }
     return {
       kind: "text",
       text: JSON.stringify({

@@ -94,7 +94,7 @@ export async function runRescore(input: { jobIds?: string[]; all?: boolean }, de
       const identity = { jobId: job.id, title: job.title, company: job.company };
       let result: RescoreResult;
       try {
-        result = await rescoreOne(job.id, profile, deps);
+        result = await assessJob(job.id, profile, deps);
       } catch (error) {
         if (deps.signal?.aborted) return;
         const reason =
@@ -121,9 +121,19 @@ export async function runRescore(input: { jobIds?: string[]; all?: boolean }, de
   };
 }
 
-type Profile = Awaited<ReturnType<typeof currentProfile>>;
+export type Profile = Awaited<ReturnType<typeof currentProfile>>;
 
-async function rescoreOne(jobId: string, profile: Profile, deps: RescoreDeps) {
+export type AssessDeps = Pick<
+  RescoreDeps,
+  "db" | "threadId" | "signal" | "tracingContext" | "recorder"
+>;
+
+/**
+ * One full assessment of a saved job against `profile` (structured output, no tools), saved as
+ * its next draft; one retry with the rule a rejected draft broke. Used by re-score and by
+ * discovery for the best new matches. Works for a job without an earlier draft.
+ */
+export async function assessJob(jobId: string, profile: Profile, deps: AssessDeps) {
   const detail = await getJobDetail(deps.db, jobId);
   if (!detail) throw new AssessmentError(`unknown job id ${jobId}`);
   const { job } = detail;
