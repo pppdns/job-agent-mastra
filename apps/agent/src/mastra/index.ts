@@ -71,7 +71,14 @@ export const mastra = new Mastra({
       // returns 403 (or a mismatch error on /chat) for threads owned by anyone else.
       mapUserToResourceId: (user) => user.id,
     }),
-    apiRoutes: [chatRoute, chatResumeRoute, chatStopRoute, threadMessagesRoute, discoveryRunRoute],
+    apiRoutes: [
+      chatRoute,
+      chatResumeRoute,
+      chatStopRoute,
+      threadMessagesRoute,
+      discoveryRunRoute,
+      assessJobRoute,
+    ],
   },
 });
 

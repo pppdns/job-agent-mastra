@@ -2,7 +2,8 @@ import { expect, test } from "@playwright/test";
 
 // Discovery on the fixture sources (fixtures/sources): a manual run stores screened jobs from
 // both boards (the cross-board duplicate merged), shows per-source results and what the screen
-// dropped; loosening the settings re-screens and lets a dropped posting through.
+// dropped; loosening the settings re-screens and lets a dropped posting through; then the inbox
+// tools: unseen filter, Keep anyway, the company page and bulk dismiss.
 
 test("run discovery, see screened jobs, loosen the screen", async ({ page }) => {
   test.setTimeout(90_000);
@@ -64,4 +65,33 @@ test("run discovery, see screened jobs, loosen the screen", async ({ page }) => 
   });
   // Let through by the settings change: triaged on the next run.
   await expect(intern).toContainText("Triage pending");
+
+  // Inbox tools: the unseen filter, keeping a dropped posting, the company page, bulk dismiss.
+  await page.goto("/jobs?tab=new&unseen=1");
+  const inbox = page.getByRole("table", { name: "Jobs" });
+  await expect(inbox.getByRole("row").filter({ hasText: "Lanternfish" })).toHaveCount(1);
+  await expect(inbox.getByRole("row").filter({ hasText: "Quillfeather" })).toHaveCount(0);
+
+  await page.goto("/jobs?tab=screened");
+  const dropped = page.getByRole("region", { name: "Dropped by the screen" });
+  const executive = dropped.getByRole("listitem").filter({ hasText: "Account Executive" });
+  await expect(executive).toContainText('title contains "account executive"');
+  await executive.getByRole("button", { name: "Keep anyway" }).click();
+  await expect(executive).toHaveCount(0);
+
+  await page.goto("/jobs?q=Tidewater");
+  const tidewater = page.getByRole("table", { name: "Jobs" });
+  await expect(tidewater.getByRole("row")).toHaveCount(3); // header + both roles
+  await tidewater.getByRole("link", { name: "+1 more role here" }).first().click();
+  await expect(page.getByRole("heading", { name: "Tidewater Robotics" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Roles" }).getByRole("listitem")).toHaveCount(2);
+
+  await page.goto("/jobs?q=Tidewater");
+  await page.getByRole("checkbox", { name: "Select all jobs on this page" }).check();
+  const bar = page.getByRole("toolbar", { name: "Selected jobs" });
+  await expect(bar).toContainText("2 selected");
+  await bar.getByRole("button", { name: "Dismiss" }).click();
+  await expect(page.getByText(/No active jobs match/)).toBeVisible();
+  await page.goto("/jobs?q=Tidewater&tab=archived");
+  await expect(page.getByRole("table", { name: "Jobs" }).getByRole("row")).toHaveCount(3);
 });
