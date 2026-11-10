@@ -20,7 +20,7 @@ flowchart LR
   - **Finish** marks the run `failed` only when every source that ran failed.
   - **Interrupted runs:** runs left `running` by a crash are swept to `interrupted` at startup (`getAppDb`).
 - **Schedule:** `0 7,16 * * *` in `DISCOVERY_TZ`.
-  - It is declared only when `discoveryScheduleEnabled()`: `DISCOVERY_SCHEDULE=on`, the agent on the main checkout's port 4111, and no `DATABASE_URL` override.
+  - It is declared only when `discoveryScheduleEnabled()`: `DISCOVERY_SCHEDULE=on`, and either the production image (`NODE_ENV=production`, the Fly machine) or the main checkout's dev server (port 4111, no `DATABASE_URL` override). Never on in both: two schedules, two bills and emails.
   - Worktrees, e2e and evals never schedule. They copy `.env` and the database, so this check matters.
   - Where the schedule is off, `index.ts` deletes a copied `wf_discover-jobs` schedule row at boot.
   - Missed fires (laptop asleep) aren't replayed. The next run catches up from each source's last good run.

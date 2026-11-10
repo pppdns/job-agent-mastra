@@ -158,3 +158,8 @@ Live models, offline web (fixtures). Judge scores are evidence, not truth. Detai
 - Live on Fly (`job-copilot-c456e8`, fra): image built on Fly's remote builder (591 MB). Both servers start, migrations run, the health check passes. `/` → `/login`, `/jobs` → `/login?next=%2Fjobs`, `/api/run-status` → 401. Port 4111 isn't reachable publicly. Through `fly proxy` Studio loads, and the API without a token returns 401.
 - Data: an online `sqlite3 .backup` of the local DB (integrity ok) was uploaded as `/data/copilot.db.import` (sha256 matched) and swapped in at startup. Production reads 34 jobs and 87 threads, as locally. It survives `fly machine restart`; after the signal trap the machine shuts down cleanly ("Main child exited normally", volume unmounts).
 - Not exercised yet: signing in with the real password and a live chat turn in production (needs the user's password), a deploy from the GitHub Action (needs `FLY_API_TOKEN`), the local `docker run` (skipped: machine overloaded; the Fly build covers the image).
+
+## Discovery on Fly (after #26)
+
+- Deploy of #26 (release 8): healthy, agent and Studio up. Production DB checked read-only over `fly ssh`: 14 migrations applied (incl. `0012_discovery`, `0013_discovery_funnel`), discovery tables present, 34 chat jobs kept, no discovery runs or schedule rows yet. Fly secrets include `APIFY_API_KEY`, `RESEND_API_KEY`, `DIGEST_TO`; `DISCOVERY_SCHEDULE` not set.
+- Found: `discoveryScheduleEnabled()` could never be true on Fly (it requires no `DATABASE_URL`). Now the production image (`NODE_ENV=production`) qualifies; dev worktrees, e2e and evals still never schedule (unit test). Not yet exercised: a run or a scheduled fire on Fly.

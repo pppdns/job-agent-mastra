@@ -29,15 +29,19 @@ export const DISCOVERY_CRON = "0 7,16 * * *";
 const MAIN_AGENT_PORT = 4111;
 
 /**
- * The schedule fires only in the main checkout's dev server on its own database: worktrees copy
- * `.env` and the database, so without this every checkout (and e2e, evals) would run it too.
+ * Where the schedule may fire (with DISCOVERY_SCHEDULE=on): the production image (`NODE_ENV`
+ * production: the Fly machine, its own database), or the main checkout's dev server on its own
+ * database. Worktrees copy `.env` and the database, so without the dev rule every checkout (and
+ * e2e, evals) would run it too. Never turn it on both locally and on Fly: two schedules mean two
+ * runs, bills and emails, against different databases.
  */
-export function discoveryScheduleEnabled(source: NodeJS.ProcessEnv = process.env): boolean {
-  return (
-    env.DISCOVERY_SCHEDULE === "on" &&
-    Number(source.AGENT_PORT ?? MAIN_AGENT_PORT) === MAIN_AGENT_PORT &&
-    !source.DATABASE_URL
-  );
+export function discoveryScheduleEnabled(
+  source: NodeJS.ProcessEnv = process.env,
+  schedule: "on" | "off" = env.DISCOVERY_SCHEDULE,
+): boolean {
+  if (schedule !== "on") return false;
+  if (source.NODE_ENV === "production") return true;
+  return Number(source.AGENT_PORT ?? MAIN_AGENT_PORT) === MAIN_AGENT_PORT && !source.DATABASE_URL;
 }
 
 const triggerSchema = z.object({
