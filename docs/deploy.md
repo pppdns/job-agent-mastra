@@ -34,7 +34,7 @@ No value is printed or written to disk. Running it again rotates the password an
 
 GitHub holds one repo secret, `FLY_API_TOKEN`: a deploy token for this app only (`fly tokens create deploy`).
 
-Discovery: `pnpm fly:secrets` also copies `APIFY_API_KEY`, `HIMALAYAS_API_KEY`, `RESEND_API_KEY`, `DIGEST_FROM` and `DIGEST_TO` when they are set locally, and `APP_BASE_URL` in `fly.toml` points digest links here. The schedule stays off on Fly for now: `discoveryScheduleEnabled()` also requires no `DATABASE_URL` and the main port, which Fly doesn't meet. Turning it on needs that check relaxed (PLAN M17). Manual runs from `/discovery` work.
+Discovery: `pnpm fly:secrets` also copies `APIFY_API_KEY`, `HIMALAYAS_API_KEY`, `RESEND_API_KEY`, `DIGEST_FROM` and `DIGEST_TO` when they are set locally, and `APP_BASE_URL` in `fly.toml` points digest links here. The schedule (twice a day, `0 7,16 * * *` in `DISCOVERY_TZ`) runs on Fly once `DISCOVERY_SCHEDULE=on` is set there (`fly secrets set DISCOVERY_SCHEDULE=on`, or in `fly.toml` `[env]`): `discoveryScheduleEnabled()` allows it in the production image (`NODE_ENV=production`). Turn it off locally then (`DISCOVERY_SCHEDULE=off` in the main checkout's `apps/agent/.env`), or both machines run, bill and email against their own databases. Manual runs from `/discovery` always work.
 
 ## Deploys
 
