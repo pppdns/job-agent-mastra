@@ -20,8 +20,8 @@ export type AssessOutcome = { assessed: number; failed: number; errors: string[]
 
 export type AssessTopDeps = {
   db: Db;
-  /** Only jobs triaged since then (this run) are candidates. */
-  since: Date;
+  /** Only jobs triaged since then (this run) are candidates; unset = every open match. */
+  since?: Date;
   budget: DiscoveryBudget;
   threadId: string;
   recorder?: RunRecorder;

@@ -214,6 +214,12 @@ Scheduled ingestion from job boards, reported as an inbox plus an email digest. 
 - [x] Compared the `fantastic-jobs/career-site-job-listing-feed` actor with a hand-built Greenhouse/Lever/Ashby/Workable resolver ([verification](verification.md#ats-enrichment-m18-2026-11-10)). Picked the feed as a new source ("Company career sites", at most once a day, ~$0.40 a run): the resolver finds no new jobs, only re-reads ones we already link to.
 - [x] `ats_key` (`greenhouse|lever|ashby|workable:<company>:<id>`, read from any URL form) as the strongest dedupe key, backfilled for existing jobs; the feed's postings are stored as `ats` sources. Skipped boards: TrueUp, Tech Jobs for Good, Arc.dev, JustRemote, PowerToFly, Climatebase, Levels.fyi (no maintained actor), FlexJobs (paid login), AIJobs.net (shut down).
 
+### M19 — Discovery operations (2026-11-10)
+- [x] Cut-off runs stay interrupted (no Mastra boot-time restart of `discover-jobs`); server times in Budapest time on Fly.
+- [x] `/discovery`: a "Last run" panel and an outcome per run ("All good", "N problems", "Interrupted", "Failed") with its problems; triage and assessment failure reasons kept on the run.
+- [x] Manual "Triage next batch", "Assess more matches" (runs without fetching) and "Stop run".
+- [ ] Verified live on Fly: Budapest times, Stop during a triage-only run, a full triage-only run.
+
 ### Deployment — Fly.io (2026-11-10)
 - [x] Password login page (`APP_PASSWORD`, signed 30-day cookie, per-client throttle); off when unset.
 - [x] One image runs both servers ([Dockerfile](../Dockerfile), [scripts/start-prod.sh](../scripts/start-prod.sh)); `fly.toml`: one always-on machine, `/data` volume, agent and Studio only through `fly proxy`.

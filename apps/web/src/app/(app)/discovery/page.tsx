@@ -1,4 +1,5 @@
 import {
+  countAwaitingTriage,
   type DiscoveryRun,
   type FunnelResult,
   getSearchSettings,
@@ -79,11 +80,12 @@ async function Discovery() {
   const db = await appDb();
   const now = Date.now();
   const monthAgo = new Date(now - 30 * DAY_MS);
-  const [runs, settings, spent, screenedOut] = await Promise.all([
+  const [runs, settings, spent, screenedOut, awaitingTriage] = await Promise.all([
     listDiscoveryRuns(db, 20),
     getSearchSettings(db),
     sourceSpendSince(db, PAID_DISCOVERY_SOURCES, monthAgo),
     screenedOutSince(db, new Date(now - 7 * DAY_MS)),
+    countAwaitingTriage(db),
   ]);
   const stats = await sourceStatsSince(db, DISCOVERY_SOURCES, monthAgo, settings.triageThreshold);
   const current = runs[0]?.status === "running" ? runs[0] : null;
@@ -102,7 +104,12 @@ async function Discovery() {
           with <code>DISCOVERY_SCHEDULE=on</code>). Each run asks every source for what was posted
           since its last good run. Use a backfill for a first fill or after a long break.
         </p>
-        <DiscoveryControls running={running} maxBackfillUsd={maxBackfillUsd} />
+        <DiscoveryControls
+          running={running}
+          maxBackfillUsd={maxBackfillUsd}
+          awaitingTriage={awaitingTriage}
+          maxAssessments={settings.maxAssessmentsPerRun}
+        />
       </section>
 
       {current ? (
@@ -321,6 +328,8 @@ function BudgetBar({ spent, budget }: { spent: number; budget: number }) {
 const TRIGGER_LABEL: Record<DiscoveryRun["trigger"], string> = {
   schedule: "Scheduled",
   manual: "Manual",
+  triage: "Triage only",
+  assess: "Assess only",
 };
 
 /** The latest finished run in one glance: did it work, what it brought, what needs a look. */

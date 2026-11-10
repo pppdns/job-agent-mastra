@@ -3,13 +3,14 @@ import {
   AssessmentError,
   currentProfile,
   endRun,
+  finishDiscoveryRun,
   getJobDetail,
   listDiscoveryRuns,
   startRun,
 } from "@copilot/db";
 import { registerApiRoute } from "@mastra/core/server";
 import { z } from "zod";
-import { discoveryThreadId } from "../../discovery/funnel";
+import { closeUsage, discoveryThreadId } from "../../discovery/funnel";
 import { BACKFILL_DAYS } from "../../discovery/run";
 import { assessJob } from "../../rescore/run";
 import { reportError } from "../../sentry";
@@ -17,7 +18,12 @@ import { RunRecorder } from "../../usage/recorder";
 import { getAppDb } from "../app-db";
 import { DISCOVER_JOBS_WORKFLOW_ID } from "../workflows/discover-jobs";
 
+const MODE_TRIGGER = { fetch: "manual", triage: "triage", assess: "assess" } as const;
+const MODE_LABEL = { fetch: "manual", triage: "triage only", assess: "assess only" } as const;
+
 const bodySchema = z.object({
+  /** fetch: the normal run; triage: triage the next batch of waiting jobs; assess: assess more matches. */
+  mode: z.enum(["fetch", "triage", "assess"]).default("fetch"),
   lookbackDays: z
     .number()
     .int()
@@ -26,7 +32,8 @@ const bodySchema = z.object({
 });
 
 /**
- * POST /discovery/run — "Run now" (optionally a backfill of 7 or 30 days). Starts the
+ * POST /discovery/run — "Run now" (optionally a backfill of 7 or 30 days), "Triage next batch"
+ * (mode triage) or "Assess more matches" (mode assess: no fetch, no triage). Starts the
  * discover-jobs workflow in the background; 409 while a run is going (the workflow's first step
  * also refuses a second run, so a race can't start two).
  */
@@ -34,19 +41,46 @@ export const discoveryRunRoute = registerApiRoute("/discovery/run", {
   method: "POST",
   handler: async (c) => {
     const parsed = bodySchema.safeParse(await c.req.json().catch(() => ({})));
-    if (!parsed.success) return c.json({ error: "lookbackDays must be 7 or 30" }, 400);
+    if (!parsed.success) {
+      return c.json({ error: "mode must be fetch, triage or assess; lookbackDays 7 or 30" }, 400);
+    }
+    const { mode } = parsed.data;
+    const lookbackDays = mode === "fetch" ? (parsed.data.lookbackDays ?? null) : null;
     const db = await getAppDb();
     const [latest] = await listDiscoveryRuns(db, 1);
     if (latest?.status === "running") return c.json({ error: "A discovery run is running" }, 409);
     const workflow = c.get("mastra").getWorkflow("discoverJobsWorkflow");
     const run = await workflow.createRun();
     const { runId } = await run.startAsync({
-      inputData: { trigger: "manual", lookbackDays: parsed.data.lookbackDays ?? null },
+      inputData: { trigger: MODE_TRIGGER[mode], lookbackDays },
       tracingOptions: {
-        rootSpanName: `discover-jobs (manual${parsed.data.lookbackDays ? `, ${parsed.data.lookbackDays}-day backfill` : ""})`,
+        rootSpanName: `discover-jobs (${MODE_LABEL[mode]}${lookbackDays ? `, ${lookbackDays}-day backfill` : ""})`,
       },
     });
     return c.json({ workflowRunId: runId, workflowId: DISCOVER_JOBS_WORKFLOW_ID }, 202);
+  },
+});
+
+/**
+ * POST /discovery/stop — "Stop run": cancels the running workflow (its steps get the abort
+ * signal; an Apify run in flight is aborted) and ends the run as interrupted. What finished is
+ * kept, and the next run catches up, as after a restart.
+ */
+export const discoveryStopRoute = registerApiRoute("/discovery/stop", {
+  method: "POST",
+  handler: async (c) => {
+    const db = await getAppDb();
+    const [latest] = await listDiscoveryRuns(db, 1);
+    if (latest?.status !== "running") return c.json({ error: "No discovery run is running" }, 409);
+    if (latest.workflowRunId) {
+      const workflow = c.get("mastra").getWorkflow("discoverJobsWorkflow");
+      const run = await workflow.createRun({ runId: latest.workflowRunId });
+      await run.cancel().catch((error: unknown) => console.error("discovery stop failed", error));
+    }
+    await finishDiscoveryRun(db, latest.id, "interrupted", "Stopped from /discovery");
+    await closeUsage(db, latest.id, false);
+    console.log(`discovery ${latest.id}: stopped from /discovery`);
+    return c.json({ runId: latest.id });
   },
 });
 

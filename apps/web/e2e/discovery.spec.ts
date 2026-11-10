@@ -10,7 +10,8 @@ test("run discovery, see screened jobs, loosen the screen", async ({ page }) => 
   await page.goto("/discovery");
   await page.getByRole("button", { name: "Run now" }).click();
   const runs = page.getByRole("table", { name: "Discovery runs" });
-  await expect(runs.getByText("completed")).toBeVisible({ timeout: 30_000 });
+  const lastRun = page.getByRole("region", { name: "Last run" });
+  await expect(lastRun).toContainText("Completed", { timeout: 30_000 });
   await expect(runs).toContainText("Himalayas");
   await expect(runs).toContainText("1 merged");
   // Mock triage scores every new job; the best get a full (mock) assessment; no email in e2e.
@@ -19,6 +20,12 @@ test("run discovery, see screened jobs, loosen the screen", async ({ page }) => 
   await expect(runs).toContainText("7 triaged");
   await expect(runs).toContainText("7 assessed");
   await expect(runs).toContainText("no email: email not configured");
+  // Nothing left to triage; "Assess more matches" runs the funnel without fetching.
+  await expect(page.getByRole("button", { name: /Triage next batch · 0 waiting/ })).toBeDisabled();
+  await page.getByRole("button", { name: /Assess more matches/ }).click();
+  await expect(lastRun).toContainText("Assess only", { timeout: 30_000 });
+  await expect(lastRun).toContainText("Completed");
+  await expect(lastRun).toContainText("0 new jobs");
 
   const screened = page.getByRole("region", { name: "Screened out" });
   await expect(screened).toContainText("Software Engineering Intern");
@@ -49,7 +56,7 @@ test("run discovery, see screened jobs, loosen the screen", async ({ page }) => 
   // A second run while nothing is new: everything is "seen before", no new jobs.
   await page.goto("/discovery");
   await page.getByRole("button", { name: "Run now" }).click();
-  await expect(runs.getByRole("row")).toHaveCount(3, { timeout: 30_000 });
+  await expect(runs.getByRole("row")).toHaveCount(4, { timeout: 30_000 });
   await expect(runs.getByRole("row").nth(1)).toContainText("seen before");
 
   // Dropping "intern" from the excludes re-screens at once and lets the intern posting in.

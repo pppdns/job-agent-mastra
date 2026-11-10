@@ -295,6 +295,11 @@ describe("problems and alerts", () => {
     expect(problems[3]?.message).toBe("12 of 12 triage calls failed");
   });
 
+  it("leaves out sources the run didn't ask (a triage-only run repeats no source alerts)", () => {
+    const states = [state({ unhealthy: true }), state({ source: "linkedin", unhealthy: true })];
+    expect(runProblems({ sources: [] }, funnel, states)).toEqual([]);
+  });
+
   it("ignores expected caps and a few failed calls", () => {
     const capped = runProblems(
       {

@@ -138,7 +138,8 @@ async function assess(db: Db, runId: string, funnel: FunnelResult, context: Step
   progress.step("assess");
   const outcome = await assessTopMatches({
     db,
-    since: run?.startedAt ?? new Date(),
+    // An assess-only run picks from every open match; the others assess their own new matches.
+    since: run?.trigger === "assess" ? undefined : (run?.startedAt ?? new Date()),
     budget,
     threadId: discoveryThreadId(runId),
     recorder,

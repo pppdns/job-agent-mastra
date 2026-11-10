@@ -334,6 +334,11 @@ describe("triage and matches", () => {
 
     const toAssess = await jobsToAssess(db, { since: start, threshold: 60, limit: 1 });
     expect(toAssess).toEqual([{ id: a?.id, triageScore: 90 }]);
+    // Without `since` (an assess-only run): every open match, however long ago it was triaged.
+    expect(await jobsToAssess(db, { since: new Date(), threshold: 60, limit: 5 })).toEqual([]);
+    expect((await jobsToAssess(db, { threshold: 60, limit: 5 })).map((j) => j.triageScore)).toEqual(
+      [90, 65],
+    );
     const matches = await digestMatches(db, { since: start, threshold: 60 });
     expect(matches.map((m) => m.triageScore)).toEqual([90, 65]);
     const source = await latestListingSource(db, a?.id ?? "");
