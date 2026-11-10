@@ -32,7 +32,8 @@ fi
 
 # From the repo root, not .mastra/output: the bundle writes its own pnpm-workspace.yaml there, and
 # findWorkspaceRoot() (migrations, data paths) would stop at it.
-node apps/agent/.mastra/output/index.mjs &
+# --enable-source-maps: stack traces (Sentry, logs) point at src/ files (bundler.sourcemap).
+node --enable-source-maps apps/agent/.mastra/output/index.mjs &
 (cd apps/web && exec node_modules/.bin/next start --hostname 0.0.0.0 --port "${WEB_PORT:-3000}") &
 
 # Bash as PID 1 ignores SIGTERM unless trapped: forward Fly's stop signal so both servers close

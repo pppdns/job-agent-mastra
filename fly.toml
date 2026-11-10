@@ -7,6 +7,9 @@ swap_size_mb = 1024
 kill_timeout = "30s"
 
 [build]
+  [build.args]
+    # Public by design (it only allows sending events); read by both servers and the browser.
+    SENTRY_DSN = "https://d3fc4d80c3c0e2361d37a60873120454@o4510280463613952.ingest.us.sentry.io/4512408149884928"
 
 [deploy]
   # One volume = one machine: replace it in place instead of rolling.
