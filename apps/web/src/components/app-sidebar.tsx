@@ -1,21 +1,25 @@
+import { LogOutIcon } from "lucide-react";
 import { Suspense } from "react";
+import { logoutAction } from "@/app/login/actions";
 import { NavLinks } from "@/components/nav-links";
 import { NewChatButton } from "@/components/new-chat-button";
 import { ThreadList } from "@/components/thread-list";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { listThreads } from "@/server/threads";
 
-export function AppSidebar() {
+export function AppSidebar({ canSignOut = false }: { canSignOut?: boolean }) {
   return (
     <Sidebar>
       <SidebarHeader>
@@ -36,6 +40,20 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      {canSignOut ? (
+        <SidebarFooter>
+          <form action={logoutAction}>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton type="submit">
+                  <LogOutIcon />
+                  Sign out
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </form>
+        </SidebarFooter>
+      ) : null}
     </Sidebar>
   );
 }
