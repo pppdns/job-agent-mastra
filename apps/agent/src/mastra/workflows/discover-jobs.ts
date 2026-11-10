@@ -104,6 +104,8 @@ const fetchSources = createStep({
       });
       return { ...inputData, sources };
     } catch (error) {
+      // Stopped: the stop route ends the run as interrupted; finishing here would race it.
+      if (abortSignal?.aborted) throw error;
       reportError(error, { area: "discovery" });
       await finishDiscovery(db, inputData.runId, []).catch(() => undefined);
       throw error;

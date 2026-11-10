@@ -25,17 +25,14 @@ export function DiscoveryControls({
   awaitingTriage: number;
   maxAssessments: number;
 }) {
-  const [state, action, pending] = useActionState<DiscoveryActionState, FormData>(
-    startDiscoveryAction,
-    null,
-  );
-  const [stopState, stop, stopping] = useActionState<DiscoveryActionState, FormData>(
-    stopDiscoveryAction,
+  // One action for every button, so the feedback line always shows the latest result.
+  const [shown, action, pending] = useActionState<DiscoveryActionState, FormData>(
+    (prev, formData) =>
+      formData.get("run") === "stop" ? stopDiscoveryAction() : startDiscoveryAction(prev, formData),
     null,
   );
   const busy = running || pending;
   const cost = maxBackfillUsd === null ? "" : ` · up to $${maxBackfillUsd.toFixed(2)}`;
-  const shown = stopState ?? state;
   return (
     <div className="flex flex-col gap-2">
       <form action={action} className="flex flex-wrap items-center gap-2">
@@ -68,9 +65,16 @@ export function DiscoveryControls({
         </Button>
       </form>
       {running && (
-        <form action={stop}>
-          <Button type="submit" variant="destructive" size="sm" disabled={stopping}>
-            {stopping ? "Stopping…" : "Stop run"}
+        <form action={action}>
+          <Button
+            type="submit"
+            name="run"
+            value="stop"
+            variant="destructive"
+            size="sm"
+            disabled={pending}
+          >
+            {pending ? "Stopping…" : "Stop run"}
           </Button>
         </form>
       )}

@@ -73,9 +73,16 @@ export const discoveryStopRoute = registerApiRoute("/discovery/stop", {
     const [latest] = await listDiscoveryRuns(db, 1);
     if (latest?.status !== "running") return c.json({ error: "No discovery run is running" }, 409);
     if (latest.workflowRunId) {
-      const workflow = c.get("mastra").getWorkflow("discoverJobsWorkflow");
-      const run = await workflow.createRun({ runId: latest.workflowRunId });
-      await run.cancel().catch((error: unknown) => console.error("discovery stop failed", error));
+      try {
+        const workflow = c.get("mastra").getWorkflow("discoverJobsWorkflow");
+        const run = await workflow.createRun({ runId: latest.workflowRunId });
+        await run.cancel();
+      } catch (error) {
+        // Still running: keep the row running, so the one-run lock keeps holding.
+        console.error("discovery stop failed", error);
+        reportError(error, { area: "discovery" });
+        return c.json({ error: "The run could not be stopped; try again." }, 502);
+      }
     }
     await finishDiscoveryRun(db, latest.id, "interrupted", "Stopped from /discovery");
     await closeUsage(db, latest.id, false);

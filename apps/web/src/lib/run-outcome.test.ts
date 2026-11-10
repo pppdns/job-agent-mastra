@@ -78,6 +78,14 @@ describe("runOutcome", () => {
     expect(outcome.label).toBe("3 problems");
   });
 
+  it("counts a failed email as a problem", () => {
+    const outcome = runOutcome(
+      run({ funnel: funnel({ status: "failed", message: "Resend answered 500", matches: 3 }) }),
+    );
+    expect(outcome.problems).toEqual(["Email failed: Resend answered 500"]);
+    expect(outcome.label).toBe("1 problem");
+  });
+
   it("does not count an expected cap stop as a problem", () => {
     const outcome = runOutcome(run({ funnel: { ...funnel(), stoppedBy: "triage cap (400)" } }));
     expect(outcome.label).toBe("All good");

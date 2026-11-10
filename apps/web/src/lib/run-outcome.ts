@@ -18,7 +18,11 @@ export type RunOutcome = {
  */
 export function runProblems(run: Pick<DiscoveryRun, "sources" | "funnel">): string[] {
   const digest = run.funnel?.digest;
-  if (digest) return digest.problems ?? [];
+  if (digest) {
+    const problems = [...(digest.problems ?? [])];
+    if (digest.status === "failed") problems.push(`Email failed: ${digest.message}`);
+    return problems;
+  }
   const problems = run.sources.flatMap((s) => {
     const label = DISCOVERY_SOURCE_LABELS[s.source];
     if (s.status === "failed") return [`${label} failed: ${s.message ?? "unknown error"}`];
