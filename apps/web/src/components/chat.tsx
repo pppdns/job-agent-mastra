@@ -10,6 +10,8 @@ import {
   type FormEvent,
   type KeyboardEvent,
   type ReactNode,
+  useEffect,
+  useRef,
   useState,
 } from "react";
 import { Streamdown } from "streamdown";
@@ -75,7 +77,15 @@ export function Chat({
     },
   });
   const [input, setInput] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const isEmpty = messages.length === 0;
   const busy = status === "submitted" || status === "streaming";
+
+  // A new (empty) chat focuses the input so you can start typing. An effect, not `autoFocus`:
+  // Next keeps visited pages mounted but hidden, and effects re-run when one is shown again.
+  useEffect(() => {
+    if (isEmpty) inputRef.current?.focus();
+  }, [isEmpty]);
 
   /** Stops the run on the server (research included), then closes the stream. */
   function stopRun() {
@@ -110,7 +120,7 @@ export function Chat({
           <MessageScroller className="min-h-0 flex-1">
             <MessageScrollerViewport>
               <MessageScrollerContent className="gap-4 p-4" aria-label="Conversation">
-                {messages.length === 0 && (
+                {isEmpty && (
                   <p className="py-16 text-center text-sm text-muted-foreground">
                     Paste a job listing or ask a question to get started.
                   </p>
@@ -143,6 +153,7 @@ export function Chat({
 
         <form onSubmit={submit} className="flex items-end gap-2 border-t p-4">
           <Textarea
+            ref={inputRef}
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={onKeyDown}
