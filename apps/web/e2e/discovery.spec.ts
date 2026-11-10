@@ -12,6 +12,10 @@ test("run discovery, see screened jobs, loosen the screen", async ({ page }) => 
   await expect(runs.getByText("completed")).toBeVisible({ timeout: 30_000 });
   await expect(runs).toContainText("Himalayas");
   await expect(runs).toContainText("1 merged");
+  // Mock triage scores every new job; the best get a full (mock) assessment; no email in e2e.
+  await expect(runs).toContainText("3 triaged");
+  await expect(runs).toContainText("3 assessed");
+  await expect(runs).toContainText("no email: email not configured");
 
   const screened = page.getByRole("region", { name: "Screened out" });
   await expect(screened).toContainText("Software Engineering Intern");
@@ -25,6 +29,14 @@ test("run discovery, see screened jobs, loosen the screen", async ({ page }) => 
   await expect(row).toHaveCount(1);
   await expect(row).toContainText("Himalayas");
   await expect(row).toContainText("LinkedIn");
+  await expect(row).toContainText("New");
+
+  // New matches count on the Jobs nav item until opened.
+  const badge = page.getByLabel(/^\d+ new match/).filter({ visible: true });
+  await expect(badge).toHaveText("3");
+  await row.getByRole("link").first().click();
+  await expect(page.getByText("Triage 88")).toBeVisible();
+  await expect(badge).toHaveText("2");
   await page.goto("/jobs?q=Pebblework");
   await expect(page.getByText(/No active jobs match/)).toBeVisible();
 
@@ -47,7 +59,9 @@ test("run discovery, see screened jobs, loosen the screen", async ({ page }) => 
     page.getByRole("form", { name: "Search settings" }).getByRole("status"),
   ).toContainText("1 new job let through");
   await page.goto("/jobs?q=Pebblework");
-  await expect(
-    page.getByRole("table", { name: "Jobs" }).getByText("Software Engineering Intern"),
-  ).toBeVisible();
+  const intern = page.getByRole("table", { name: "Jobs" }).getByRole("row").filter({
+    hasText: "Software Engineering Intern",
+  });
+  // Let through by the settings change: triaged on the next run.
+  await expect(intern).toContainText("Triage pending");
 });

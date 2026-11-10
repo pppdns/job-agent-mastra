@@ -19,6 +19,8 @@ const job = (id: string, summary?: Partial<AssessmentSummary>): JobOverview => (
   postedBasis: null,
   origin: "chat",
   triageScore: null,
+  triageReason: null,
+  seenAt: null,
   draftVersion: null,
   draftProfileVersion: null,
   profileStale: false,
@@ -36,6 +38,23 @@ const job = (id: string, summary?: Partial<AssessmentSummary>): JobOverview => (
 });
 
 const ids = (jobs: JobOverview[]) => jobs.map((j) => j.id);
+
+describe("sortJobs by triage", () => {
+  it("orders unassessed discovered jobs by triage score, after assessed ones", () => {
+    const scored = (id: string, triageScore: number | null) => ({
+      ...job(id),
+      summary: null,
+      origin: "discovery" as const,
+      triageScore,
+    });
+    const assessed = job("assessed", { fitLevel: "good", fitBasis: "with_profile" });
+    const sorted = sortJobs(
+      [scored("low", 40), scored("none", null), assessed, scored("high", 90)],
+      "fit",
+    );
+    expect(sorted.map((j) => j.id)).toEqual(["assessed", "high", "low", "none"]);
+  });
+});
 
 describe("sortJobs", () => {
   const jobs = [

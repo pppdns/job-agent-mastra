@@ -153,6 +153,54 @@ export function SearchSettingsForm({ settings }: { settings: SearchSettings }) {
       </section>
 
       <section className="flex flex-col gap-3">
+        <h2 className="font-medium">Triage and assessments</h2>
+        <p className="text-sm text-muted-foreground">
+          Every job that passes the screen gets a quick triage score (0–100) against your profile.
+          Jobs under the threshold are hidden; the best new matches of each run get a full
+          assessment.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Show jobs scoring at least" hint="0–100. Lower it to see more.">
+            <Input
+              name="triageThreshold"
+              type="number"
+              min={0}
+              max={100}
+              defaultValue={settings.triageThreshold}
+            />
+          </Field>
+          <Field label="Full assessments per run" hint="About $0.04 each, best matches first.">
+            <Input
+              name="maxAssessmentsPerRun"
+              type="number"
+              min={0}
+              max={50}
+              defaultValue={settings.maxAssessmentsPerRun}
+            />
+          </Field>
+          <Field label="Triage at most per run" hint="The rest waits for the next run.">
+            <Input
+              name="maxTriagePerRun"
+              type="number"
+              min={0}
+              max={2000}
+              defaultValue={settings.maxTriagePerRun}
+            />
+          </Field>
+          <Field label="Max model spend per run (USD)" hint="Triage plus assessments.">
+            <Input
+              name="maxLlmUsdPerRun"
+              type="number"
+              min={0}
+              max={50}
+              step={0.1}
+              defaultValue={settings.maxLlmUsdPerRun}
+            />
+          </Field>
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-3">
         <h2 className="font-medium">Sources</h2>
         <div className="flex flex-col gap-3 rounded-lg border p-3">
           <Check

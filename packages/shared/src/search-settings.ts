@@ -46,10 +46,14 @@ export const searchSettingsSchema = z.object({
     .object({ amount: z.number().positive(), currency: z.string().trim().length(3) })
     .nullable()
     .default(null),
-  /** Triage score (0–100) a job needs to be shown (M14). */
+  /** Triage score (0–100) a job needs to be shown. */
   triageThreshold: z.number().int().min(0).max(100).default(60),
-  /** Full assessments per run for the best new matches (M14). */
+  /** Full assessments per run for the best new matches. */
   maxAssessmentsPerRun: z.number().int().min(0).max(50).default(15),
+  /** Most jobs triaged per run; the rest wait for the next run (newest first). */
+  maxTriagePerRun: z.number().int().min(0).max(2_000).default(400),
+  /** Hard cap on what one run may spend on models: triage plus assessments (USD). */
+  maxLlmUsdPerRun: z.number().min(0).max(50).default(2),
   sources: z
     .object({
       himalayas: z

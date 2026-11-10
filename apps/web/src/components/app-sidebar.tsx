@@ -1,3 +1,5 @@
+import { unseenMatchCount } from "@copilot/db";
+import { connection } from "next/server";
 import { Suspense } from "react";
 import { NavLinks } from "@/components/nav-links";
 import { NewChatButton } from "@/components/new-chat-button";
@@ -13,6 +15,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { appDb } from "@/server/db";
 import { listThreads } from "@/server/threads";
 
 export function AppSidebar() {
@@ -23,7 +26,7 @@ export function AppSidebar() {
         <NewChatButton />
         {/* usePathname() needs a Suspense boundary under Cache Components. */}
         <Suspense fallback={<NavLinks />}>
-          <NavLinks active />
+          <ActiveNav />
         </Suspense>
       </SidebarHeader>
       <SidebarContent>
@@ -38,6 +41,12 @@ export function AppSidebar() {
       </SidebarContent>
     </Sidebar>
   );
+}
+
+async function ActiveNav() {
+  await connection(); // libsql is synchronous: keep this read out of prerendering
+  const newMatches = await unseenMatchCount(await appDb()).catch(() => 0);
+  return <NavLinks active newMatches={newMatches} />;
 }
 
 async function Threads() {

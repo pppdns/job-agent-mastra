@@ -32,6 +32,13 @@ Drizzle schema (`src/schema.ts`, `app_*` tables), migrations in `drizzle/` (gene
   - per-source results as JSON (`recordSourceResult`)
   - `sourceStates` derives each source's cursor (last good run) and health
   - `sourceSpendSince` gives the Apify budget
+- **Triage and matches:**
+  - `jobsAwaitingTriage` / `countAwaitingTriage`: untouched discovered jobs (`new`, not archived, a passing posting) without a score.
+  - `saveTriage` stores score, reason and the profile version.
+  - `jobsToAssess`: triaged since the run started, at or above the threshold, without a draft, best first.
+  - `digestMatches`: the run's matches for the email.
+  - `markJobSeen` / `unseenMatchCount`: the "new matches" badge.
+  - `recordFunnel` stores the run's funnel; a run's `estimated_usd` = sources' provider cost + the funnel's model cost.
 - **`company_key`** is on jobs too. `backfillCompanyKeys` (in `migrateDb`) fills it and recomputes `dedupe_key` for older jobs.
 - **Run markers:** `latestRunStatuses` skips `discovery:%` threads (discovery usage, M14), so they never show as chats.
 

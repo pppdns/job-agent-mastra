@@ -189,9 +189,9 @@ Scheduled ingestion from job boards, reported as an inbox plus an email digest. 
 - [ ] Verified: unit tests, e2e on fixture sources, one live run.
 
 ### M14 — Scoring funnel + report
-- [ ] Triage agent (fast model, no tools, budgeted), `assessJob` shared with re-score, top-N assessments, usage on a `discovery:<runId>` thread.
-- [ ] Resend email digest; "new matches" badge from unseen jobs.
-- [ ] Triage evals (match, hard conflict, injection); live scheduled fire.
+- [x] Triage agent (fast model, no tools, budgeted; a named hard conflict caps the score in code), `assessJob` shared with re-score, top-N assessments, usage on a `discovery:<runId>` thread; triage scores, reasons and "New" badges on `/jobs`, funnel per run on `/discovery`, triage controls in the search settings.
+- [x] Resend email digest (skipped without matches or config); "new matches" badge on the Jobs nav item, cleared when a job is opened.
+- [x] Triage eval (match, hard conflict, injection) live 3/3. Not yet: a live scheduled fire in the main checkout.
 
 ### M15 — UI for daily volume + companies
 - [ ] Paging and tab counts in SQL; New tab as an inbox (score sort, unseen, filters, bulk shortlist/dismiss); "Screened out" tab with reasons and "Keep anyway".

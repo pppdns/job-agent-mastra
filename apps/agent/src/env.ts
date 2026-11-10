@@ -40,6 +40,14 @@ const envSchema = z.object({
   // (see discoveryScheduleEnabled); worktrees, e2e and evals never schedule.
   DISCOVERY_SCHEDULE: z.enum(["on", "off"]).default("off"),
   DISCOVERY_TZ: z.string().min(1).default("Europe/Budapest"),
+  // Email digest after each run (Resend). Without the key or a recipient it is skipped.
+  RESEND_API_KEY: optionalKey,
+  DIGEST_TO: optionalKey,
+  // Resend's test sender delivers only to your Resend account's own address; use a verified
+  // domain's address to send elsewhere.
+  DIGEST_FROM: z.string().min(3).default("Job Research Copilot <onboarding@resend.dev>"),
+  // Where the email's links point (the web app).
+  APP_BASE_URL: z.string().url().default("http://127.0.0.1:3000"),
 });
 
 export type Env = z.infer<typeof envSchema>;
