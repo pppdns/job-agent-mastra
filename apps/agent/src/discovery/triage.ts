@@ -15,6 +15,7 @@ import { TRIAGE_MARKER } from "../mastra/models";
 import { formatProfile } from "../mastra/profile-context";
 import type { RunRecorder } from "../usage/recorder";
 import type { DiscoveryBudget } from "./budget";
+import { noteError } from "./errors";
 
 // Triage: one fast structured call per discovered job, newest first, a few at a time, within the
 // run's budget. Jobs left over (cap or budget) are triaged first next run. A failed call leaves
@@ -78,7 +79,14 @@ export type TriageDeps = {
   onProgress?: (done: number, total: number) => void;
 };
 
-export type TriageOutcome = { triaged: number; failed: number; pending: number; matched: number };
+export type TriageOutcome = {
+  triaged: number;
+  failed: number;
+  pending: number;
+  matched: number;
+  /** The first few distinct failure messages. */
+  errors: string[];
+};
 
 export async function triageJobs(deps: TriageDeps): Promise<TriageOutcome> {
   const { db, budget } = deps;
@@ -90,6 +98,7 @@ export async function triageJobs(deps: TriageDeps): Promise<TriageOutcome> {
   let triaged = 0;
   let failed = 0;
   let matched = 0;
+  const errors: string[] = [];
 
   const worker = async () => {
     for (let job = queue.shift(); job; job = queue.shift()) {
@@ -111,13 +120,14 @@ export async function triageJobs(deps: TriageDeps): Promise<TriageOutcome> {
       } catch (error) {
         if (deps.signal?.aborted) return;
         failed += 1;
+        noteError(errors, error);
         console.error("triage failed", job.id, error instanceof Error ? error.message : error);
       }
       deps.onProgress?.(triaged + failed, total);
     }
   };
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
-  return { triaged, failed, matched, pending: await countAwaitingTriage(db) };
+  return { triaged, failed, matched, errors, pending: await countAwaitingTriage(db) };
 }
 
 async function triageWithModel(prompt: string, deps: TriageDeps): Promise<Triage> {

@@ -26,6 +26,7 @@ import {
 import { beforeEach, describe, expect, it } from "vitest";
 import { assessTopMatches } from "./assess";
 import { ASSESS_RESERVE_USD, DiscoveryBudget, TRIAGE_RESERVE_USD } from "./budget";
+import { MAX_ERRORS, noteError } from "./errors";
 import { assessStep, closeUsage, discoveryThreadId, reportStep, triageStep } from "./funnel";
 import { alreadyAlerted, buildDigest, runProblems, sendDigest } from "./report";
 import type { HttpJson } from "./sources/http";
@@ -117,6 +118,7 @@ describe("triage", () => {
     expect(outcome.triaged + outcome.failed).toBe(2);
     expect(outcome.pending).toBe(1 + outcome.failed);
     expect(budget.stoppedBy).toContain("triage cap");
+    expect(outcome.errors).toEqual(outcome.failed > 0 ? ["model down"] : []);
     // A job under the threshold disappears from the list; pending ones stay visible.
     const titles = (await listJobs(db)).map((j) => j.title);
     if (outcome.triaged === 2) expect(titles).not.toContain("AI Engineer");
@@ -159,7 +161,7 @@ describe("assessTopMatches", () => {
       threadId: "t",
       assess: async (id) => assessed.push(titles[id] ?? id),
     });
-    expect(outcome).toEqual({ assessed: 1, failed: 0 });
+    expect(outcome).toEqual({ assessed: 1, failed: 0, errors: [] });
     expect(assessed).toEqual(["B"]);
 
     await saveSearchSettings(db, settings({ maxAssessmentsPerRun: 5 }));
@@ -172,7 +174,7 @@ describe("assessTopMatches", () => {
         threadId: "t",
         assess: async () => 1,
       }),
-    ).toEqual({ assessed: 0, failed: 0 });
+    ).toEqual({ assessed: 0, failed: 0, errors: [] });
     expect(broke.stoppedBy).toContain("spend cap");
   });
 });
@@ -293,6 +295,11 @@ describe("problems and alerts", () => {
     expect(problems[3]?.message).toBe("12 of 12 triage calls failed");
   });
 
+  it("leaves out sources the run didn't ask (a triage-only run repeats no source alerts)", () => {
+    const states = [state({ unhealthy: true }), state({ source: "linkedin", unhealthy: true })];
+    expect(runProblems({ sources: [] }, funnel, states)).toEqual([]);
+  });
+
   it("ignores expected caps and a few failed calls", () => {
     const capped = runProblems(
       {
@@ -403,5 +410,14 @@ describe("funnel steps (mock model)", () => {
     expect(usage.runs[0]?.status).toBe("completed");
     expect(usage.totals.llmCalls).toBeGreaterThanOrEqual(3);
     expect(Object.keys(await latestRunStatuses(db))).toEqual([]);
+  });
+});
+
+describe("noteError", () => {
+  it("keeps the first few distinct messages, cut short", () => {
+    const errors: string[] = [];
+    for (const m of ["a", "a", "b", "x".repeat(300), "c", "d"]) noteError(errors, new Error(m));
+    expect(errors).toEqual(["a", "b", "x".repeat(200)]);
+    expect(MAX_ERRORS).toBe(3);
   });
 });

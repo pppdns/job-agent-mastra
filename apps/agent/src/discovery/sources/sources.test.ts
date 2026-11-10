@@ -265,6 +265,26 @@ describe("Apify runner", () => {
     await expect(createApifyRunner(broke, "t")("a/b", {}, options)).rejects.toThrow("usage limit");
   });
 
+  it("aborts the actor run when it is stopped while waiting", async () => {
+    const controller = new AbortController();
+    const calls: string[] = [];
+    const http: HttpJson = async (url, init) => {
+      calls.push(`${init?.method ?? "GET"} ${url.pathname}`);
+      if (url.pathname.endsWith("/runs")) return run("RUNNING");
+      if (url.pathname.endsWith("/abort")) {
+        expect(init?.signal).toBeUndefined();
+        return run("ABORTED");
+      }
+      controller.abort();
+      throw new Error("aborted");
+    };
+    const options = { maxUsd: 1, timeoutSecs: 60, prices: LINKEDIN_PRICES };
+    await expect(
+      createApifyRunner(http, "t")("a/b", {}, { ...options, signal: controller.signal }),
+    ).rejects.toThrow("aborted");
+    expect(calls.at(-1)).toBe("POST /v2/actor-runs/run1/abort");
+  });
+
   it("takes Apify's reported cost, else the run's event prices, else ours", () => {
     const counts = { "apify-default-dataset-item": 200, "apify-actor-start": 1 };
     expect(runCost({ usageTotalUsd: 0.5, chargedEventCounts: counts }, LINKEDIN_PRICES, 200)).toBe(

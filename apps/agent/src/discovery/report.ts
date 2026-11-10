@@ -71,7 +71,8 @@ export function runProblems(
   });
   for (const state of states) {
     const result = run.sources.find((r) => r.source === state.source);
-    if (state.unhealthy && result?.status !== "failed" && result?.status !== "skipped") {
+    // Only sources this run asked: a triage-only run has none, so it repeats no source alerts.
+    if (result && state.unhealthy && result.status !== "failed" && result.status !== "skipped") {
       problems.push({
         key: `${state.source}:empty`,
         message: `${label(state.source)} returned nothing in its last two runs`,

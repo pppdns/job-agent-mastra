@@ -254,7 +254,8 @@ export const searchSettings = sqliteTable("app_search_settings", {
 });
 
 export const DISCOVERY_RUN_STATUSES = ["running", "completed", "failed", "interrupted"] as const;
-export const DISCOVERY_TRIGGERS = ["schedule", "manual"] as const;
+/** `triage` and `assess` are manual runs that skip fetching (from /discovery). */
+export const DISCOVERY_TRIGGERS = ["schedule", "manual", "triage", "assess"] as const;
 export const SOURCE_RUN_STATUSES = ["ok", "partial", "failed", "skipped"] as const;
 
 /** What one source did in one run (stored as JSON on the run). */
@@ -326,6 +327,10 @@ export type FunnelResult = {
   assessFailed: number;
   /** Model cost of triage + assessments (USD, estimated from tokens). */
   llmUsd: number;
+  /** The first few distinct reasons triage calls failed. */
+  triageErrors?: string[];
+  /** The first few distinct reasons assessments failed (e.g. a draft the rules rejected). */
+  assessErrors?: string[];
   /** Why triage or assessment stopped early (per-run cap, spend cap). */
   stoppedBy?: string;
   digest?: {

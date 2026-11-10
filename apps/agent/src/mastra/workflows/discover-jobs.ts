@@ -1,3 +1,4 @@
+import { countAwaitingTriage } from "@copilot/db";
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 import {
@@ -11,6 +12,7 @@ import { createProgress } from "../../discovery/progress";
 import {
   BACKFILL_DAYS,
   claimDiscoveryRun,
+  fetchesSources,
   finishDiscovery,
   runDiscoverySources,
 } from "../../discovery/run";
@@ -47,7 +49,7 @@ export function discoveryScheduleEnabled(
 }
 
 const triggerSchema = z.object({
-  trigger: z.enum(["schedule", "manual"]).default("schedule"),
+  trigger: z.enum(["schedule", "manual", "triage", "assess"]).default("schedule"),
   lookbackDays: z
     .number()
     .int()
@@ -88,17 +90,22 @@ const fetchSources = createStep({
   description: "Asks each source for new postings, screens them and stores jobs",
   inputSchema: z.object({ runId: z.string().nullable(), skipped: z.string().optional() }),
   outputSchema: fetchedSchema,
-  execute: async ({ inputData }) => {
+  execute: async ({ inputData, getInitData, abortSignal }) => {
     if (!inputData.runId) return { ...inputData, sources: [] };
+    const { trigger } = triggerSchema.parse(getInitData());
+    if (!fetchesSources(trigger)) return { ...inputData, sources: [] };
     const db = await getAppDb();
     try {
       const progress = createProgress(db, inputData.runId);
       progress.step("fetch");
       const sources = await runDiscoverySources(db, inputData.runId, discoverySources(), {
         progress,
+        signal: abortSignal,
       });
       return { ...inputData, sources };
     } catch (error) {
+      // Stopped: the stop route ends the run as interrupted; finishing here would race it.
+      if (abortSignal?.aborted) throw error;
       reportError(error, { area: "discovery" });
       await finishDiscovery(db, inputData.runId, []).catch(() => undefined);
       throw error;
@@ -113,6 +120,8 @@ const funnelSchema = z.object({
   matched: z.number(),
   assessed: z.number(),
   assessFailed: z.number(),
+  triageErrors: z.array(z.string()).optional(),
+  assessErrors: z.array(z.string()).optional(),
   llmUsd: z.number(),
   stoppedBy: z.string().optional(),
   digest: z
@@ -132,9 +141,15 @@ const triage = createStep({
   description: "Scores new discovered jobs against the profile with the fast model (budgeted)",
   inputSchema: fetched,
   outputSchema: funnelled,
-  execute: async ({ inputData, tracingContext, abortSignal }) => {
+  execute: async ({ inputData, getInitData, tracingContext, abortSignal }) => {
     if (!inputData.runId) return { ...inputData, funnel: EMPTY_FUNNEL };
     const db = await getAppDb();
+    if (triggerSchema.parse(getInitData()).trigger === "assess") {
+      return {
+        ...inputData,
+        funnel: { ...EMPTY_FUNNEL, triagePending: await countAwaitingTriage(db) },
+      };
+    }
     const funnel = await triageStep(db, inputData.runId, { tracingContext, signal: abortSignal });
     return { ...inputData, funnel };
   },

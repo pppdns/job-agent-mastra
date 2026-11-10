@@ -105,19 +105,26 @@ export function createApifyRunner(http: HttpJson, token: string): ApifyRunner {
       }),
     );
     const deadline = Date.now() + (timeoutSecs + 60) * 1_000;
-    while (!TERMINAL.has(run.status)) {
-      if (Date.now() > deadline) {
-        await call(`/actor-runs/${run.id}/abort`, { method: "POST", signal }).catch(
-          () => undefined,
+    // Its own short request, not the run's signal: it must go out after a Stop too.
+    const abortRemote = (id: string) =>
+      call(`/actor-runs/${id}/abort`, { method: "POST", timeoutMs: 15_000 }).catch(() => undefined);
+    try {
+      while (!TERMINAL.has(run.status)) {
+        if (Date.now() > deadline) {
+          await abortRemote(run.id);
+          throw new SourceError(`Apify run did not finish in ${timeoutSecs}s`);
+        }
+        run = runOf(
+          await call(`/actor-runs/${run.id}?waitForFinish=${WAIT_SECS}`, {
+            signal,
+            timeoutMs: 90_000,
+          }),
         );
-        throw new SourceError(`Apify run did not finish in ${timeoutSecs}s`);
       }
-      run = runOf(
-        await call(`/actor-runs/${run.id}?waitForFinish=${WAIT_SECS}`, {
-          signal,
-          timeoutMs: 90_000,
-        }),
-      );
+    } catch (error) {
+      // Stopped while waiting: the paid actor run would go on until its own timeout.
+      if (signal?.aborted) await abortRemote(run.id);
+      throw error;
     }
     if (run.status === "FAILED") throw new SourceError(`Apify run ${run.id} failed`);
 

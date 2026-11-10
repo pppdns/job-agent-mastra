@@ -171,28 +171,49 @@ async function startChat(text: string): Promise<{ error?: string }> {
 
 export type DiscoveryActionState = { ok: boolean; message: string } | null;
 
-/** "Run now" (optionally a 7- or 30-day backfill): starts the discover-jobs workflow. */
+const DISCOVERY_RUNS = {
+  now: { body: { mode: "fetch" }, started: "Started a discovery run." },
+  "backfill-7": { body: { mode: "fetch", lookbackDays: 7 }, started: "Started a 7-day backfill." },
+  "backfill-30": {
+    body: { mode: "fetch", lookbackDays: 30 },
+    started: "Started a 30-day backfill.",
+  },
+  triage: { body: { mode: "triage" }, started: "Triaging the next batch of waiting jobs." },
+  assess: { body: { mode: "assess" }, started: "Assessing more matches." },
+} as const;
+
+/**
+ * The /discovery buttons: "Run now", a 7- or 30-day backfill, "Triage next batch" or "Assess
+ * more matches". Each starts the discover-jobs workflow (one run at a time).
+ */
 export async function startDiscoveryAction(
   _prev: DiscoveryActionState,
   formData: FormData,
 ): Promise<DiscoveryActionState> {
-  const lookback = z
-    .enum(["", "7", "30"])
-    .catch("")
-    .parse(formData.get("lookbackDays") ?? "");
+  const kind = z
+    .enum(["now", "backfill-7", "backfill-30", "triage", "assess"])
+    .catch("now")
+    .parse(formData.get("run") ?? "now");
   const response = await agentFetch("/discovery/run", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ lookbackDays: lookback ? Number(lookback) : null }),
+    body: JSON.stringify(DISCOVERY_RUNS[kind].body),
   }).catch(() => null);
   refresh();
   if (!response) return { ok: false, message: "The agent server is not reachable." };
   if (response.status === 409) return { ok: false, message: "A discovery run is already running." };
   if (!response.ok) return { ok: false, message: `Could not start the run (${response.status}).` };
-  return {
-    ok: true,
-    message: lookback ? `Started a ${lookback}-day backfill.` : "Started a discovery run.",
-  };
+  return { ok: true, message: DISCOVERY_RUNS[kind].started };
+}
+
+/** "Stop run": cancels the running discovery run; it ends as interrupted. */
+export async function stopDiscoveryAction(): Promise<DiscoveryActionState> {
+  const response = await agentFetch("/discovery/stop", { method: "POST" }).catch(() => null);
+  refresh();
+  if (!response) return { ok: false, message: "The agent server is not reachable." };
+  if (response.status === 409) return { ok: false, message: "No discovery run is running." };
+  if (!response.ok) return { ok: false, message: `Could not stop the run (${response.status}).` };
+  return { ok: true, message: "Stopped the run." };
 }
 
 /** One entry per line (or comma), trimmed, empties dropped. */

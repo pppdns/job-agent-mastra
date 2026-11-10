@@ -1,5 +1,6 @@
 import {
   type Db,
+  type DiscoveryTrigger,
   discoveryRunsSince,
   finishDiscoveryRun,
   getDiscoveryRun,
@@ -47,10 +48,14 @@ export const SOURCE_TIME_LIMIT_MS = 20 * 60_000;
 export const BACKFILL_DAYS = [7, 30] as const;
 
 export type DiscoveryTriggerInput = {
-  trigger: "schedule" | "manual";
+  trigger: DiscoveryTrigger;
   /** Manual backfill: look this many days back and allow the sources' raised caps. */
   lookbackDays?: number | null;
 };
+
+/** Triage-only and assess-only runs skip fetching. */
+export const fetchesSources = (trigger: DiscoveryTrigger) =>
+  trigger === "schedule" || trigger === "manual";
 
 export type Claim = { runId: string } | { runId: null; skipped: string };
 

@@ -2,43 +2,91 @@
 
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect } from "react";
-import { type DiscoveryActionState, startDiscoveryAction } from "@/app/actions";
+import {
+  type DiscoveryActionState,
+  startDiscoveryAction,
+  stopDiscoveryAction,
+} from "@/app/actions";
 import { Button } from "@/components/ui/button";
 
-/** "Run now" plus the occasional backfill; `maxBackfillUsd` is what a backfill may spend. */
+/**
+ * "Run now", the occasional backfill, and runs that skip fetching: triage the next batch of
+ * waiting jobs, or fully assess more matches. "Stop run" while one is going.
+ * `maxBackfillUsd` is what a backfill may spend.
+ */
 export function DiscoveryControls({
   running,
   maxBackfillUsd,
+  awaitingTriage,
+  maxAssessments,
 }: {
   running: boolean;
   maxBackfillUsd: number | null;
+  awaitingTriage: number;
+  maxAssessments: number;
 }) {
-  const [state, action, pending] = useActionState<DiscoveryActionState, FormData>(
-    startDiscoveryAction,
+  // One action for every button, so the feedback line always shows the latest result.
+  const [shown, action, pending] = useActionState<DiscoveryActionState, FormData>(
+    (prev, formData) =>
+      formData.get("run") === "stop" ? stopDiscoveryAction() : startDiscoveryAction(prev, formData),
     null,
   );
   const busy = running || pending;
   const cost = maxBackfillUsd === null ? "" : ` · up to $${maxBackfillUsd.toFixed(2)}`;
   return (
-    <form action={action} className="flex flex-wrap items-center gap-2">
-      <Button type="submit" name="lookbackDays" value="" disabled={busy}>
-        {running ? "Running…" : "Run now"}
-      </Button>
-      <Button type="submit" name="lookbackDays" value="7" variant="outline" disabled={busy}>
-        Backfill 7 days{cost}
-      </Button>
-      <Button type="submit" name="lookbackDays" value="30" variant="outline" disabled={busy}>
-        Backfill 30 days{cost}
-      </Button>
-      {state && (
+    <div className="flex flex-col gap-2">
+      <form action={action} className="flex flex-wrap items-center gap-2">
+        <Button type="submit" name="run" value="now" disabled={busy}>
+          {running ? "Running…" : "Run now"}
+        </Button>
+        <Button type="submit" name="run" value="backfill-7" variant="outline" disabled={busy}>
+          Backfill 7 days{cost}
+        </Button>
+        <Button type="submit" name="run" value="backfill-30" variant="outline" disabled={busy}>
+          Backfill 30 days{cost}
+        </Button>
+        <Button
+          type="submit"
+          name="run"
+          value="triage"
+          variant="outline"
+          disabled={busy || awaitingTriage === 0}
+        >
+          Triage next batch · {awaitingTriage.toLocaleString("en-US")} waiting
+        </Button>
+        <Button
+          type="submit"
+          name="run"
+          value="assess"
+          variant="outline"
+          disabled={busy || maxAssessments === 0}
+        >
+          Assess more matches · up to {maxAssessments}
+        </Button>
+      </form>
+      {running && (
+        <form action={action}>
+          <Button
+            type="submit"
+            name="run"
+            value="stop"
+            variant="destructive"
+            size="sm"
+            disabled={pending}
+          >
+            {pending ? "Stopping…" : "Stop run"}
+          </Button>
+        </form>
+      )}
+      {shown && (
         <p
           role="status"
-          className={state.ok ? "text-sm text-muted-foreground" : "text-sm text-destructive"}
+          className={shown.ok ? "text-sm text-muted-foreground" : "text-sm text-destructive"}
         >
-          {state.message}
+          {shown.message}
         </p>
       )}
-    </form>
+    </div>
   );
 }
 

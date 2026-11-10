@@ -9,7 +9,7 @@ import { onServerError } from "../sentry";
 import { copilotAgent } from "./agents/copilot";
 import { researcherAgent } from "./agents/researcher";
 import { chatResumeRoute, chatRoute, chatStopRoute } from "./routes/chat";
-import { assessJobRoute, discoveryRunRoute } from "./routes/discovery";
+import { assessJobRoute, discoveryRunRoute, discoveryStopRoute } from "./routes/discovery";
 import { threadMessagesRoute } from "./routes/thread-messages";
 import { createStorage } from "./storage";
 import {
@@ -82,6 +82,7 @@ export const mastra = new Mastra({
       chatStopRoute,
       threadMessagesRoute,
       discoveryRunRoute,
+      discoveryStopRoute,
       assessJobRoute,
     ],
   },

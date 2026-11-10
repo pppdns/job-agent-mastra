@@ -574,7 +574,8 @@ export function saveTriage(
  */
 export async function jobsToAssess(
   db: Db,
-  input: { since: Date; threshold: number; limit: number },
+  /** `since` limits it to jobs triaged since then (a run's own matches); without it, any. */
+  input: { since?: Date; threshold: number; limit: number },
 ): Promise<{ id: string; triageScore: number | null }[]> {
   if (input.limit <= 0) return [];
   return db
@@ -583,7 +584,7 @@ export async function jobsToAssess(
     .where(
       and(
         openDiscovered,
-        gte(jobs.triagedAt, input.since),
+        input.since ? gte(jobs.triagedAt, input.since) : isNotNull(jobs.triagedAt),
         gte(jobs.triageScore, input.threshold),
         notExists(db.select({ x: sql`1` }).from(jobDrafts).where(eq(jobDrafts.jobId, jobs.id))),
       ),

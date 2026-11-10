@@ -322,7 +322,7 @@ A Mastra workflow (`discover-jobs`) fetches new postings from job boards twice a
 ```mermaid
 flowchart LR
   CRON["schedule 07:00/16:00<br/>(main checkout only)"] --> WF
-  RUN["/discovery: Run now · Backfill"] -->|POST /discovery/run| WF
+  RUN["/discovery: Run now · Backfill ·<br/>Triage next batch · Assess more · Stop"] -->|POST /discovery/run, /stop| WF
   subgraph WF[discover-jobs workflow]
     C[claim-run<br/>one at a time] --> F[fetch-sources] --> X[finish-run]
   end

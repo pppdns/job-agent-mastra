@@ -123,6 +123,7 @@ async function triage(db: Db, runId: string, context: StepContext) {
     triageFailed: outcome.failed,
     triagePending: outcome.pending,
     matched: outcome.matched,
+    ...(outcome.errors.length > 0 ? { triageErrors: outcome.errors } : {}),
     llmUsd: await llmUsd(db, runId, recorder),
     ...(budget.stoppedBy ? { stoppedBy: budget.stoppedBy } : {}),
   };
@@ -137,7 +138,8 @@ async function assess(db: Db, runId: string, funnel: FunnelResult, context: Step
   progress.step("assess");
   const outcome = await assessTopMatches({
     db,
-    since: run?.startedAt ?? new Date(),
+    // An assess-only run picks from every open match; the others assess their own new matches.
+    since: run?.trigger === "assess" ? undefined : (run?.startedAt ?? new Date()),
     budget,
     threadId: discoveryThreadId(runId),
     recorder,
@@ -149,6 +151,7 @@ async function assess(db: Db, runId: string, funnel: FunnelResult, context: Step
     ...funnel,
     assessed: outcome.assessed,
     assessFailed: outcome.failed,
+    ...(outcome.errors.length > 0 ? { assessErrors: outcome.errors } : {}),
     llmUsd: await llmUsd(db, runId, recorder),
     ...(budget.stoppedBy ? { stoppedBy: budget.stoppedBy } : {}),
   };
