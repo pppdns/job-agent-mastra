@@ -5,6 +5,7 @@ import { PinoLogger } from "@mastra/loggers";
 import { MastraStorageExporter, Observability, SensitiveDataFilter } from "@mastra/observability";
 import { env } from "../env";
 import { allScorers } from "../evals/scorers";
+import { onServerError } from "../sentry";
 import { copilotAgent } from "./agents/copilot";
 import { researcherAgent } from "./agents/researcher";
 import { chatResumeRoute, chatRoute, chatStopRoute } from "./routes/chat";
@@ -61,7 +62,10 @@ export const mastra = new Mastra({
       },
     },
   }),
+  // Source maps keep production stack traces (Sentry, logs) pointing at src/ files.
+  bundler: { sourcemap: true },
   server: {
+    onError: onServerError,
     // Loopback by default; every API call needs the shared secret. Fly sets AGENT_HOST="::" so
     // `fly proxy` reaches Studio over the private org network (never a public port; docs/deploy.md).
     host: process.env.AGENT_HOST || "127.0.0.1",

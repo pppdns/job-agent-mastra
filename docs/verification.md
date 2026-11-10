@@ -197,3 +197,13 @@ Picked: the feed as the "Company career sites" source, run at most every 20 h (~
 - 39 were screened out; the other 78 became new jobs, 30 of those with an ATS key.
 - A second run straight after was skipped: "last good run 0 h ago (runs at most every 20 h)".
 - It recorded $0.001 because Apify's `usageTotalUsd` lags right after a run finishes (it read $0.401 20 s later). `runCost` now takes the larger of that and the final charged-event counts × prices. Earlier runs of every paid board may have recorded less than they cost, so the monthly budget check saw too little spend.
+
+## Sentry (2026-11-10)
+
+Live, on local production builds (bundled agent run like `start-prod.sh`, `next build` + `next start`) with the DSN and `environment=verification`. All three errors reached project `job-copilot`:
+
+- Agent startup crash (uncaught, bad `DATABASE_URL`): culprit `createStorage(storage.ts)`, so the source-mapped frames point at `src/`.
+- Failed chat run (invalid gateway key): `GatewayAuthenticationError`, tags `area=chat`, `service=agent`, release set. It still carried request data (a user-agent-derived `browser` tag, IP user): v11 collects by default, hence the explicit `SENTRY_DATA_COLLECTION` added after review.
+- Web route error (a temporary throwing route, removed afterwards): captured through `onRequestError`.
+
+Not verified: browser errors and web source-map upload (needs the `SENTRY_AUTH_TOKEN` repo secret), and the Fly deploy itself. Sentry stores the client IP as the event's user unless the project's "Prevent Storing of IP Addresses" setting is on.

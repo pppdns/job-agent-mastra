@@ -22,6 +22,7 @@ import {
   type SearchSettings,
   screenPosting,
 } from "@copilot/shared";
+import { reportError } from "../sentry";
 import { BACKFILL_USD_FACTOR } from "./sources/linkedin";
 import type { JobSource } from "./types";
 
@@ -222,6 +223,7 @@ export async function runDiscoverySources(
     } catch (error) {
       if (options.signal?.aborted) throw error;
       console.error(`discovery source ${id} failed`, error);
+      reportError(error, { area: "discovery", source: id });
       await finish({
         ...base,
         status: "failed",

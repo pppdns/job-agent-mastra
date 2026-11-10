@@ -41,6 +41,7 @@ Simple, polished, functional: shadcn/ui (Radix Nova preset) defaults. Clear visu
 - Vercel AI Gateway — all LLM calls (`AI_GATEWAY_API_KEY`)
 - Tavily — search/extract (`TAVILY_API_KEY`)
 - Firecrawl — scrape/extract, optional hosted browser (`FIRECRAWL_API_KEY`)
+- Sentry — production error reporting, project `job-copilot` (DSN in `fly.toml`; off locally): [docs/deploy.md](docs/deploy.md#sentry)
 
 ## Main Commands
 

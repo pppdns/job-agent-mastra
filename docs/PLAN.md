@@ -207,6 +207,7 @@ Scheduled ingestion from job boards, reported as an inbox plus an email digest. 
 ### M17 — Hosting
 - [x] Fly.io: one always-on machine with a volume (agent + web), password login, daily volume snapshots, SQLite on the volume. See "Deployment — Fly.io" below and [deploy.md](deploy.md).
 - [x] Turn the discovery schedule on there (`DISCOVERY_SCHEDULE`, discovery secrets).
+- [x] Sentry error reporting (production only; [deploy.md](deploy.md#sentry)).
 
 ### M18 — ATS enrichment
 - [x] Compared the `fantastic-jobs/career-site-job-listing-feed` actor with a hand-built Greenhouse/Lever/Ashby/Workable resolver ([verification](verification.md#ats-enrichment-m18-2026-11-10)). Picked the feed as a new source ("Company career sites", at most once a day, ~$0.40 a run): the resolver finds no new jobs, only re-reads ones we already link to.
