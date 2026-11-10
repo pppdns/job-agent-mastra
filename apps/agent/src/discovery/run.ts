@@ -19,6 +19,7 @@ import {
   type SearchSettings,
   screenPosting,
 } from "@copilot/shared";
+import { noProgress, type ProgressReporter } from "./progress";
 import { BACKFILL_USD_FACTOR } from "./sources/linkedin";
 import type { JobSource } from "./types";
 
@@ -70,9 +71,10 @@ export async function runDiscoverySources(
   runId: string,
   /** The sources to run (all of them in production; tests pass a few). */
   sources: Partial<Record<DiscoverySource, JobSource>>,
-  options: { now?: () => Date; signal?: AbortSignal } = {},
+  options: { now?: () => Date; signal?: AbortSignal; progress?: ProgressReporter } = {},
 ): Promise<SourceRunResult[]> {
   const now = options.now ?? (() => new Date());
+  const progress = options.progress ?? noProgress;
   const started = now();
   const [settings, run, recent] = await Promise.all([
     getSearchSettings(db),
@@ -114,6 +116,13 @@ export async function runDiscoverySources(
       const final = { ...result, durationMs: Date.now() - t0 };
       results.push(final);
       await recordSourceResult(db, runId, final);
+      if (final.status !== "skipped") {
+        console.info(
+          `discovery ${runId}: ${id} ${final.status} in ${Math.round(final.durationMs / 1000)}s, ` +
+            `${final.fetched} fetched, ${final.newJobs} new, $${final.costUsd.toFixed(2)}` +
+            (final.message ? ` (${final.message})` : ""),
+        );
+      }
     };
 
     const unavailable = !enabled(settings, id)
@@ -140,6 +149,7 @@ export async function runDiscoverySources(
       backfill || !lastOk ? floor : Math.max(floor, lastOk.getTime() - CURSOR_OVERLAP_MS),
     );
 
+    progress.source(id);
     try {
       const knownIds = await knownExternalIds(
         db,
@@ -153,6 +163,7 @@ export async function runDiscoverySources(
         knownIds,
         maxUsd,
         signal: options.signal,
+        onProgress: (done, total, label) => progress.work(done, total, label),
       });
       const counts: Record<PostingOutcome, number> = {
         seen: 0,
@@ -190,6 +201,7 @@ export async function runDiscoverySources(
       });
     }
   }
+  await progress.flush();
   return results;
 }
 

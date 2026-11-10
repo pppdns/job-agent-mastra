@@ -22,6 +22,7 @@ import {
   jobs,
   type Posting,
   postings,
+  type RunProgress,
   type SourceRunResult,
   searchSettings,
 } from "./schema";
@@ -110,6 +111,16 @@ export function recordFunnel(db: Db, runId: string, funnel: FunnelResult): Promi
   });
 }
 
+/** Saves where a running run is now (ignored once the run has ended). */
+export function recordProgress(db: Db, runId: string, progress: RunProgress): Promise<void> {
+  return serializeWrites(db, async () => {
+    await db
+      .update(discoveryRuns)
+      .set({ progress })
+      .where(and(eq(discoveryRuns.id, runId), eq(discoveryRuns.status, "running")));
+  });
+}
+
 /** Ends a running run; a run that already ended keeps its first final status. */
 export function finishDiscoveryRun(
   db: Db,
@@ -120,7 +131,7 @@ export function finishDiscoveryRun(
   return serializeWrites(db, async () => {
     await db
       .update(discoveryRuns)
-      .set({ status, error: error?.slice(0, 500) ?? null, endedAt: new Date() })
+      .set({ status, error: error?.slice(0, 500) ?? null, progress: null, endedAt: new Date() })
       .where(and(eq(discoveryRuns.id, runId), eq(discoveryRuns.status, "running")));
   });
 }
@@ -130,7 +141,7 @@ export function interruptStaleDiscoveryRuns(db: Db): Promise<number> {
   return serializeWrites(db, async () => {
     const rows = await db
       .update(discoveryRuns)
-      .set({ status: "interrupted", endedAt: new Date() })
+      .set({ status: "interrupted", progress: null, endedAt: new Date() })
       .where(eq(discoveryRuns.status, "running"))
       .returning({ id: discoveryRuns.id });
     return rows.length;

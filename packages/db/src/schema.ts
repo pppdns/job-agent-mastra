@@ -309,6 +309,24 @@ export type FunnelResult = {
   };
 };
 
+export const DISCOVERY_STEPS = ["fetch", "triage", "assess", "report"] as const;
+export type DiscoveryStep = (typeof DISCOVERY_STEPS)[number];
+
+/** Where a running discovery run is right now (cleared when it ends). Dates are ISO strings. */
+export type RunProgress = {
+  step: DiscoveryStep;
+  stepStartedAt: string;
+  /** The source being fetched (fetch step only). */
+  source?: (typeof DISCOVERY_SOURCES)[number];
+  sourceStartedAt?: string;
+  /** Work done in the step or source so far: searches or requests of the source, jobs triaged or assessed. */
+  done?: number;
+  total?: number;
+  /** What is being worked on, e.g. the current search phrase. */
+  label?: string;
+  updatedAt: string;
+};
+
 /** One discovery run (scheduled or manual) with per-source results. */
 export const discoveryRuns = sqliteTable(
   "app_discovery_runs",
@@ -321,6 +339,8 @@ export const discoveryRuns = sqliteTable(
     error: text("error"),
     sources: text("sources", { mode: "json" }).$type<SourceRunResult[]>().notNull(),
     funnel: text("funnel", { mode: "json" }).$type<FunnelResult>(),
+    /** Live position of a running run; null once it ends. */
+    progress: text("progress", { mode: "json" }).$type<RunProgress>(),
     /** Provider + model cost of the run (USD, estimated). */
     estimatedUsd: real("estimated_usd").notNull().default(0),
     /** Mastra workflow run id, for the Studio link. */

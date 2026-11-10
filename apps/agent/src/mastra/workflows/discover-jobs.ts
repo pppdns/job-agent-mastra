@@ -7,6 +7,7 @@ import {
   reportStep,
   triageStep,
 } from "../../discovery/funnel";
+import { createProgress } from "../../discovery/progress";
 import {
   BACKFILL_DAYS,
   claimDiscoveryRun,
@@ -90,7 +91,11 @@ const fetchSources = createStep({
     if (!inputData.runId) return { ...inputData, sources: [] };
     const db = await getAppDb();
     try {
-      const sources = await runDiscoverySources(db, inputData.runId, discoverySources());
+      const progress = createProgress(db, inputData.runId);
+      progress.step("fetch");
+      const sources = await runDiscoverySources(db, inputData.runId, discoverySources(), {
+        progress,
+      });
       return { ...inputData, sources };
     } catch (error) {
       await finishDiscovery(db, inputData.runId, []).catch(() => undefined);

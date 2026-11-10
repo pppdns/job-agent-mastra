@@ -44,7 +44,8 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
       const failures: string[] = [];
       const notes: string[] = [];
       let succeeded = 0;
-      for (const search of searches) {
+      for (const [i, search] of searches.entries()) {
+        context.onProgress?.(i, searches.length, search.label);
         const remaining = context.maxUsd - costUsd;
         if (remaining < 0.01) {
           notes.push(`spend cap reached after ${costUsd.toFixed(2)} USD`);

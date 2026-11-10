@@ -112,7 +112,8 @@ export function createHimalayasSource(
       const failed: string[] = [];
       let requests = 0;
       let cooledDown = false;
-      for (const query of settings.queries) {
+      for (const [i, query] of settings.queries.entries()) {
+        context.onProgress?.(i, settings.queries.length, `"${query}"`);
         try {
           for (let page = 1; page <= maxPages; page++) {
             if (requests++ > 0) await sleep(pauseMs, signal);

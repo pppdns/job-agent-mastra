@@ -11,6 +11,8 @@ export type FetchContext = {
   /** Most this source may spend in this run (USD). */
   maxUsd: number;
   signal?: AbortSignal;
+  /** Called before each search or request (`done` of `total` finished), for live progress. */
+  onProgress?: (done: number, total: number, label?: string) => void;
 };
 
 export type FetchOutcome = {
