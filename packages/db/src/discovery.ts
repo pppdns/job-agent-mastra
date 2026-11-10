@@ -12,6 +12,7 @@ import {
 import { and, desc, eq, gte, inArray, isNotNull, isNull, notExists, sql } from "drizzle-orm";
 import type { Db } from "./index";
 import { addSourceUnlocked, upsertJobUnlocked } from "./jobs";
+import { DISCOVERY_THREAD_PREFIX } from "./runs";
 import {
   type DiscoveryRun,
   type DiscoveryRunStatus,
@@ -23,6 +24,8 @@ import {
   type Posting,
   postings,
   type RunProgress,
+  runEvents,
+  runs,
   type SourceRunResult,
   searchSettings,
 } from "./schema";
@@ -209,6 +212,57 @@ export async function sourceSpendSince(
     .flatMap((r) => r.sources)
     .filter((s) => sources.includes(s.source))
     .reduce((sum, s) => sum + s.costUsd, 0);
+}
+
+/** Estimated model spend of discovery: triage calls (fast model) and everything else (assessments). */
+export type ModelSpend = { triageUsd: number; assessUsd: number };
+
+const spendOf = (rows: { actor: string | null; usd: number | null }[]): ModelSpend => {
+  const spend = { triageUsd: 0, assessUsd: 0 };
+  for (const r of rows) {
+    if (r.actor === "triager") spend.triageUsd += r.usd ?? 0;
+    else spend.assessUsd += r.usd ?? 0;
+  }
+  return spend;
+};
+
+/**
+ * Model spend per discovery run, from its usage events (the discovery run id is also its usage
+ * run id), so a running run's spend shows as it grows.
+ */
+export async function modelSpendByRun(db: Db, runIds: string[]): Promise<Map<string, ModelSpend>> {
+  if (runIds.length === 0) return new Map();
+  const rows = await db
+    .select({
+      runId: runEvents.runId,
+      actor: runEvents.actor,
+      usd: sql<number>`sum(${runEvents.estimatedUsd})`,
+    })
+    .from(runEvents)
+    .where(and(eq(runEvents.type, "llm"), inArray(runEvents.runId, runIds)))
+    .groupBy(runEvents.runId, runEvents.actor);
+  const byRun = new Map<string, ModelSpend>();
+  for (const id of new Set(rows.map((r) => r.runId))) {
+    byRun.set(id, spendOf(rows.filter((r) => r.runId === id)));
+  }
+  return byRun;
+}
+
+/** Model spend of all discovery runs since a time. */
+export async function modelSpendSince(db: Db, since: Date): Promise<ModelSpend> {
+  const rows = await db
+    .select({ actor: runEvents.actor, usd: sql<number>`sum(${runEvents.estimatedUsd})` })
+    .from(runEvents)
+    .innerJoin(runs, eq(runs.id, runEvents.runId))
+    .where(
+      and(
+        eq(runEvents.type, "llm"),
+        gte(runEvents.at, since),
+        sql`${runs.threadId} like ${`${DISCOVERY_THREAD_PREFIX}%`}`,
+      ),
+    )
+    .groupBy(runEvents.actor);
+  return spendOf(rows);
 }
 
 /** What one source brought in over a window, to judge whether it's worth keeping. */

@@ -22,6 +22,8 @@ import {
   knownExternalIds,
   listDiscoveryRuns,
   markJobSeen,
+  modelSpendByRun,
+  modelSpendSince,
   postingSourcesByJob,
   recordFunnel,
   recordPosting,
@@ -37,7 +39,7 @@ import {
 } from "./discovery";
 import { createDb, type Db, migrateDb } from "./index";
 import { backfillCompanyKeys, latestListingSource, setJobStatus, upsertJob } from "./jobs";
-import { latestRunStatuses, startRun } from "./runs";
+import { latestRunStatuses, recordRunEvents, startRun } from "./runs";
 import { type DiscoveryRun, jobs, type SourceRunResult } from "./schema";
 
 let db: Db;
@@ -248,6 +250,36 @@ describe("discovery runs", () => {
     const spend = await sourceSpendSince(db, ["linkedin"], new Date(0));
     expect(spend).toBeCloseTo(0.2);
     expect(await sourceSpendSince(db, ["himalayas"], new Date(0))).toBe(0);
+  });
+
+  it("splits discovery model spend into triage and assessments, per run and over time", async () => {
+    await startRun(db, { id: "d1", threadId: "discovery:d1" });
+    await startRun(db, { id: "c1", threadId: "chat-1" });
+    const llm = (runId: string, actor: string, usd: number, at = new Date()) => ({
+      runId,
+      type: "llm" as const,
+      category: "llm" as const,
+      name: "m",
+      actor,
+      status: "ok" as const,
+      at,
+      estimatedUsd: usd,
+    });
+    await recordRunEvents(db, [
+      llm("d1", "triager", 0.002),
+      llm("d1", "triager", 0.003),
+      llm("d1", "copilot", 0.05),
+      llm("d1", "triager", 1, new Date(0)),
+      llm("c1", "copilot", 0.4),
+      { ...llm("d1", "triager", 9), type: "provider", category: "search" },
+    ]);
+    const byRun = await modelSpendByRun(db, ["d1", "missing"]);
+    expect(byRun.get("d1")?.triageUsd).toBeCloseTo(1.005);
+    expect(byRun.get("d1")?.assessUsd).toBeCloseTo(0.05);
+    expect(byRun.has("missing")).toBe(false);
+    const recent = await modelSpendSince(db, new Date(Date.now() - 60_000));
+    expect(recent.triageUsd).toBeCloseTo(0.005);
+    expect(recent.assessUsd).toBeCloseTo(0.05);
   });
 
   it("derives source cursors and health from recent runs", () => {

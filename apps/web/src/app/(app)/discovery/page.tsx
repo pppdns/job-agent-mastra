@@ -4,6 +4,9 @@ import {
   type FunnelResult,
   getSearchSettings,
   listDiscoveryRuns,
+  type ModelSpend,
+  modelSpendByRun,
+  modelSpendSince,
   type SourceRunResult,
   type SourceState,
   type SourceStats,
@@ -39,6 +42,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { costParts, runCost } from "@/lib/run-cost";
 import { runOutcome } from "@/lib/run-outcome";
 import { appDb } from "@/server/db";
 import { serverEnv } from "@/server/env";
@@ -87,6 +91,13 @@ async function Discovery() {
     screenedOutSince(db, new Date(now - 7 * DAY_MS)),
     countAwaitingTriage(db),
   ]);
+  const [modelSpend, spendByRun] = await Promise.all([
+    modelSpendSince(db, monthAgo),
+    modelSpendByRun(
+      db,
+      runs.map((r) => r.id),
+    ),
+  ]);
   const stats = await sourceStatsSince(db, DISCOVERY_SOURCES, monthAgo, settings.triageThreshold);
   const current = runs[0]?.status === "running" ? runs[0] : null;
   const running = current !== null;
@@ -113,9 +124,14 @@ async function Discovery() {
       </section>
 
       {current ? (
-        <RunProgress run={current} settings={settings} now={now} />
+        <RunProgress
+          run={current}
+          settings={settings}
+          now={now}
+          costUsd={runCost(current, spendByRun.get(current.id)).totalUsd}
+        />
       ) : (
-        runs[0] && <LastRun run={runs[0]} />
+        runs[0] && <LastRun run={runs[0]} spend={spendByRun.get(runs[0].id)} />
       )}
 
       <section aria-label="Sources" className="flex flex-col gap-2">
@@ -124,8 +140,9 @@ async function Discovery() {
           above {settings.triageThreshold}, kept, or acted on) and how many no other board had, the
           share of jobs also seen on another board, and the cost per match.
         </p>
-        <div className="sm:max-w-sm">
+        <div className="flex flex-col gap-2 sm:max-w-sm">
           <BudgetBar spent={spent} budget={settings.apifyMonthlyBudgetUsd} />
+          <ModelSpendLine spend={modelSpend} />
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {states.map((state) => (
@@ -150,12 +167,12 @@ async function Discovery() {
                 <TableHead className="w-44">Started</TableHead>
                 <TableHead className="w-28">Status</TableHead>
                 <TableHead>Sources</TableHead>
-                <TableHead className="w-20 text-right">Cost</TableHead>
+                <TableHead className="w-32 text-right">Cost (est.)</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {runs.map((run) => (
-                <RunRow key={run.id} run={run} studio={studio} />
+                <RunRow key={run.id} run={run} spend={spendByRun.get(run.id)} studio={studio} />
               ))}
             </TableBody>
           </Table>
@@ -325,6 +342,18 @@ function BudgetBar({ spent, budget }: { spent: number; budget: number }) {
   );
 }
 
+/** Model spend of discovery (triage and assessments), last 30 days; no budget, just the sum. */
+function ModelSpendLine({ spend }: { spend: ModelSpend }) {
+  return (
+    <div className="flex justify-between gap-2 text-xs text-muted-foreground tabular-nums">
+      <span>Models (triage, assessments), last 30 days</span>
+      <span title={`triage ${usd(spend.triageUsd)} · assessments ${usd(spend.assessUsd)}`}>
+        {usd(spend.triageUsd + spend.assessUsd)}
+      </span>
+    </div>
+  );
+}
+
 const TRIGGER_LABEL: Record<DiscoveryRun["trigger"], string> = {
   schedule: "Scheduled",
   manual: "Manual",
@@ -333,8 +362,10 @@ const TRIGGER_LABEL: Record<DiscoveryRun["trigger"], string> = {
 };
 
 /** The latest finished run in one glance: did it work, what it brought, what needs a look. */
-function LastRun({ run }: { run: DiscoveryRun }) {
+function LastRun({ run, spend }: { run: DiscoveryRun; spend: ModelSpend | undefined }) {
   const outcome = runOutcome(run);
+  const cost = runCost(run, spend);
+  const parts = costParts(cost, usd);
   const newJobs = run.sources.reduce((sum, s) => sum + s.newJobs, 0);
   const duration = run.endedAt && formatDuration(run.endedAt.getTime() - run.startedAt.getTime());
   const facts = [
@@ -342,7 +373,7 @@ function LastRun({ run }: { run: DiscoveryRun }) {
     run.funnel && `${run.funnel.triaged} triaged`,
     run.funnel && `${run.funnel.matched} matches`,
     run.funnel && `${run.funnel.assessed} assessed`,
-    usd(run.estimatedUsd),
+    `${usd(cost.totalUsd)}${parts.length > 1 ? ` (${parts.join(", ")})` : ""}`,
   ].filter(Boolean);
   return (
     <section aria-label="Last run" className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
@@ -378,7 +409,16 @@ function ProblemList({ problems }: { problems: string[] }) {
   );
 }
 
-function RunRow({ run, studio }: { run: DiscoveryRun; studio: string }) {
+function RunRow({
+  run,
+  spend,
+  studio,
+}: {
+  run: DiscoveryRun;
+  spend: ModelSpend | undefined;
+  studio: string;
+}) {
+  const cost = runCost(run, spend);
   const ran = run.sources.filter((s) => s.status !== "skipped");
   const skipped = run.sources.filter((s) => s.status === "skipped");
   const newJobs = run.sources.reduce((sum, s) => sum + s.newJobs, 0);
@@ -451,7 +491,14 @@ function RunRow({ run, studio }: { run: DiscoveryRun; studio: string }) {
           </p>
         )}
       </TableCell>
-      <TableCell className="text-right align-top tabular-nums">{usd(run.estimatedUsd)}</TableCell>
+      <TableCell className="text-right align-top tabular-nums">
+        <div>{usd(cost.totalUsd)}</div>
+        {costParts(cost, usd).map((part) => (
+          <div key={part} className="text-xs whitespace-nowrap text-muted-foreground">
+            {part}
+          </div>
+        ))}
+      </TableCell>
     </TableRow>
   );
 }
@@ -466,7 +513,6 @@ function FunnelLine({ funnel }: { funnel: FunnelResult }) {
     `${funnel.matched} matches`,
     `${funnel.assessed} assessed`,
     funnel.assessFailed && `${funnel.assessFailed} assessments failed`,
-    `models ${usd(funnel.llmUsd)}`,
   ].filter(Boolean);
   return (
     <div className="mt-1.5 border-t pt-1.5 text-xs">
