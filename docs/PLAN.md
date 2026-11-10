@@ -178,12 +178,12 @@ Scheduled ingestion from job boards, reported as an inbox plus an email digest. 
 | Criteria | Structured search settings (one JSON row) for the screen and source queries; triage and assessment read the profile facts | Deterministic filters must be predictable and debuggable (reasons are stored) |
 | Volume | Postings failing the screen stay in `app_postings` and never become jobs; jobs under the triage threshold are hidden by one predicate | Chat tools, FTS, re-score keep working on jobs worth seeing |
 | Dedupe | Posting (source, external id) → off-board apply URL → company key + title; ATS id later | Same job on several boards becomes one job with several postings |
-| Hard sites | Apify actors (LinkedIn, Wellfound, HiringCafe), low volume, capped | Maintained scrapers; accepted ToS risk for personal use |
+| Sources | Official free feeds read directly (Himalayas, WWR, RemoteOK, Remotive, NoDesk); other boards via pay-per-event Apify actors (LinkedIn, HiringCafe, Welcome to the Jungle, Wellfound, Dice, Built In, YC, Jobgether), started by our workflow with per-run caps and a monthly budget (default $100). No proxy setup: pay-per-event actors include it | Free and sanctioned where a feed exists; maintained scrapers elsewhere; accepted ToS risk for personal use |
 
-### M13 — Discovery foundation (Himalayas + We Work Remotely, no LLM)
+### M13 — Discovery foundation (Himalayas direct + LinkedIn via Apify, no LLM)
 - [ ] `app_postings`, `app_search_settings`, `app_discovery_runs`; `app_jobs` gains `origin`, `company_key`, triage, `kept_at`, `seen_at`; dedupe key uses the company key (backfill).
 - [ ] Shared search settings, posting schema, `screenPosting` (reasons), `companyKey`.
-- [ ] Source adapters (Himalayas API, WWR RSS) with fixtures (`WEB_MODE=fixture`).
+- [ ] Source adapters: Himalayas API and a generic Apify runner with a `valig/linkedin-jobs-scraper` definition (`skipJobId` for known ids, caps, monthly budget check); fixtures (`WEB_MODE=fixture`).
 - [ ] `discover-jobs` workflow: fetch → postings → screen → jobs + board snapshot → run record; schedule only in the main checkout with `DISCOVERY_SCHEDULE=on`; one run at a time; interrupted sweep at startup.
 - [ ] UI: `/settings/search` (save re-screens), `/discovery` runs with per-source health, "Run now", source badge on jobs.
 - [ ] Verified: unit tests, e2e on fixture sources, one live run.
@@ -197,14 +197,14 @@ Scheduled ingestion from job boards, reported as an inbox plus an email digest. 
 - [ ] Paging and tab counts in SQL; New tab as an inbox (score sort, unseen, filters, bulk shortlist/dismiss); "Screened out" tab with reasons and "Keep anyway".
 - [ ] Job page triage card, "Assess fully", "Seen on" postings; `app_companies` and a company page.
 
-### M16 — More easy sources + ATS enrichment
-- [ ] RemoteOK, Remotive (attribution), NoDesk, Tech Jobs for Good; ATS resolver (Greenhouse, Lever, Ashby, Workable) as the strongest dedupe key; YC jobs sitemap; Built In / Arc via Firecrawl; per-source match and duplicate rates.
+### M16 — More sources
+- [ ] Direct feeds: We Work Remotely, RemoteOK (followed link-back), Remotive (attribution), NoDesk. Apify definitions: HiringCafe, Welcome to the Jungle, Wellfound, Dice, Built In, YC, Jobgether. Per-source match rate, duplicate rate and cost per match.
 
 ### M17 — Hosting
 - [ ] One long-lived host with a volume (agent + web), real auth, backups; SQLite on the volume or Turso.
 
-### M18 — Hard and medium sources
-- [ ] Apify actors for LinkedIn, Wellfound, HiringCafe (caps per source); Welcome to the Jungle, Dice, Levels.fyi, TrueUp, Jobgether, PowerToFly, JustRemote, Climatebase via Firecrawl or Apify. Skipped: FlexJobs (paid login), AIJobs.net (shut down).
+### M18 — ATS enrichment
+- [ ] Compare the `fantastic-jobs/career-site-job-listing-feed` actor with a hand-built Greenhouse/Lever/Ashby/Workable resolver; `ats_key` as the strongest dedupe key. Skipped boards: TrueUp, Tech Jobs for Good, Arc.dev, JustRemote, PowerToFly, Climatebase, Levels.fyi (no maintained actor), FlexJobs (paid login), AIJobs.net (shut down).
 
 ## Simplifications chosen (tell me if any is unacceptable)
 
