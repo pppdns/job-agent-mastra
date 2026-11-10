@@ -158,7 +158,10 @@ export function SearchSettingsForm({ settings }: { settings: SearchSettings }) {
               placeholder="none"
             />
           </Field>
-          <Field label="Currency" hint="Pay in other currencies isn't compared.">
+          <Field
+            label="Currency"
+            hint="EUR and USD pay are compared at a rough fixed rate; other currencies aren't."
+          >
             <Input
               name="minSalaryCurrency"
               maxLength={3}
