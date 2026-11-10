@@ -92,9 +92,12 @@ test("run discovery, see screened jobs, loosen the screen", async ({ page }) => 
   await expect(page.getByRole("region", { name: "Roles" }).getByRole("listitem")).toHaveCount(2);
 
   await page.goto("/jobs?q=Tidewater");
-  await page.getByRole("checkbox", { name: "Select all jobs on this page" }).check();
   const bar = page.getByRole("toolbar", { name: "Selected jobs" });
-  await expect(bar).toContainText("2 selected");
+  // A click before hydration checks the box without React seeing it: retry until the bar shows.
+  await expect(async () => {
+    await page.getByRole("checkbox", { name: "Select all jobs on this page" }).check();
+    await expect(bar).toContainText("2 selected", { timeout: 1_000 });
+  }).toPass();
   await bar.getByRole("button", { name: "Dismiss" }).click();
   await expect(page.getByText(/No active jobs match/)).toBeVisible();
   await page.goto("/jobs?q=Tidewater&tab=archived");

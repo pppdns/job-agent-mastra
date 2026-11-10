@@ -24,6 +24,13 @@ test("track a job through statuses, archive it and bring it back", async ({ page
   const table = page.getByRole("table", { name: "Jobs" });
   const tabs = page.getByRole("navigation", { name: "Job status" });
   const row = table.getByRole("row").filter({ hasText: "Pipeline Works" });
+  // A tab change remounts the list: wait until the new tab is current, or a menu opened on the
+  // old list's rows is detached mid-click.
+  const openTab = async (name: RegExp) => {
+    const link = tabs.getByRole("link", { name });
+    await link.click();
+    await expect(link).toHaveAttribute("aria-current", "page");
+  };
   await expect(table.getByRole("row")).toHaveCount(2); // header + the job
   const status = row.getByRole("button", { name: /^Status of / });
   await expect(status).toHaveText("New");
@@ -32,23 +39,23 @@ test("track a job through statuses, archive it and bring it back", async ({ page
   await status.click();
   await page.getByRole("menuitemradio", { name: "Applied" }).click();
   await expect(status).toHaveText("Applied");
-  await tabs.getByRole("link", { name: /^Applied/ }).click();
+  await openTab(/^Applied/);
   await expect(row).toBeVisible();
 
   // Dismissed archives it: gone from Active, listed under Archived.
   await status.click();
   await page.getByRole("menuitemradio", { name: "Dismissed" }).click();
   await expect(row).toHaveCount(0);
-  await tabs.getByRole("link", { name: /^Active/ }).click();
+  await openTab(/^Active/);
   await expect(row).toHaveCount(0);
-  await tabs.getByRole("link", { name: /^Archived/ }).click();
+  await openTab(/^Archived/);
   await expect(status).toHaveText("Dismissed");
 
   // Unarchive keeps the status but brings the job back to Active.
   await status.click();
   await page.getByRole("menuitem", { name: "Unarchive" }).click();
   await expect(row).toHaveCount(0);
-  await tabs.getByRole("link", { name: /^Active/ }).click();
+  await openTab(/^Active/);
   await expect(status).toHaveText("Dismissed");
 
   // The job page has the same menu.
