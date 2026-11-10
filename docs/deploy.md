@@ -48,9 +48,11 @@ Later: the job-discovery schedule needs `DISCOVERY_SCHEDULE = "on"` in `fly.toml
 | --- | --- |
 | Logs | `fly logs` |
 | Status / restart | `fly status`, `fly machine restart` |
-| Studio (traces, logs, metrics) | `fly proxy 4111`, then http://localhost:4111 (never public) |
+| Studio (traces, logs, metrics) | `fly proxy 4111`, then http://localhost:4111 (never public; the agent listens on Fly's private network, `AGENT_HOST="::"`). Studio asks for the token: `fly ssh console -C 'printenv AGENT_SHARED_SECRET'` |
 | Shell | `fly ssh console` |
 | Backups | daily volume snapshots, 5 kept: `fly volumes snapshots list <vol-id>` |
 | Restore | `fly volumes create copilot_data --snapshot-id <id> --region fra`, then move the machine to it |
 
-**Copying a database in or out:** stop writes first. Run `fly ssh console -C "pkill -f next"`, or scale to 0 and use a temporary machine. Then use `fly ssh sftp get /data/copilot.db` or `put`. The initial production data was copied once from the local `data/copilot.db`.
+**Copying a database in:** make a consistent copy (`sqlite3 data/copilot.db ".backup /tmp/copilot.db"`, safe while the app runs). Upload it next to the live file with `fly ssh sftp shell`, then `put /tmp/copilot.db /data/copilot.db.import`, and run `fly machine restart`. [scripts/start-prod.sh](../scripts/start-prod.sh) swaps it in before the servers start and keeps the old file as `/data/copilot.db.before-import`. The initial production data was copied this way from the local `data/copilot.db`.
+
+**Copying it out:** `fly ssh console -C "sqlite3 …"` isn't available in the image. Use `fly ssh sftp get /data/copilot.db` while the app is idle, or restore a volume snapshot.

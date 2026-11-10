@@ -18,7 +18,17 @@ if ((${#APP_PASSWORD} < 12)); then
   echo "start-prod: APP_PASSWORD must be at least 12 characters" >&2
   exit 1
 fi
-mkdir -p "$(dirname "${DATABASE_URL#file:}")"
+db="${DATABASE_URL#file:}"
+mkdir -p "$(dirname "$db")"
+
+# One-shot import (docs/deploy.md): an uploaded <db>.import replaces the database before any
+# process opens it; the previous file is kept as <db>.before-import.
+if [[ -f "$db.import" ]]; then
+  [[ -f "$db" ]] && mv "$db" "$db.before-import"
+  rm -f "$db-wal" "$db-shm"
+  mv "$db.import" "$db"
+  echo "start-prod: imported $db.import"
+fi
 
 (cd apps/agent/.mastra/output && exec node index.mjs) &
 (cd apps/web && exec node_modules/.bin/next start --hostname 0.0.0.0 --port "${WEB_PORT:-3000}") &

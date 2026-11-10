@@ -15,6 +15,8 @@ swap_size_mb = 1024
   LLM_MODE = "live"
   DATABASE_URL = "file:/data/copilot.db"
   AGENT_PORT = "4111"
+  # Private network only (for `fly proxy 4111`); the public service is port 3000 alone.
+  AGENT_HOST = "::"
   WEB_PORT = "3000"
 
 [mounts]
