@@ -94,6 +94,14 @@ const PER_YEAR: Record<SalaryPeriod, number> = {
   year: 1,
 };
 
+/**
+ * Rough value of one unit in EUR, for comparing pay against a floor in the other currency. Set by
+ * hand (EUR/USD drifts slowly); cross-currency checks keep a margin so drift never decides.
+ */
+const EUR_PER_UNIT: Record<string, number> = { EUR: 1, USD: 0.87 };
+/** Cross-currency pay is screened out only when clearly under the floor. */
+export const CROSS_CURRENCY_MARGIN = 0.1;
+
 /** Whole-word containment: every word of the phrase appears in the text. */
 const hasPhrase = (text: string, phrase: string) => {
   const words = new Set(normalizeText(text).split(" "));
@@ -140,16 +148,21 @@ export function screenPosting(
   }
 
   const floor = settings.minSalary;
-  if (
-    floor &&
-    posting.salaryMax !== null &&
-    posting.salaryCurrency?.toUpperCase() === floor.currency.toUpperCase()
-  ) {
-    const yearly = posting.salaryMax * PER_YEAR[posting.salaryPeriod ?? "year"];
-    if (yearly < floor.amount) {
-      reasons.push(
-        `pay tops out at ${Math.round(yearly).toLocaleString("en-US")} ${floor.currency.toUpperCase()}/year`,
-      );
+  if (floor && posting.salaryMax !== null && posting.salaryCurrency) {
+    const from = posting.salaryCurrency.toUpperCase();
+    const to = floor.currency.toUpperCase();
+    const rate = from === to ? 1 : (EUR_PER_UNIT[from] ?? 0) / (EUR_PER_UNIT[to] ?? 0);
+    if (Number.isFinite(rate) && rate > 0) {
+      const yearly = posting.salaryMax * PER_YEAR[posting.salaryPeriod ?? "year"];
+      const margin = from === to ? 0 : CROSS_CURRENCY_MARGIN;
+      if (yearly * rate < floor.amount * (1 - margin)) {
+        const round = (n: number) => Math.round(n).toLocaleString("en-US");
+        reasons.push(
+          from === to
+            ? `pay tops out at ${round(yearly)} ${to}/year`
+            : `pay tops out at ${round(yearly)} ${from}/year (about ${round(yearly * rate)} ${to})`,
+        );
+      }
     }
   }
 
