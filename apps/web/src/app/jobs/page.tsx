@@ -1,6 +1,7 @@
-import { type JobOverview, listJobs, searchJobIds } from "@copilot/db";
+import { type JobOverview, listJobs, postingSourcesByJob, searchJobIds } from "@copilot/db";
+import { DISCOVERY_SOURCE_LABELS, type DiscoverySource } from "@copilot/shared";
 import { cn } from "cn";
-import { SearchIcon } from "lucide-react";
+import { RadarIcon, SearchIcon } from "lucide-react";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
@@ -51,6 +52,12 @@ export default function JobsPage({ searchParams }: PageProps<"/jobs">) {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader>
         <h1 className="text-sm font-semibold">Jobs</h1>
+        <Button asChild size="sm" variant="ghost" className="ml-auto">
+          <Link href="/discovery">
+            <RadarIcon />
+            Discovery
+          </Link>
+        </Button>
       </PageHeader>
       <div className="mx-auto w-full max-w-5xl flex-1 overflow-y-auto p-4">
         <Suspense fallback={<p className="text-sm text-muted-foreground">Loading jobs…</p>}>
@@ -71,7 +78,11 @@ async function JobList({ searchParams }: Pick<PageProps<"/jobs">, "searchParams"
   if (all.length === 0 && !params.q) {
     return (
       <p className="text-sm text-muted-foreground">
-        No jobs yet. Paste a listing or URL into a chat.
+        No jobs yet. Paste a listing or URL into a chat, or{" "}
+        <Link href="/discovery" className="underline">
+          run discovery
+        </Link>
+        .
       </p>
     );
   }
@@ -81,6 +92,10 @@ async function JobList({ searchParams }: Pick<PageProps<"/jobs">, "searchParams"
     params.sort,
   );
   const active = all.filter((j) => j.archivedAt === null && j.draftVersion !== null);
+  const sources = await postingSourcesByJob(
+    db,
+    jobs.filter((j) => j.origin === "discovery").map((j) => j.id),
+  );
   const stale = params.q ? 0 : active.filter((j) => j.profileStale).length;
   return (
     <div className="flex flex-col gap-4">
@@ -98,7 +113,7 @@ async function JobList({ searchParams }: Pick<PageProps<"/jobs">, "searchParams"
             : "No jobs here."}
         </p>
       ) : (
-        <JobTable jobs={jobs} tab={params.tab} now={new Date()} />
+        <JobTable jobs={jobs} tab={params.tab} now={new Date()} sources={sources} />
       )}
     </div>
   );
@@ -189,7 +204,17 @@ function StatusTabs({
 }
 
 /** Per-tab emphasis (`src/lib/job-emphasis.ts`): color marks decisions that are still open. */
-function JobTable({ jobs, tab, now }: { jobs: JobOverview[]; tab: JobTab; now: Date }) {
+function JobTable({
+  jobs,
+  tab,
+  now,
+  sources,
+}: {
+  jobs: JobOverview[];
+  tab: JobTab;
+  now: Date;
+  sources: Record<string, DiscoverySource[]>;
+}) {
   return (
     <Table aria-label="Jobs" className="table-fixed">
       <TableHeader>
@@ -204,7 +229,7 @@ function JobTable({ jobs, tab, now }: { jobs: JobOverview[]; tab: JobTab; now: D
       </TableHeader>
       <TableBody>
         {jobs.map((job) => (
-          <JobRow key={job.id} job={job} tab={tab} now={now} />
+          <JobRow key={job.id} job={job} tab={tab} now={now} sources={sources[job.id] ?? []} />
         ))}
       </TableBody>
     </Table>
@@ -212,7 +237,17 @@ function JobTable({ jobs, tab, now }: { jobs: JobOverview[]; tab: JobTab; now: D
 }
 
 /** One row; the title link covers the row, the status menu and tooltips sit above it. */
-function JobRow({ job, tab, now }: { job: JobOverview; tab: JobTab; now: Date }) {
+function JobRow({
+  job,
+  tab,
+  now,
+  sources,
+}: {
+  job: JobOverview;
+  tab: JobTab;
+  now: Date;
+  sources: DiscoverySource[];
+}) {
   const { summary } = job;
   const age = showsStageAge(tab) ? stageAge(job, now) : jobAge(job, now);
   const fitColored = fitMatters(job);
@@ -241,6 +276,11 @@ function JobRow({ job, tab, now }: { job: JobOverview; tab: JobTab; now: Date })
           {summary?.salary && <SalaryLabel salary={summary.salary} className="[&>svg]:size-3.5" />}
           <AgePill age={age} compact className="sm:hidden" />
           <JobFlags job={job} />
+          {sources.map((source) => (
+            <Badge key={source} variant="outline" className="h-4 px-1.5 text-[11px]">
+              {DISCOVERY_SOURCE_LABELS[source]}
+            </Badge>
+          ))}
         </div>
         {summary && (
           <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground" title={summary.headline}>

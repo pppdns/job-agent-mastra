@@ -146,16 +146,49 @@ describe("rescreenPostings and visibility", () => {
     expect((await listJobs(db)).map((j) => j.title)).toEqual(["Founding Engineer"]);
 
     const strict = settings({ blockedCompanies: ["Orbit Labs"], titleExclude: [] });
-    const result = await rescreenPostings(db, (p) => screenPosting(strict, p, now), new Date(0));
+    const result = await rescreenPostings(
+      db,
+      (p, i) => screenPosting(strict, p, i.seenAt),
+      new Date(0),
+    );
     expect(result).toEqual({ checked: 2, promoted: 1, hidden: 1, shown: 0 });
     await saveSearchSettings(db, strict);
     expect((await listJobs(db)).map((j) => j.title)).toEqual(["Sales Engineer"]);
     expect(await listJobs(db, undefined, { includeHidden: true })).toHaveLength(2);
 
     const loose = settings({ titleExclude: [] });
-    const back = await rescreenPostings(db, (p) => screenPosting(loose, p, now), new Date(0));
+    const back = await rescreenPostings(
+      db,
+      (p, i) => screenPosting(loose, p, i.seenAt),
+      new Date(0),
+    );
     expect(back).toMatchObject({ promoted: 0, hidden: 0, shown: 1 });
     expect(await listJobs(db)).toHaveLength(2);
+  });
+
+  it("judges age as of arrival, with the backfill window the posting came in with", async () => {
+    const old = posting({ externalId: "h-old", postedAt: new Date("2026-10-20T00:00:00Z") });
+    const run = await startDiscoveryRun(db, { trigger: "manual", lookbackDays: 30 });
+    await recordPosting(db, {
+      posting: old,
+      screen: screenPosting(settings(), old, now, 30),
+      runId: run?.id ?? "",
+      now,
+    });
+    await record(
+      posting({
+        externalId: "h-older",
+        title: "Staff Engineer",
+        postedAt: new Date("2026-10-01T00:00:00Z"),
+      }),
+    );
+    const result = await rescreenPostings(
+      db,
+      (p, i) => screenPosting(settings(), p, i.seenAt, Math.max(14, i.lookbackDays ?? 0)),
+      new Date(0),
+    );
+    expect(result).toMatchObject({ promoted: 0, hidden: 0 });
+    expect((await listJobs(db)).map((j) => j.title)).toEqual(["Founding Engineer"]);
   });
 
   it("keeps jobs the user acted on visible even when their postings fail", async () => {
@@ -163,7 +196,7 @@ describe("rescreenPostings and visibility", () => {
     const [job] = await listJobs(db);
     await setJobStatus(db, job?.id ?? "", "shortlisted");
     const strict = settings({ blockedCompanies: ["Orbit Labs"] });
-    await rescreenPostings(db, (p) => screenPosting(strict, p, now), new Date(0));
+    await rescreenPostings(db, (p, i) => screenPosting(strict, p, i.seenAt), new Date(0));
     expect(await listJobs(db)).toHaveLength(1);
   });
 

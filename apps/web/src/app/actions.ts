@@ -8,11 +8,20 @@ import {
   decideApproval,
   editProfile,
   getApprovalView,
+  getSearchSettings,
   listJobs,
+  rescreenPostings,
+  saveSearchSettings,
   setJobArchived,
   setJobStatus,
 } from "@copilot/db";
-import { JOB_STATUSES, RESEARCH_TOPICS, researchRequestText } from "@copilot/shared";
+import {
+  JOB_STATUSES,
+  RESEARCH_TOPICS,
+  researchRequestText,
+  screenPosting,
+  searchSettingsSchema,
+} from "@copilot/shared";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -153,4 +162,124 @@ async function startChat(text: string): Promise<{ error?: string }> {
   await upstream.body?.cancel();
   if (!upstream.ok) return { error: "The agent server is unavailable." };
   redirect(`/c/${threadId}`);
+}
+
+export type DiscoveryActionState = { ok: boolean; message: string } | null;
+
+/** "Run now" (optionally a 7- or 30-day backfill): starts the discover-jobs workflow. */
+export async function startDiscoveryAction(
+  _prev: DiscoveryActionState,
+  formData: FormData,
+): Promise<DiscoveryActionState> {
+  const lookback = z
+    .enum(["", "7", "30"])
+    .catch("")
+    .parse(formData.get("lookbackDays") ?? "");
+  const response = await agentFetch("/discovery/run", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ lookbackDays: lookback ? Number(lookback) : null }),
+  }).catch(() => null);
+  refresh();
+  if (!response) return { ok: false, message: "The agent server is not reachable." };
+  if (response.status === 409) return { ok: false, message: "A discovery run is already running." };
+  if (!response.ok) return { ok: false, message: `Could not start the run (${response.status}).` };
+  return {
+    ok: true,
+    message: lookback ? `Started a ${lookback}-day backfill.` : "Started a discovery run.",
+  };
+}
+
+/** One entry per line (or comma), trimmed, empties dropped. */
+const lines = (value: FormDataEntryValue | null) =>
+  String(value ?? "")
+    .split(/\n|,/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+const numberOr = (value: FormDataEntryValue | null, fallback: number) => {
+  const n = Number(value);
+  return value === null || value === "" || Number.isNaN(n) ? fallback : n;
+};
+
+/** Days of postings a settings change re-screens (older ones aren't shown anyway). */
+const RESCREEN_DAYS = 60;
+
+/**
+ * Saves the search settings and re-screens recent postings at once: newly passing ones become
+ * jobs, untouched discovered jobs that now fail are hidden. Age is judged as of when a posting
+ * arrived, with the backfill window of the run that brought it.
+ */
+export async function saveSearchSettingsAction(
+  _prev: DiscoveryActionState,
+  formData: FormData,
+): Promise<DiscoveryActionState> {
+  const db = await appDb();
+  const current = await getSearchSettings(db);
+  const amount = formData.get("minSalaryAmount");
+  const currency = String(formData.get("minSalaryCurrency") ?? "")
+    .trim()
+    .toUpperCase();
+  const parsed = searchSettingsSchema.safeParse({
+    ...current,
+    queries: lines(formData.get("queries")),
+    titleExclude: lines(formData.get("titleExclude")),
+    blockedCompanies: lines(formData.get("blockedCompanies")),
+    remoteRegions: lines(formData.get("remoteRegions")),
+    onsitePlaces: lines(formData.get("onsitePlaces")),
+    maxAgeDays: numberOr(formData.get("maxAgeDays"), current.maxAgeDays),
+    minSalary: amount && currency ? { amount: Number(amount), currency } : null,
+    apifyMonthlyBudgetUsd: numberOr(
+      formData.get("apifyMonthlyBudgetUsd"),
+      current.apifyMonthlyBudgetUsd,
+    ),
+    sources: {
+      himalayas: {
+        enabled: formData.get("himalayasEnabled") === "on",
+        maxPages: numberOr(formData.get("himalayasMaxPages"), current.sources.himalayas.maxPages),
+      },
+      linkedin: {
+        enabled: formData.get("linkedinEnabled") === "on",
+        locations: lines(formData.get("linkedinLocations")),
+        limitPerSearch: numberOr(
+          formData.get("linkedinLimitPerSearch"),
+          current.sources.linkedin.limitPerSearch,
+        ),
+        maxUsdPerRun: numberOr(
+          formData.get("linkedinMaxUsdPerRun"),
+          current.sources.linkedin.maxUsdPerRun,
+        ),
+      },
+    },
+  });
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return {
+      ok: false,
+      message: `Not saved: ${issue?.path.join(".") || "settings"}: ${issue?.message}`,
+    };
+  }
+  const settings = parsed.data;
+  await saveSearchSettings(db, settings);
+  const result = await rescreenPostings(
+    db,
+    (posting, intake) =>
+      screenPosting(
+        settings,
+        posting,
+        intake.seenAt,
+        Math.max(settings.maxAgeDays, intake.lookbackDays ?? 0),
+      ),
+    new Date(Date.now() - RESCREEN_DAYS * 86_400_000),
+  );
+  refresh();
+  const changes = [
+    result.promoted && `${result.promoted} new job${result.promoted === 1 ? "" : "s"} let through`,
+    result.hidden && `${result.hidden} hidden`,
+    result.shown && `${result.shown} shown again`,
+  ].filter(Boolean);
+  return {
+    ok: true,
+    message: `Saved. Re-screened ${result.checked} recent postings${changes.length ? `: ${changes.join(", ")}` : ", nothing changed"}.`,
+  };
 }

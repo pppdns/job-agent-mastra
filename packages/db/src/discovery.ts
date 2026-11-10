@@ -289,6 +289,9 @@ const postingInputOf = (row: Posting): PostingInput => ({ ...row });
 
 export type RescreenResult = { checked: number; promoted: number; hidden: number; shown: number };
 
+/** When and how a posting arrived: age is judged as of then, with its run's backfill window. */
+export type PostingIntake = { seenAt: Date; lookbackDays: number | null };
+
 /**
  * Re-applies the screen to postings first seen since `since` (after a settings change). Newly
  * passing postings become jobs; a discovered job the user hasn't acted on is hidden while all of
@@ -296,15 +299,27 @@ export type RescreenResult = { checked: number; promoted: number; hidden: number
  */
 export function rescreenPostings(
   db: Db,
-  screen: (posting: PostingInput) => ScreenResult,
+  screen: (posting: PostingInput, intake: PostingIntake) => ScreenResult,
   since: Date,
 ): Promise<RescreenResult> {
   return serializeWrites(db, async () => {
     const rows = await db.query.postings.findMany({ where: gte(postings.firstSeenAt, since) });
+    const runIds = [...new Set(rows.flatMap((r) => (r.firstRunId ? [r.firstRunId] : [])))];
+    const runs =
+      runIds.length > 0
+        ? await db
+            .select({ id: discoveryRuns.id, lookbackDays: discoveryRuns.lookbackDays })
+            .from(discoveryRuns)
+            .where(inArray(discoveryRuns.id, runIds))
+        : [];
+    const lookback = new Map(runs.map((r) => [r.id, r.lookbackDays]));
     const result: RescreenResult = { checked: rows.length, promoted: 0, hidden: 0, shown: 0 };
     const now = new Date();
     for (const row of rows) {
-      const { pass, reasons } = screen(postingInputOf(row));
+      const { pass, reasons } = screen(postingInputOf(row), {
+        seenAt: row.firstSeenAt,
+        lookbackDays: (row.firstRunId && lookback.get(row.firstRunId)) || null,
+      });
       const wasPassing = row.screenReasons === null;
       const next = pass ? null : reasons;
       if (JSON.stringify(next) !== JSON.stringify(row.screenReasons)) {
