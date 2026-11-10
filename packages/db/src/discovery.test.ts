@@ -31,6 +31,7 @@ import {
   saveTriage,
   sourceSpendSince,
   sourceStates,
+  sourceStatsSince,
   startDiscoveryRun,
   unseenMatchCount,
 } from "./discovery";
@@ -383,6 +384,73 @@ describe("triage and matches", () => {
     const [row] = await listDiscoveryRuns(db, 1);
     expect(row?.estimatedUsd).toBeCloseTo(0.15);
     expect(row?.funnel).toEqual(funnel);
+  });
+});
+
+describe("source stats", () => {
+  it("counts postings, screen passes, overlap with other boards, matches and cost", async () => {
+    await record(posting());
+    await record(
+      posting({ source: "linkedin", externalId: "1", company: "Orbit Labs", applyUrl: null }),
+    );
+    await record(posting({ externalId: "h-2", title: "Platform Engineer" }));
+    await record(posting({ externalId: "h-3", title: "Sales Lead" }));
+    const all = await listJobs(db);
+    const founding = all.find((j) => j.title === "Founding Engineer");
+    const platform = all.find((j) => j.title === "Platform Engineer");
+    await saveTriage(db, founding?.id ?? "", { score: 80, reason: "Good", profileVersion: 1 });
+    await saveTriage(db, platform?.id ?? "", { score: 75, reason: "Good", profileVersion: 1 });
+    const run = await startDiscoveryRun(db, { trigger: "manual" });
+    await recordSourceResult(db, run?.id ?? "", {
+      source: "linkedin",
+      status: "ok",
+      fetched: 1,
+      invalid: 0,
+      seen: 0,
+      filtered: 0,
+      newJobs: 0,
+      merged: 1,
+      costUsd: 0.02,
+      durationMs: 1,
+    });
+    const stats = await sourceStatsSince(
+      db,
+      ["himalayas", "linkedin", "remoteok"],
+      new Date(0),
+      60,
+    );
+    expect(stats).toEqual([
+      {
+        source: "himalayas",
+        postings: 3,
+        passed: 2,
+        jobs: 2,
+        duplicates: 1,
+        matches: 2,
+        uniqueMatches: 1,
+        costUsd: 0,
+      },
+      {
+        source: "linkedin",
+        postings: 1,
+        passed: 1,
+        jobs: 1,
+        duplicates: 1,
+        matches: 1,
+        uniqueMatches: 0,
+        costUsd: 0.02,
+      },
+      {
+        source: "remoteok",
+        postings: 0,
+        passed: 0,
+        jobs: 0,
+        duplicates: 0,
+        matches: 0,
+        uniqueMatches: 0,
+        costUsd: 0,
+      },
+    ]);
   });
 });
 

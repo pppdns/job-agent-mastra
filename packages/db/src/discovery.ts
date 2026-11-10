@@ -200,6 +200,76 @@ export async function sourceSpendSince(
     .reduce((sum, s) => sum + s.costUsd, 0);
 }
 
+/** What one source brought in over a window, to judge whether it's worth keeping. */
+export type SourceStats = {
+  source: DiscoverySource;
+  /** Postings first seen in the window. */
+  postings: number;
+  /** Of those, how many passed the screen. */
+  passed: number;
+  /** Jobs these postings belong to. */
+  jobs: number;
+  /** Jobs also found on another board (overlap). */
+  duplicates: number;
+  /** Jobs that are matches: triage at or above the threshold, kept, or acted on. */
+  matches: number;
+  /** Matches no other board found. */
+  uniqueMatches: number;
+  /** Provider spend in the window (USD, as runs recorded it). */
+  costUsd: number;
+};
+
+/** Per-source yield since a date: postings, screen passes, overlap, matches and cost. */
+export async function sourceStatsSince(
+  db: Db,
+  sources: readonly DiscoverySource[],
+  since: Date,
+  triageThreshold: number,
+): Promise<SourceStats[]> {
+  const elsewhere = sql`EXISTS (SELECT 1 FROM app_postings o WHERE o.job_id = p.job_id AND o.source != p.source)`;
+  const match = sql`(j.kept_at IS NOT NULL OR j.status NOT IN ('new', 'dismissed') OR j.triage_score >= ${triageThreshold})`;
+  const rows = await db.all<{
+    source: DiscoverySource;
+    postings: number;
+    passed: number;
+    jobs: number;
+    duplicates: number;
+    matches: number;
+    unique_matches: number;
+  }>(sql`
+    SELECT p.source AS source,
+      COUNT(*) AS postings,
+      SUM(CASE WHEN p.screen_reasons IS NULL THEN 1 ELSE 0 END) AS passed,
+      COUNT(DISTINCT p.job_id) AS jobs,
+      COUNT(DISTINCT CASE WHEN ${elsewhere} THEN p.job_id END) AS duplicates,
+      COUNT(DISTINCT CASE WHEN ${match} THEN p.job_id END) AS matches,
+      COUNT(DISTINCT CASE WHEN ${match} AND NOT ${elsewhere} THEN p.job_id END) AS unique_matches
+    FROM app_postings p LEFT JOIN app_jobs j ON j.id = p.job_id
+    WHERE p.first_seen_at >= ${since.getTime()}
+    GROUP BY p.source`);
+  const runs = await db.query.discoveryRuns.findMany({
+    where: gte(discoveryRuns.startedAt, since),
+  });
+  const spend = (source: DiscoverySource) =>
+    runs
+      .flatMap((r) => r.sources)
+      .filter((s) => s.source === source)
+      .reduce((sum, s) => sum + s.costUsd, 0);
+  return sources.map((source) => {
+    const row = rows.find((r) => r.source === source);
+    return {
+      source,
+      postings: Number(row?.postings ?? 0),
+      passed: Number(row?.passed ?? 0),
+      jobs: Number(row?.jobs ?? 0),
+      duplicates: Number(row?.duplicates ?? 0),
+      matches: Number(row?.matches ?? 0),
+      uniqueMatches: Number(row?.unique_matches ?? 0),
+      costUsd: spend(source),
+    };
+  });
+}
+
 /** Board ids already stored for a source (e.g. so a paid scraper can skip them). */
 export async function knownExternalIds(
   db: Db,

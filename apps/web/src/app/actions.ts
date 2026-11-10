@@ -250,6 +250,40 @@ export async function saveSearchSettingsAction(
         enabled: formData.get("himalayasEnabled") === "on",
         maxPages: numberOr(formData.get("himalayasMaxPages"), current.sources.himalayas.maxPages),
       },
+      weworkremotely: {
+        enabled: formData.get("weworkremotelyEnabled") === "on",
+        categories: lines(formData.get("weworkremotelyCategories")),
+      },
+      remoteok: { enabled: formData.get("remoteokEnabled") === "on" },
+      remotive: { enabled: formData.get("remotiveEnabled") === "on" },
+      nodesk: {
+        enabled: formData.get("nodeskEnabled") === "on",
+        categories: lines(formData.get("nodeskCategories")),
+      },
+      ...Object.fromEntries(
+        (["ycombinator", "jobgether", "dice", "builtin", "hiringcafe"] as const).map((id) => [
+          id,
+          {
+            enabled: formData.get(`${id}Enabled`) === "on",
+            limitPerSearch: numberOr(
+              formData.get(`${id}LimitPerSearch`),
+              current.sources[id].limitPerSearch,
+            ),
+            maxUsdPerRun: numberOr(
+              formData.get(`${id}MaxUsdPerRun`),
+              current.sources[id].maxUsdPerRun,
+            ),
+          },
+        ]),
+      ),
+      wellfound: {
+        enabled: formData.get("wellfoundEnabled") === "on",
+        roles: lines(formData.get("wellfoundRoles")),
+        maxUsdPerRun: numberOr(
+          formData.get("wellfoundMaxUsdPerRun"),
+          current.sources.wellfound.maxUsdPerRun,
+        ),
+      },
       linkedin: {
         enabled: formData.get("linkedinEnabled") === "on",
         locations: lines(formData.get("linkedinLocations")),

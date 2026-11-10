@@ -1,0 +1,47 @@
+[
+  {
+    "schemaVersion": "nomad-agent-job-row-v5",
+    "source": "ycombinator_was",
+    "id": "700001",
+    "url": "https://www.workatastartup.com/jobs/700001",
+    "title": "AI Engineer",
+    "company": "Fernhollow AI",
+    "locations": ["Remote"],
+    "countryCodes": null,
+    "applicantLocations": ["US", "GB", "DE"],
+    "postedAt": "2026-11-09T16:00:00Z",
+    "deadline": null,
+    "workType": "remote",
+    "salary": "$140K - $180K",
+    "employmentTypes": ["Full-time"],
+    "hiringContacts": [],
+    "description": "Fernhollow AI (YC) builds agents for warehouse planning. Ship LLM features with a team of six.",
+    "descriptionHtml": "<p>Fernhollow AI (YC) builds agents for warehouse planning.</p><p>Ship LLM features with a team of six.</p>"
+  },
+  {
+    "schemaVersion": "nomad-agent-job-row-v5",
+    "source": "ycombinator_was",
+    "id": "700002",
+    "url": "https://www.workatastartup.com/jobs/700002",
+    "title": "Founding Engineer",
+    "company": "Mossgrove",
+    "locations": ["San Francisco, CA, US"],
+    "countryCodes": null,
+    "applicantLocations": ["US"],
+    "postedAt": "2026-11-09T10:00:00Z",
+    "deadline": null,
+    "workType": "onsite",
+    "salary": "$150K - $200K",
+    "employmentTypes": ["Full-time"],
+    "hiringContacts": [],
+    "description": "In person in San Francisco.",
+    "descriptionHtml": "<p>In person in San Francisco.</p>"
+  },
+  {
+    "schemaVersion": "nomad-agent-job-row-v5",
+    "source": "ycombinator_was",
+    "id": "",
+    "url": "not a url",
+    "title": ""
+  }
+]

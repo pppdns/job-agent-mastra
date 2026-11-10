@@ -3,13 +3,63 @@ import { z } from "zod";
 // A job posting as a discovery source reports it, normalized across boards. Everything here
 // comes from a third-party feed or scraper: untrusted data, validated and size-capped.
 
-export const DISCOVERY_SOURCES = ["himalayas", "linkedin"] as const;
+export const DISCOVERY_SOURCES = [
+  "himalayas",
+  "weworkremotely",
+  "remoteok",
+  "remotive",
+  "nodesk",
+  "linkedin",
+  "ycombinator",
+  "jobgether",
+  "dice",
+  "builtin",
+  "wellfound",
+  "hiringcafe",
+] as const;
 export type DiscoverySource = (typeof DISCOVERY_SOURCES)[number];
 
 export const DISCOVERY_SOURCE_LABELS: Record<DiscoverySource, string> = {
   himalayas: "Himalayas",
+  weworkremotely: "We Work Remotely",
+  remoteok: "Remote OK",
+  remotive: "Remotive",
+  nodesk: "NoDesk",
   linkedin: "LinkedIn",
+  ycombinator: "YC Work at a Startup",
+  jobgether: "Jobgether",
+  dice: "Dice",
+  builtin: "Built In",
+  wellfound: "Wellfound",
+  hiringcafe: "HiringCafe",
 };
+
+/** Each board's home page (attribution links). */
+export const DISCOVERY_SOURCE_SITES: Record<DiscoverySource, string> = {
+  himalayas: "https://himalayas.app",
+  weworkremotely: "https://weworkremotely.com",
+  remoteok: "https://remoteok.com",
+  remotive: "https://remotive.com",
+  nodesk: "https://nodesk.co",
+  linkedin: "https://www.linkedin.com/jobs",
+  ycombinator: "https://www.workatastartup.com",
+  jobgether: "https://jobgether.com",
+  dice: "https://www.dice.com",
+  builtin: "https://builtin.com",
+  wellfound: "https://wellfound.com",
+  hiringcafe: "https://hiringcafe.com",
+};
+
+/** Sources paid through Apify (they count against the monthly Apify budget). */
+export const PAID_DISCOVERY_SOURCES: readonly DiscoverySource[] = [
+  "linkedin",
+  "ycombinator",
+  "jobgether",
+  "dice",
+  "builtin",
+  "wellfound",
+  "hiringcafe",
+];
 
 /** Postings keep at most this much description (the full text goes into the job's snapshot). */
 export const MAX_POSTING_DESCRIPTION_CHARS = 30_000;

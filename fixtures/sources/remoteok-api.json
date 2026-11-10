@@ -1,0 +1,45 @@
+[
+  {
+    "last_updated": 1794211212,
+    "legal": "Synthetic fixture notice: link back to the job on Remote OK and name Remote OK as the source."
+  },
+  {
+    "slug": "remote-ai-engineer-copperleaf-systems-900001",
+    "id": "900001",
+    "epoch": "1794211200",
+    "date": "2026-11-09T08:00:00+00:00",
+    "company": "Copperleaf Systems",
+    "company_logo": "",
+    "position": "AI Engineer",
+    "tags": ["ai", "python", "typescript"],
+    "description": "<p>Copperleaf Systems builds scheduling software for clinics.</p><p><strong>You will</strong> ship LLM features end to end: retrieval, evals and the TypeScript UI around them.</p><ul><li>3+ years shipping production software</li><li>Experience with LLM APIs</li></ul>",
+    "location": "Worldwide",
+    "salary_min": 120000,
+    "salary_max": 160000,
+    "apply_url": "https://jobs.copperleaf.example/ai-engineer",
+    "url": "https://remoteOK.com/remote-jobs/remote-ai-engineer-copperleaf-systems-900001"
+  },
+  {
+    "slug": "remote-sales-engineer-copperleaf-systems-900002",
+    "id": "900002",
+    "epoch": "1794124800",
+    "date": "2026-11-08T08:00:00+00:00",
+    "company": "Copperleaf Systems",
+    "company_logo": "",
+    "position": "Sales Engineer",
+    "tags": ["sales"],
+    "description": "<p>Pre-sales demos for clinic customers.</p>",
+    "location": "",
+    "salary_min": 114000000,
+    "salary_max": 140000000,
+    "apply_url": "https://remoteOK.com/remote-jobs/remote-sales-engineer-copperleaf-systems-900002",
+    "url": "https://remoteOK.com/remote-jobs/remote-sales-engineer-copperleaf-systems-900002"
+  },
+  {
+    "slug": "broken",
+    "id": "not-a-number",
+    "epoch": "0",
+    "company": "",
+    "position": ""
+  }
+]

@@ -5,6 +5,29 @@ import { z } from "zod";
 // keep working when fields are added.
 
 const phrases = (max: number) => z.array(z.string().trim().min(1).max(100)).max(max);
+/** Feed category slugs as they appear in the board's feed URLs. */
+const slugs = (fallback: string[]) =>
+  z
+    .array(
+      z
+        .string()
+        .trim()
+        .regex(/^[a-z0-9-]{1,80}$/),
+    )
+    .max(20)
+    .default(fallback);
+const feed = z.object({ enabled: z.boolean().default(true) }).prefault({});
+/** A board read through an Apify actor: on/off, results per search and a per-run spend cap. */
+const actorBoard = (enabled: boolean, limit: number, maxUsd: number) =>
+  z
+    .object({
+      enabled: z.boolean().default(enabled),
+      /** Results per search (Apify bills per result). */
+      limitPerSearch: z.number().int().min(1).max(200).default(limit),
+      /** Hard cap on what one run may spend on this board (USD). */
+      maxUsdPerRun: z.number().min(0.01).max(20).default(maxUsd),
+    })
+    .prefault({});
 
 export const searchSettingsSchema = z.object({
   /** Search phrases sent to the sources (one query each). They never filter on their own. */
@@ -63,6 +86,29 @@ export const searchSettingsSchema = z.object({
           maxPages: z.number().int().min(1).max(10).default(3),
         })
         .prefault({}),
+      weworkremotely: z
+        .object({
+          enabled: z.boolean().default(true),
+          /** RSS categories read each run (`weworkremotely.com/categories/<slug>.rss`). */
+          categories: slugs([
+            "remote-full-stack-programming-jobs",
+            "remote-back-end-programming-jobs",
+            "remote-front-end-programming-jobs",
+            "remote-devops-sysadmin-jobs",
+          ]),
+        })
+        .prefault({}),
+      /** The latest ~100 jobs of every kind (no search); the screen and triage sort them. */
+      remoteok: feed,
+      /** A small, 24h-delayed set (no search). */
+      remotive: feed,
+      nodesk: z
+        .object({
+          enabled: z.boolean().default(true),
+          /** RSS categories read each run (`nodesk.co/remote-jobs/<slug>/index.xml`). */
+          categories: slugs(["engineering"]),
+        })
+        .prefault({}),
       linkedin: z
         .object({
           enabled: z.boolean().default(true),
@@ -74,6 +120,25 @@ export const searchSettingsSchema = z.object({
           maxUsdPerRun: z.number().min(0.01).max(20).default(0.5),
         })
         .prefault({}),
+      /** YC's Work at a Startup (about $0.10 per 1,000 results; one run for all phrases). */
+      ycombinator: actorBoard(true, 50, 0.05),
+      /** Jobgether, remote-first (about $0.10 per 1,000; one run for all phrases). */
+      jobgether: actorBoard(true, 50, 0.05),
+      /** Dice, US tech (about $1 per 1,000; on-site US roles are screened out). */
+      dice: actorBoard(true, 25, 0.1),
+      /** Built In (about $1.07 per 1,000, billed in pages of 25; one run for all phrases). */
+      builtin: actorBoard(true, 25, 0.15),
+      /** Wellfound, startups (about $2.80 per 1,000; searched by role pages, ~30 per page). */
+      wellfound: z
+        .object({
+          enabled: z.boolean().default(false),
+          /** Role slugs (`wellfound.com/role/r/<slug>`). */
+          roles: slugs(["ai-engineer", "full-stack-engineer", "engineering-manager"]),
+          maxUsdPerRun: z.number().min(0.01).max(20).default(0.15),
+        })
+        .prefault({}),
+      /** HiringCafe, career-site jobs with apply links (about $1.25 per 1,000; descriptions are often missing). */
+      hiringcafe: actorBoard(false, 25, 0.15),
     })
     .prefault({}),
   /** All Apify sources together stop for the month once this is spent (USD, last 30 days). */

@@ -66,7 +66,25 @@ const EUROPE = [
 ];
 const EUROPE_ALIASES = new Set(["europe", "european union", "eu", "emea", "eea"]);
 const US_ALIASES = new Set(["united states", "usa", "us", "united states of america"]);
-const WORLDWIDE = new Set(["worldwide", "anywhere", "global", "remote"]);
+/** Regions in or around the US: a "North America only" or "California" role is open from the US. */
+const US_REGIONS = [
+  "north america",
+  "americas",
+  ..."alabama alaska arizona arkansas california colorado connecticut delaware florida georgia hawaii idaho illinois indiana iowa kansas kentucky louisiana maine maryland massachusetts michigan minnesota mississippi missouri montana nebraska nevada ohio oklahoma oregon pennsylvania tennessee texas utah vermont virginia washington wisconsin wyoming".split(
+    " ",
+  ),
+  "new hampshire",
+  "new jersey",
+  "new mexico",
+  "new york",
+  "north carolina",
+  "north dakota",
+  "rhode island",
+  "south carolina",
+  "south dakota",
+  "west virginia",
+];
+const WORLDWIDE = new Set(["worldwide", "anywhere", "anywhere in the world", "global", "remote"]);
 
 const PER_YEAR: Record<SalaryPeriod, number> = {
   hour: 2_080,
@@ -87,7 +105,7 @@ const hasPhrase = (text: string, phrase: string) => {
 function expand(region: string): string[] {
   const r = normalizeText(region);
   if (EUROPE_ALIASES.has(r)) return EUROPE;
-  if (US_ALIASES.has(r)) return [...US_ALIASES];
+  if (US_ALIASES.has(r)) return [...US_ALIASES, ...US_REGIONS];
   return [r];
 }
 

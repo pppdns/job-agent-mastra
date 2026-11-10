@@ -65,12 +65,25 @@ function Check({ name, label, checked }: { name: string; label: string; checked:
   );
 }
 
+/** Paid boards with the shared actor settings (results per search, spend cap per run). */
+const ACTOR_BOARDS = [
+  { id: "ycombinator", label: "YC Work at a Startup", price: "about $0.10 per 1,000 results" },
+  { id: "jobgether", label: "Jobgether", price: "about $0.10 per 1,000 results" },
+  { id: "dice", label: "Dice", price: "about $1 per 1,000 results, per phrase" },
+  { id: "builtin", label: "Built In", price: "about $1.07 per 1,000, billed in pages of 25" },
+  {
+    id: "hiringcafe",
+    label: "HiringCafe",
+    price: "about $1.25 per 1,000; descriptions often missing",
+  },
+] as const;
+
 export function SearchSettingsForm({ settings }: { settings: SearchSettings }) {
   const [state, action, pending] = useActionState<DiscoveryActionState, FormData>(
     saveSearchSettingsAction,
     null,
   );
-  const { himalayas, linkedin } = settings.sources;
+  const { himalayas, linkedin, weworkremotely, remoteok, remotive, nodesk } = settings.sources;
   return (
     <form action={action} aria-label="Search settings" className="flex flex-col gap-6">
       <section className="flex flex-col gap-3">
@@ -223,6 +236,47 @@ export function SearchSettingsForm({ settings }: { settings: SearchSettings }) {
           </Field>
         </div>
         <div className="flex flex-col gap-3 rounded-lg border p-3">
+          <p className="text-sm font-medium">Free remote-job feeds</p>
+          <p className="text-xs text-muted-foreground">
+            Feeds can't be searched: each run reads their latest jobs and the screen and triage sort
+            them. Jobs link back to the board, as their terms ask.
+          </p>
+          <Check
+            name="weworkremotelyEnabled"
+            label="We Work Remotely (RSS)"
+            checked={weworkremotely.enabled}
+          />
+          <ListField
+            name="weworkremotelyCategories"
+            label="We Work Remotely categories"
+            hint="Feed slugs from weworkremotely.com/categories/<slug>.rss, one per line."
+            values={weworkremotely.categories}
+            rows={4}
+          />
+          <Check
+            name="remoteokEnabled"
+            label="Remote OK (latest ~100 jobs of every kind)"
+            checked={remoteok.enabled}
+          />
+          <Check
+            name="remotiveEnabled"
+            label="Remotive (a small set, 24 h delayed)"
+            checked={remotive.enabled}
+          />
+          <Check
+            name="nodeskEnabled"
+            label="NoDesk (RSS, short descriptions)"
+            checked={nodesk.enabled}
+          />
+          <ListField
+            name="nodeskCategories"
+            label="NoDesk categories"
+            hint="Slugs from nodesk.co/remote-jobs/<slug>/, one per line."
+            values={nodesk.categories}
+            rows={2}
+          />
+        </div>
+        <div className="flex flex-col gap-3 rounded-lg border p-3">
           <Check
             name="linkedinEnabled"
             label="LinkedIn (Apify, paid per result)"
@@ -256,6 +310,69 @@ export function SearchSettingsForm({ settings }: { settings: SearchSettings }) {
                 max={20}
                 step={0.01}
                 defaultValue={linkedin.maxUsdPerRun}
+              />
+            </Field>
+          </div>
+        </div>
+        <div className="flex flex-col gap-3 rounded-lg border p-3">
+          <p className="text-sm font-medium">More paid boards (Apify)</p>
+          <p className="text-xs text-muted-foreground">
+            A backfill may spend 4× the per-run cap. Compare boards on the discovery page (matches,
+            overlap, cost per match) and turn off the ones that don't pay off.
+          </p>
+          {ACTOR_BOARDS.map((board) => {
+            const config = settings.sources[board.id];
+            return (
+              <div key={board.id} className="grid items-end gap-3 sm:grid-cols-[1fr_8rem_8rem]">
+                <div className="flex flex-col gap-0.5">
+                  <Check name={`${board.id}Enabled`} label={board.label} checked={config.enabled} />
+                  <span className="pl-6 text-xs text-muted-foreground">{board.price}</span>
+                </div>
+                <Field label="Results per search">
+                  <Input
+                    name={`${board.id}LimitPerSearch`}
+                    type="number"
+                    min={1}
+                    max={200}
+                    defaultValue={config.limitPerSearch}
+                  />
+                </Field>
+                <Field label="Max USD per run">
+                  <Input
+                    name={`${board.id}MaxUsdPerRun`}
+                    type="number"
+                    min={0.01}
+                    max={20}
+                    step={0.01}
+                    defaultValue={config.maxUsdPerRun}
+                  />
+                </Field>
+              </div>
+            );
+          })}
+          <div className="grid items-end gap-3 sm:grid-cols-[1fr_8rem]">
+            <div className="flex flex-col gap-2">
+              <Check
+                name="wellfoundEnabled"
+                label="Wellfound (about $2.80 per 1,000; ~30 jobs per role page)"
+                checked={settings.sources.wellfound.enabled}
+              />
+              <ListField
+                name="wellfoundRoles"
+                label="Wellfound role pages"
+                hint="Slugs from wellfound.com/role/r/<slug>, one per line."
+                values={settings.sources.wellfound.roles}
+                rows={3}
+              />
+            </div>
+            <Field label="Max USD per run">
+              <Input
+                name="wellfoundMaxUsdPerRun"
+                type="number"
+                min={0.01}
+                max={20}
+                step={0.01}
+                defaultValue={settings.sources.wellfound.maxUsdPerRun}
               />
             </Field>
           </div>

@@ -18,8 +18,32 @@ export type HttpJson = (
   },
 ) => Promise<unknown>;
 
+/** Identifies us to free feeds (no contact details: this is a single-user app). */
+const USER_AGENT = "job-copilot/1.0 (personal job search)";
+
 export const httpJson: HttpJson = (url, init = {}) =>
-  withCooldown(url, () => request(url, init), init.signal);
+  withCooldown(
+    url,
+    async () => {
+      const text = await request(url, init, "application/json");
+      try {
+        return JSON.parse(text) as unknown;
+      } catch {
+        throw new SourceError(`${url.hostname} sent invalid JSON`);
+      }
+    },
+    init.signal,
+  );
+
+/** GET a text document (RSS feeds), with the same timeout, size cap and retries. */
+export type HttpText = (url: URL, init?: { signal?: AbortSignal }) => Promise<string>;
+
+export const httpText: HttpText = (url, init = {}) =>
+  withCooldown(
+    url,
+    () => request(url, init, "application/rss+xml, application/xml;q=0.9, */*;q=0.5"),
+    init.signal,
+  );
 
 /** A `Retry-After` longer than we retry for becomes a CooldownError: sources stop for this run. */
 async function withCooldown<T>(url: URL, fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
@@ -34,14 +58,19 @@ async function withCooldown<T>(url: URL, fn: () => Promise<T>, signal?: AbortSig
   }
 }
 
-async function request(url: URL, init: Parameters<HttpJson>[1] = {}): Promise<unknown> {
+async function request(
+  url: URL,
+  init: Parameters<HttpJson>[1] = {},
+  accept: string,
+): Promise<string> {
   const timeout = AbortSignal.timeout(init.timeoutMs ?? TIMEOUT_MS);
   let response: Response;
   try {
     response = await fetch(url, {
       method: init.method ?? "GET",
       headers: {
-        accept: "application/json",
+        accept,
+        "user-agent": USER_AGENT,
         ...(init.body === undefined ? {} : { "content-type": "application/json" }),
         ...init.headers,
       },
@@ -61,9 +90,5 @@ async function request(url: URL, init: Parameters<HttpJson>[1] = {}): Promise<un
   if (!response.ok) throw new SourceError(`${url.hostname} answered ${response.status}`);
   const text = await response.text();
   if (text.length > MAX_BYTES) throw new SourceError(`${url.hostname} sent too much data`);
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    throw new SourceError(`${url.hostname} sent invalid JSON`);
-  }
+  return text;
 }

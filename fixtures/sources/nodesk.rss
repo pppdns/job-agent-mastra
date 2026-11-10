@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Remote Engineering Jobs on NoDesk (synthetic fixture)</title>
+    <link>https://nodesk.co/remote-jobs/engineering/</link>
+    <item>
+      <title>Platform Engineer at Brightwater Labs</title>
+      <description>
+About Brightwater Labs
+We make field-survey software for water utilities. You&rsquo;ll run the platform our TypeScript services deploy on.</description>
+      <pubDate>{{days-ago:1}}</pubDate>
+      <guid>https://nodesk.co/remote-jobs/brightwater-labs-platform-engineer/</guid>
+      <link>https://nodesk.co/remote-jobs/brightwater-labs-platform-engineer/</link>
+    </item>
+    <item>
+      <title>Senior Full Stack Engineer at Brightwater Labs</title>
+      <description>Own features across a TypeScript stack.</description>
+      <pubDate>{{days-ago:1}}</pubDate>
+      <guid>https://nodesk.co/remote-jobs/brightwater-labs-senior-full-stack-engineer/</guid>
+      <link>https://nodesk.co/remote-jobs/brightwater-labs-senior-full-stack-engineer/</link>
+    </item>
+  </channel>
+</rss>

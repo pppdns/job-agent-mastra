@@ -1,0 +1,36 @@
+{
+  "00-warning": "Synthetic fixture.",
+  "0-legal-notice": "Synthetic fixture notice: link back to Remotive and name it as the source.",
+  "job-count": 2,
+  "total-job-count": 2,
+  "jobs": [
+    {
+      "id": 800001,
+      "url": "https://remotive.com/remote-jobs/software-dev/applied-ai-engineer-800001",
+      "title": "Applied AI Engineer",
+      "company_name": "Lanternfish Analytics",
+      "company_logo": "",
+      "category": "Software Development",
+      "tags": ["python", "llm"],
+      "job_type": "full_time",
+      "publication_date": "2026-11-08T10:00:00",
+      "candidate_required_location": "Europe",
+      "salary": "",
+      "description": "<p>Lanternfish Analytics turns sensor data into forecasts. Build LLM-backed analysis tools with the product team.</p>"
+    },
+    {
+      "id": 800002,
+      "url": "https://remotive.com/remote-jobs/software-dev/junior-developer-800002",
+      "title": "Junior Developer",
+      "company_name": "Driftwood Labs",
+      "company_logo": "",
+      "category": "Software Development",
+      "tags": ["javascript"],
+      "job_type": "full_time",
+      "publication_date": "2026-11-08T09:00:00",
+      "candidate_required_location": "USA",
+      "salary": "$40k - $50k",
+      "description": "<p>Entry-level role on the web team.</p>"
+    }
+  ]
+}
