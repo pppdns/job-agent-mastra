@@ -58,7 +58,7 @@ const fixtureRunner: ApifyRunner = async (_actor, _input, { prices }) => {
 export function discoverySources(): Record<DiscoverySource, JobSource> {
   if (env.WEB_MODE === "fixture") {
     return {
-      himalayas: createHimalayasSource(fixtureHttp),
+      himalayas: createHimalayasSource(fixtureHttp, undefined, 0),
       linkedin: createLinkedInSource(fixtureRunner),
     };
   }

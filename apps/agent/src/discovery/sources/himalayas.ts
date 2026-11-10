@@ -9,6 +9,22 @@ import type { HttpJson } from "./http";
 
 const SEARCH_URL = "https://himalayas.app/jobs/api/search";
 const BACKFILL_MAX_PAGES = 10;
+/** Pause between requests: well under the keyed limit (60/min), polite on the shared one. */
+export const HIMALAYAS_PAUSE_MS = 1_100;
+
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    if (ms <= 0) return resolve();
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
 
 const PERIODS: Record<string, SalaryPeriod> = {
   hourly: "hour",
@@ -73,7 +89,11 @@ export function parseHimalayasJob(raw: unknown): PostingInput | null {
   return parsed.success ? parsed.data : null;
 }
 
-export function createHimalayasSource(http: HttpJson, apiKey?: string): JobSource {
+export function createHimalayasSource(
+  http: HttpJson,
+  apiKey?: string,
+  pauseMs: number = HIMALAYAS_PAUSE_MS,
+): JobSource {
   return {
     id: "himalayas",
     paid: false,
@@ -84,9 +104,11 @@ export function createHimalayasSource(http: HttpJson, apiKey?: string): JobSourc
       const byId = new Map<string, PostingInput>();
       let invalid = 0;
       const failed: string[] = [];
+      let requests = 0;
       for (const query of settings.queries) {
         try {
           for (let page = 1; page <= maxPages; page++) {
+            if (requests++ > 0) await sleep(pauseMs, signal);
             const url = new URL(SEARCH_URL);
             url.searchParams.set("q", query);
             url.searchParams.set("sort", "recent");

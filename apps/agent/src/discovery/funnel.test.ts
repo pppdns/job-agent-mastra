@@ -5,11 +5,14 @@ import {
   createDb,
   type Db,
   type DigestMatch,
+  type DiscoveryRun,
   getJobDetail,
   latestRunStatuses,
   listJobs,
   migrateDb,
   recordPosting,
+  type SourceRunResult,
+  type SourceState,
   saveSearchSettings,
   startDiscoveryRun,
   threadUsage,
@@ -24,7 +27,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { assessTopMatches } from "./assess";
 import { ASSESS_RESERVE_USD, DiscoveryBudget, TRIAGE_RESERVE_USD } from "./budget";
 import { assessStep, closeUsage, discoveryThreadId, reportStep, triageStep } from "./funnel";
-import { buildDigest, sendDigest } from "./report";
+import { alreadyAlerted, buildDigest, runProblems, sendDigest } from "./report";
 import type { HttpJson } from "./sources/http";
 import { criteriaSummary, settleScore, triageJobs, triagePrompt } from "./triage";
 
@@ -217,7 +220,7 @@ describe("digest", () => {
     );
     expect(await sendDigest(ok, config, [match()])).toEqual({
       status: "sent",
-      message: "sent to me@example.com",
+      message: "digest sent to me@example.com",
       matches: 1,
     });
     expect(sent[0]?.url).toBe("https://api.resend.com/emails");
@@ -226,6 +229,126 @@ describe("digest", () => {
       throw new Error("api.resend.com answered 403");
     };
     expect(await sendDigest(down, config, [match()])).toMatchObject({ status: "failed" });
+  });
+});
+
+describe("problems and alerts", () => {
+  const result = (over: Partial<SourceRunResult>): SourceRunResult => ({
+    source: "linkedin",
+    status: "ok",
+    fetched: 5,
+    invalid: 0,
+    seen: 0,
+    filtered: 0,
+    newJobs: 5,
+    merged: 0,
+    costUsd: 0,
+    durationMs: 1,
+    ...over,
+  });
+  const state = (over: Partial<SourceState> = {}): SourceState => ({
+    source: "himalayas",
+    lastOkAt: null,
+    last: null,
+    unhealthy: false,
+    ...over,
+  });
+  const funnel = {
+    triaged: 0,
+    triageFailed: 0,
+    triagePending: 0,
+    matched: 0,
+    assessed: 0,
+    assessFailed: 0,
+    llmUsd: 0,
+  };
+
+  it("names failed sources, budget stops, empty sources and failed steps, not expected caps", () => {
+    const problems = runProblems(
+      {
+        sources: [
+          result({ status: "failed", message: "Apify rejected the API key (401)" }),
+          result({ source: "himalayas", status: "ok", fetched: 0 }),
+        ],
+      },
+      { ...funnel, stoppedBy: "triage failed: model down" },
+      [state({ unhealthy: true }), state({ source: "linkedin", unhealthy: true })],
+    );
+    expect(problems).toEqual([
+      "LinkedIn failed: Apify rejected the API key (401)",
+      "Himalayas returned nothing in its last two runs",
+      "triage failed: model down",
+    ]);
+    expect(
+      runProblems(
+        {
+          sources: [
+            result({
+              status: "skipped",
+              message: "monthly Apify budget reached (100.00 of 100.00 USD in 30 days)",
+            }),
+          ],
+        },
+        { ...funnel, stoppedBy: "per-run model spend cap ($2.00) reached" },
+        [],
+      ),
+    ).toEqual(["LinkedIn skipped: monthly Apify budget reached (100.00 of 100.00 USD in 30 days)"]);
+    expect(
+      runProblems(
+        { sources: [result({ status: "partial", message: "spend cap reached" })] },
+        funnel,
+        [],
+      ),
+    ).toEqual([]);
+  });
+
+  it("sends a problems-only alert once a day, and puts problems on top of a digest", async () => {
+    const sent: { subject: string; text: string }[] = [];
+    const http: HttpJson = async (_url, init) => {
+      sent.push(init?.body as { subject: string; text: string });
+      return { id: "e" };
+    };
+    const config = { apiKey: "re_x", to: "me@example.com", from: "a <b@c.d>", baseUrl: "http://x" };
+    const problems = ["LinkedIn failed: Apify run r1 failed"];
+    const alert = await sendDigest(http, config, [], problems);
+    expect(alert).toMatchObject({ status: "sent", alert: true, problems });
+    expect(sent[0]?.subject).toBe(
+      "Job discovery needs a look: LinkedIn failed: Apify run r1 failed",
+    );
+
+    const earlier = {
+      id: "r0",
+      startedAt: new Date(Date.now() - 3_600_000),
+      funnel: { ...funnel, digest: alert },
+    } as unknown as DiscoveryRun;
+    expect(alreadyAlerted(problems, [earlier])).toBe(true);
+    expect(await sendDigest(http, config, [], problems, [earlier])).toMatchObject({
+      status: "skipped",
+      message: "same problems already emailed today",
+    });
+    expect(sent).toHaveLength(1);
+
+    const digest = await sendDigest(
+      http,
+      config,
+      [
+        {
+          id: "j",
+          title: "AI Engineer",
+          company: "Kite",
+          location: null,
+          triageScore: 80,
+          triageReason: "fit",
+          headline: null,
+          sources: [],
+        },
+      ],
+      problems,
+      [earlier],
+    );
+    expect(digest).toMatchObject({ status: "sent", message: "digest sent to me@example.com" });
+    expect(sent[1]?.text.startsWith("Needs a look:")).toBe(true);
+    expect(buildDigest([], "http://x", ["<b>"]).html).toContain("&lt;b&gt;");
   });
 });
 

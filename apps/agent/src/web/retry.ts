@@ -1,5 +1,27 @@
-/** A provider failure worth retrying: network error, timeout, HTTP 429 or 5xx. */
-export class RetryableError extends Error {}
+/**
+ * A provider failure worth retrying: network error, timeout, HTTP 429 or 5xx. `retryAfterMs`
+ * is how long the server asked us to wait (`Retry-After`), when it said.
+ */
+export class RetryableError extends Error {
+  constructor(
+    message: string,
+    readonly retryAfterMs?: number,
+  ) {
+    super(message);
+  }
+}
+
+/** Longest `Retry-After` we wait for; asking for more means "not this run". */
+export const MAX_RETRY_AFTER_MS = 60_000;
+
+/** `Retry-After` as milliseconds: seconds or an HTTP date; undefined when absent or unreadable. */
+export function retryAfterMs(header: string | null, now: number = Date.now()): number | undefined {
+  if (!header) return undefined;
+  const value = header.trim();
+  if (/^\d+$/.test(value)) return Number(value) * 1_000;
+  const at = Date.parse(value);
+  return Number.isNaN(at) ? undefined : Math.max(0, at - now);
+}
 
 export type RetryOptions = {
   retries?: number;
@@ -9,8 +31,9 @@ export type RetryOptions = {
 };
 
 /**
- * Bounded retries with exponential backoff (base, 2×base, …). Only RetryableError is retried;
- * an abort stops immediately. The last error is rethrown.
+ * Bounded retries with exponential backoff (base, 2×base, …), or the server's `Retry-After`
+ * when longer. Only RetryableError is retried; a wait over MAX_RETRY_AFTER_MS or an abort
+ * stops immediately. The last error is rethrown.
  */
 export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
   const { retries = 2, baseDelayMs = 500, signal, onRetry } = options;
@@ -19,8 +42,10 @@ export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions =
       return await fn();
     } catch (error) {
       if (!(error instanceof RetryableError) || attempt >= retries || signal?.aborted) throw error;
+      const asked = error.retryAfterMs ?? 0;
+      if (asked > MAX_RETRY_AFTER_MS) throw error;
       await onRetry?.(attempt + 1, error);
-      await sleep(baseDelayMs * 2 ** attempt, signal);
+      await sleep(Math.max(baseDelayMs * 2 ** attempt, asked), signal);
     }
   }
 }

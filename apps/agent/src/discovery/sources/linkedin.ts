@@ -20,7 +20,8 @@ export const LINKEDIN_PRICES: ActorPrices = { [RESULT_EVENT]: 0.00036, [START_EV
 
 const BACKFILL_LIMIT_FACTOR = 4;
 const BACKFILL_USD_FACTOR = 4;
-const MAX_SKIP_IDS = 1_000;
+/** Known ids sent as `skipJobId`, so re-asking a window (after a partial run) isn't billed. */
+const MAX_SKIP_IDS = 3_000;
 const RUN_TIMEOUT_SECS = 300;
 const HOUR_MS = 3_600_000;
 

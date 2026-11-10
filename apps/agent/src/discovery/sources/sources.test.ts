@@ -67,7 +67,7 @@ describe("Himalayas", () => {
       const pubDate = page === 1 ? 2_000_000_000 : 1_000;
       return { jobs: jobs.slice(0, 2).map((j) => ({ ...(j as object), pubDate })) };
     };
-    const source = createHimalayasSource(http);
+    const source = createHimalayasSource(http, undefined, 0);
     const result = await source.fetch(
       context({
         settings: settings({ queries: ["a", "b"] }),
@@ -84,12 +84,14 @@ describe("Himalayas", () => {
       if (url.searchParams.get("q") === "bad") throw new SourceError("himalayas.app answered 400");
       return { jobs: [] };
     };
-    const partial = await createHimalayasSource(flaky).fetch(
+    const partial = await createHimalayasSource(flaky, undefined, 0).fetch(
       context({ settings: settings({ queries: ["good", "bad"] }) }),
     );
     expect(partial.partial).toContain('"bad": himalayas.app answered 400');
     await expect(
-      createHimalayasSource(flaky).fetch(context({ settings: settings({ queries: ["bad"] }) })),
+      createHimalayasSource(flaky, undefined, 0).fetch(
+        context({ settings: settings({ queries: ["bad"] }) }),
+      ),
     ).rejects.toThrow("every search failed");
   });
 });

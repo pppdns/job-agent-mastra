@@ -147,7 +147,7 @@ export async function getDiscoveryRun(db: Db, runId: string): Promise<DiscoveryR
 
 export type SourceState = {
   source: DiscoverySource;
-  /** End of the last run where this source succeeded (the next run asks from here). */
+  /** End of the last run where this source fully succeeded (the next run asks from here). */
   lastOkAt: Date | null;
   last: SourceRunResult | null;
   /** Last run failed, or the last two runs returned nothing. */
@@ -161,7 +161,10 @@ export function sourceStates(runs: DiscoveryRun[], sources: readonly DiscoverySo
       const result = run.sources.find((s) => s.source === source);
       return result && result.status !== "skipped" ? [{ run, result }] : [];
     });
-    const lastOk = results.find((r) => r.result.status === "ok" || r.result.status === "partial");
+    // Only a fully good run moves the cursor: after a partial one (a search failed), the next
+    // run asks again from the last good run, so the failed part's window isn't lost. Known
+    // postings are skipped (and not billed by paid sources), so asking again is cheap.
+    const lastOk = results.find((r) => r.result.status === "ok");
     const last = results[0]?.result ?? null;
     const lastTwo = results.slice(0, 2);
     const empty = lastTwo.length === 2 && lastTwo.every((r) => r.result.fetched === 0);
@@ -194,7 +197,7 @@ export async function knownExternalIds(
   db: Db,
   source: DiscoverySource,
   since: Date,
-  limit = 2_000,
+  limit = 3_000,
 ): Promise<string[]> {
   const rows = await db
     .select({ id: postings.externalId })

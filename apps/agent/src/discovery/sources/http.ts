@@ -1,4 +1,4 @@
-import { RetryableError, withRetry } from "../../web/retry";
+import { RetryableError, retryAfterMs, withRetry } from "../../web/retry";
 import { SourceError } from "../types";
 
 // GET/POST JSON for discovery sources: fixed hosts, timeout, size cap, bounded retries.
@@ -39,7 +39,10 @@ export const httpJson: HttpJson = (url, init = {}) =>
         throw new RetryableError(`${url.hostname} could not be reached`);
       }
       if (response.status === 429 || response.status >= 500) {
-        throw new RetryableError(`${url.hostname} failed with ${response.status}`);
+        throw new RetryableError(
+          `${url.hostname} failed with ${response.status}`,
+          retryAfterMs(response.headers.get("retry-after")),
+        );
       }
       if (!response.ok) throw new SourceError(`${url.hostname} answered ${response.status}`);
       const text = await response.text();

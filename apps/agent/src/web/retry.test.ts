@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RetryableError, withRetry } from "./retry";
+import { RetryableError, retryAfterMs, withRetry } from "./retry";
 
 describe("withRetry", () => {
   it("retries retryable errors up to the limit, reporting each retry", async () => {
@@ -57,5 +57,40 @@ describe("withRetry", () => {
       ),
     ).rejects.toThrow("503");
     expect(calls).toBe(1);
+  });
+});
+
+describe("Retry-After", () => {
+  it("reads seconds and HTTP dates", () => {
+    expect(retryAfterMs("3")).toBe(3_000);
+    expect(retryAfterMs(new Date(10_000).toUTCString(), 4_000)).toBe(6_000);
+    expect(retryAfterMs(null)).toBeUndefined();
+    expect(retryAfterMs("soon")).toBeUndefined();
+  });
+
+  it("waits as long as the server asks, and gives up when that is too long", async () => {
+    let calls = 0;
+    const started = Date.now();
+    await withRetry(
+      async () => {
+        calls += 1;
+        if (calls === 1) throw new RetryableError("429", 120);
+        return "ok";
+      },
+      { baseDelayMs: 1 },
+    );
+    expect(Date.now() - started).toBeGreaterThanOrEqual(110);
+
+    let attempts = 0;
+    await expect(
+      withRetry(
+        async () => {
+          attempts += 1;
+          throw new RetryableError("429", 10 * 60_000);
+        },
+        { baseDelayMs: 1 },
+      ),
+    ).rejects.toThrow("429");
+    expect(attempts).toBe(1);
   });
 });
