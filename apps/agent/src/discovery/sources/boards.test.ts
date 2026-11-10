@@ -347,6 +347,8 @@ describe("actor sources", () => {
       return {
         items: [row("1", "2026-11-10T00:00:00Z"), row("2", "2026-11-01T00:00:00Z"), {}],
         costUsd: 0.03,
+        runId: `run-${calls.length}`,
+        datasetId: `ds-${calls.length}`,
       };
     };
     const outcome = await createActorSource(diceBoard, runner).fetch(context({ maxUsd: 0.07 }));
@@ -357,6 +359,11 @@ describe("actor sources", () => {
     const yc = await createActorSource(ycombinatorBoard, runner).fetch(context());
     expect(yc.postings.map((p) => p.externalId)).toEqual(["1", "2"]);
     expect(yc.invalid).toBe(1);
+    expect(yc.providerRuns).toEqual([{ label: "all phrases", runId: "run-4", datasetId: "ds-4" }]);
+    expect(yc.raw).toEqual({
+      invalid: [{}],
+      sample: [expect.objectContaining({ id: "1" }), expect.objectContaining({ id: "2" })],
+    });
   });
 
   it("says why it can't run without a key, and stops on an exhausted account", async () => {

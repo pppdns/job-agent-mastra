@@ -8,6 +8,7 @@ import {
   getDiscoveryRun,
   listJobs,
   migrateDb,
+  rawItemsOf,
   recordSourceResult,
   saveSearchSettings,
   startDiscoveryRun,
@@ -234,6 +235,28 @@ describe("runDiscoverySources", () => {
       [0, 1],
     ]);
     expect(await listJobs(db)).toHaveLength(1);
+  });
+
+  it("keeps raw items and Apify run ids for later parser checks", async () => {
+    const linkedin: JobSource = {
+      id: "linkedin",
+      paid: true,
+      unavailable: () => null,
+      fetch: async () => ({
+        postings: [posting("linkedin")],
+        invalid: 1,
+        costUsd: 0.01,
+        raw: { invalid: [{ broken: true }], sample: [{ id: "linkedin-1" }] },
+        providerRuns: [{ label: '"AI Engineer"', runId: "run1", datasetId: "ds1" }],
+      }),
+    };
+    const { results } = await run({ linkedin });
+    expect(results[0]?.providerRuns).toEqual([
+      { label: '"AI Engineer"', runId: "run1", datasetId: "ds1" },
+    ]);
+    expect((await rawItemsOf(db, "linkedin")).map((r) => r.item)).toEqual(
+      expect.arrayContaining([{ broken: true }, { id: "linkedin-1" }]),
+    );
   });
 
   it("passes known board ids so paid sources can skip them", async () => {

@@ -10,6 +10,8 @@ import {
   type FetchContext,
   type FetchOutcome,
   type JobSource,
+  type ProviderRun,
+  rawSampler,
   SourceError,
 } from "../types";
 import type { ActorPrices, ApifyRunner } from "./apify";
@@ -56,6 +58,8 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
       const failures: string[] = [];
       const notes: string[] = [];
       let succeeded = 0;
+      const raws = rawSampler();
+      const providerRuns: ProviderRun[] = [];
       /** Company + title → the kept variant's id, and whether it passes the screen. */
       const titles = new Map<string, { id: string; pass: boolean }>();
       for (const search of searches) {
@@ -72,14 +76,23 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
             signal: context.signal,
           });
           costUsd += result.costUsd;
+          if (result.runId && result.datasetId) {
+            providerRuns.push({
+              label: search.label,
+              runId: result.runId,
+              datasetId: result.datasetId,
+            });
+          }
           if (result.partial) failures.push(result.partial);
           else succeeded += 1;
           for (const raw of result.items) {
             const posting = board.parse(raw);
             if (!posting) {
               invalid += 1;
+              raws.invalid(raw);
               continue;
             }
+            raws.valid(raw);
             if (board.onePerTitle) {
               const key = `${companyKey(posting.company)}|${normalizeText(posting.title)}`;
               const pass = screenPosting(context.settings, posting).pass;
@@ -111,6 +124,8 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
         costUsd,
         partial: partial.length > 0 ? partial.slice(0, 5).join("; ") : undefined,
         failures,
+        raw: raws.items(),
+        providerRuns,
       };
     },
   };

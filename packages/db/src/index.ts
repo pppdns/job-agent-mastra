@@ -16,6 +16,7 @@ export * from "./job-list";
 export * from "./jobs";
 export { findWorkspaceRoot, resolveDatabaseUrl, resolveObservabilityPath } from "./paths";
 export * from "./profile";
+export * from "./raw-items";
 export * from "./runs";
 export type {
   Approval,

@@ -19,6 +19,9 @@ export type ActorRunResult = {
   costUsd: number;
   /** Set when the run stopped early (timed out or was aborted) but left some items. */
   partial?: string;
+  /** The Apify run and its dataset (live runs only), to look the raw output up later. */
+  runId?: string;
+  datasetId?: string;
 };
 
 type Run = {
@@ -131,6 +134,8 @@ export function createApifyRunner(http: HttpJson, token: string): ApifyRunner {
     return {
       items,
       costUsd: runCost(run, prices, items.length),
+      runId: run.id,
+      datasetId: run.defaultDatasetId,
       partial:
         run.status === "SUCCEEDED"
           ? undefined

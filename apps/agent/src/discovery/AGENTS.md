@@ -64,6 +64,12 @@ flowchart LR
     - Cost is estimated from `chargedEventCounts` × prices.
     - Proxies are part of the event price, so there is nothing to configure.
   - **Fixtures:** with `WEB_MODE=fixture`, `sources/index.ts` serves `fixtures/sources/` (dates shifted to "a day ago") instead of the live APIs.
+- **Raw items, for judging and replaying parsers** (`rawSampler` in `types.ts`, used by every source loop):
+  - Each run keeps, per source, every raw item that failed parsing (up to 25) and the first 5 valid ones in `app_raw_items` (`@copilot/db` `raw-items.ts`).
+  - Items over 50k characters are kept as their keys and size only. Rows are pruned after 60 days at the start of each run, and storing them never fails a source.
+  - Paid sources also record each search's Apify `runId` and `datasetId` in the run row (`providerRuns`). Apify keeps the full dataset for its own retention time.
+  - To check a parser after a board changes its fields, run it over `rawItemsOf(db, source)` in a throwaway test. Items are third-party data, so no secrets of ours are in them.
+  - Model calls of triage and assessment are in the Mastra traces, linked to the workflow run; LLM usage is in `app_run_events`.
 - **Adding a board:** a free feed is a `createFeedSource` call, an Apify actor an `ActorBoard` in `boards.ts` (input builder + item parser). Then add its id to `DISCOVERY_SOURCES` with a label and site (and to `PAID_DISCOVERY_SOURCES` if paid), its settings under `sources`, the settings form, a fixture or a test, and check one tiny live run.
 - **Source stats** (`sourceStatsSince`, `/discovery` cards): last 30 days per source — postings and screen passes, matches (triage at or above the threshold, kept or acted on) and matches no other board had, overlap with other boards, cost per match. Use them to turn off boards that don't pay off.
 - **Funnel** (`funnel.ts`, after fetching). Each step records the run's `funnel` as it finishes; an unexpected error is recorded as `stoppedBy` instead of failing the run.

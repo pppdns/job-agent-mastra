@@ -7,7 +7,9 @@ import {
   knownExternalIds,
   listDiscoveryRuns,
   type PostingOutcome,
+  pruneRawItems,
   recordPosting,
+  recordRawItems,
   recordSourceResult,
   type SourceRunResult,
   sourceSpendSince,
@@ -100,6 +102,8 @@ export async function runDiscoverySources(
     paidIds,
     new Date(started.getTime() - BUDGET_WINDOW_MS),
   );
+
+  await pruneRawItems(db, started).catch((e) => console.error("pruning raw items failed", e));
 
   const results: SourceRunResult[] = [];
   for (const id of ids) {
@@ -205,7 +209,16 @@ export async function runDiscoverySources(
         merged: counts.merged,
         costUsd: outcome.costUsd,
         since: since.toISOString(),
+        ...(outcome.providerRuns?.length
+          ? { providerRuns: outcome.providerRuns.slice(0, 20) }
+          : {}),
       });
+      if (outcome.raw) {
+        // Diagnostics only: losing them never fails the source.
+        await recordRawItems(db, { runId, source: id, ...outcome.raw, now: now() }).catch((e) =>
+          console.error(`storing raw items of ${id} failed`, e),
+        );
+      }
     } catch (error) {
       if (options.signal?.aborted) throw error;
       console.error(`discovery source ${id} failed`, error);

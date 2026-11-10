@@ -4,6 +4,7 @@ import {
   type FetchContext,
   type FetchOutcome,
   type JobSource,
+  rawSampler,
   SourceError,
 } from "../types";
 
@@ -52,13 +53,19 @@ export function createFeedSource(options: {
       const failures: string[] = [];
       let invalid = 0;
       let cooledDown = false;
+      const raws = rawSampler();
       for (const [i, request] of requests.entries()) {
         if (i > 0) await sleep(pauseMs, context.signal);
         try {
           for (const raw of await request.load(context.signal)) {
             const posting = options.parse(raw);
-            if (!posting) invalid += 1;
-            else byId.set(posting.externalId, posting);
+            if (!posting) {
+              invalid += 1;
+              raws.invalid(raw);
+            } else {
+              raws.valid(raw);
+              byId.set(posting.externalId, posting);
+            }
           }
         } catch (error) {
           if (context.signal?.aborted) throw error;
@@ -81,6 +88,7 @@ export function createFeedSource(options: {
         costUsd: 0,
         partial: failures.length > 0 ? `some requests failed: ${failures.join("; ")}` : undefined,
         failures,
+        raw: raws.items(),
       };
     },
   };
