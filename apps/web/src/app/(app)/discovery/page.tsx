@@ -38,6 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { runOutcome } from "@/lib/run-outcome";
 import { appDb } from "@/server/db";
 import { serverEnv } from "@/server/env";
 
@@ -104,7 +105,11 @@ async function Discovery() {
         <DiscoveryControls running={running} maxBackfillUsd={maxBackfillUsd} />
       </section>
 
-      {current && <RunProgress run={current} settings={settings} now={now} />}
+      {current ? (
+        <RunProgress run={current} settings={settings} now={now} />
+      ) : (
+        runs[0] && <LastRun run={runs[0]} />
+      )}
 
       <section aria-label="Sources" className="flex flex-col gap-2">
         <p className="text-xs text-muted-foreground">
@@ -313,32 +318,77 @@ function BudgetBar({ spent, budget }: { spent: number; budget: number }) {
   );
 }
 
-const RUN_TONE: Record<DiscoveryRun["status"], Tone> = {
-  running: "info",
-  completed: "success",
-  failed: "destructive",
-  interrupted: "warning",
+const TRIGGER_LABEL: Record<DiscoveryRun["trigger"], string> = {
+  schedule: "Scheduled",
+  manual: "Manual",
 };
+
+/** The latest finished run in one glance: did it work, what it brought, what needs a look. */
+function LastRun({ run }: { run: DiscoveryRun }) {
+  const outcome = runOutcome(run);
+  const newJobs = run.sources.reduce((sum, s) => sum + s.newJobs, 0);
+  const duration = run.endedAt && formatDuration(run.endedAt.getTime() - run.startedAt.getTime());
+  const facts = [
+    `${newJobs} new jobs`,
+    run.funnel && `${run.funnel.triaged} triaged`,
+    run.funnel && `${run.funnel.matched} matches`,
+    run.funnel && `${run.funnel.assessed} assessed`,
+    usd(run.estimatedUsd),
+  ].filter(Boolean);
+  return (
+    <section aria-label="Last run" className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="font-medium">Last run</h2>
+        <ToneBadge tone={outcome.tone}>{outcome.label}</ToneBadge>
+        <span className="text-xs text-muted-foreground">
+          {formatTime(run.startedAt)} · {TRIGGER_LABEL[run.trigger]}
+          {duration ? ` · ${duration}` : ""}
+        </span>
+      </div>
+      <p>{outcome.summary}</p>
+      <p className="text-xs text-muted-foreground tabular-nums">
+        {facts.join(" · ")}
+        {run.funnel?.digest &&
+          ` · ${DIGEST_LABEL[run.funnel.digest.status]}: ${run.funnel.digest.message}`}
+      </p>
+      {outcome.problems.length > 0 && <ProblemList problems={outcome.problems} />}
+    </section>
+  );
+}
+
+function ProblemList({ problems }: { problems: string[] }) {
+  return (
+    <ul className="flex flex-col gap-0.5 text-xs text-warning">
+      {problems.map((p) => (
+        <li key={p} className="flex items-start gap-1.5">
+          <StatusIcon status="partial" className="mt-px size-3.5" />
+          <span>{p}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function RunRow({ run, studio }: { run: DiscoveryRun; studio: string }) {
   const ran = run.sources.filter((s) => s.status !== "skipped");
   const skipped = run.sources.filter((s) => s.status === "skipped");
   const newJobs = run.sources.reduce((sum, s) => sum + s.newJobs, 0);
   const duration = run.endedAt && formatDuration(run.endedAt.getTime() - run.startedAt.getTime());
+  const outcome = runOutcome(run);
   return (
     <TableRow className="align-top">
       <TableCell className="whitespace-normal align-top">
         <div>{formatTime(run.startedAt)}</div>
         <div className="text-xs text-muted-foreground">
-          {run.trigger === "schedule" ? "Scheduled" : "Manual"}
+          {TRIGGER_LABEL[run.trigger]}
           {run.lookbackDays ? ` · ${run.lookbackDays}-day backfill` : ""}
           {duration ? ` · ${duration}` : ""}
         </div>
       </TableCell>
       <TableCell className="whitespace-normal align-top">
-        <ToneBadge tone={RUN_TONE[run.status]}>
+        <ToneBadge tone={outcome.tone}>
           {run.status === "running" && <LoaderCircleIcon className="animate-spin" />}
-          {run.status}
+          {outcome.label}
         </ToneBadge>
         {run.workflowRunId && (
           <a
@@ -373,7 +423,24 @@ function RunRow({ run, studio }: { run: DiscoveryRun; studio: string }) {
         </ul>
         {skipped.length > 0 && <SkippedLine results={skipped} />}
         {run.funnel && <FunnelLine funnel={run.funnel} />}
-        {run.error && <p className="text-xs text-destructive">{run.error}</p>}
+        {outcome.problems.length > 0 && (
+          <div className="mt-1.5">
+            <ProblemList problems={outcome.problems} />
+          </div>
+        )}
+        {run.status === "interrupted" && !run.error && (
+          <p className="text-xs text-warning">Cut off by a server restart.</p>
+        )}
+        {run.error && (
+          <p
+            className={cn(
+              "text-xs",
+              run.status === "failed" ? "text-destructive" : "text-muted-foreground",
+            )}
+          >
+            {run.error}
+          </p>
+        )}
       </TableCell>
       <TableCell className="text-right align-top tabular-nums">{usd(run.estimatedUsd)}</TableCell>
     </TableRow>
