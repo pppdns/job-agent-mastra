@@ -126,7 +126,7 @@ Live models, offline web (fixtures). Judge scores are evidence, not truth. Detai
 
 ## Job discovery foundation (M13)
 
-- Offline: `pnpm check` (shared: screen reasons, whole-word title excludes, Europe expansion, salary floor only for stated pay in the same currency, backfill age limit, company keys; db: cross-board merge by company key + title and by shared apply URL, merge into a chat job, re-seen postings don't touch the job, re-screen hides/shows/promotes and judges age as of arrival with the backfill window, triage-threshold visibility, one run at a time, interrupted sweep, spend, run markers skip `discovery:` threads; agent: Himalayas paging and partial failures, LinkedIn mapping, pay parsing, searches per query × location, spend cap, 402, Apify runner start/poll/dataset/cost, orchestrator skips, budget, cursors, backfill caps). `pnpm e2e` 24/24 incl. `discovery.spec.ts` (Run now on fixture sources, merged duplicate with both badges, screened-out list, second run "seen before", settings change lets a dropped posting through).
+- Offline: `pnpm check` (shared: screen reasons, whole-word title excludes, Europe expansion, salary floor for stated EUR/USD pay (fixed rate, 10% margin across currencies), backfill age limit, company keys; db: cross-board merge by company key + title and by shared apply URL, merge into a chat job, re-seen postings don't touch the job, re-screen hides/shows/promotes and judges age as of arrival with the backfill window, triage-threshold visibility, one run at a time, interrupted sweep, spend, run markers skip `discovery:` threads; agent: Himalayas paging and partial failures, LinkedIn mapping, pay parsing, searches per query × location, spend cap, 402, Apify runner start/poll/dataset/cost, orchestrator skips, budget, cursors, backfill caps). `pnpm e2e` 24/24 incl. `discovery.spec.ts` (Run now on fixture sources, merged duplicate with both badges, screened-out list, second run "seen before", settings change lets a dropped posting through).
 - Browser (fixture stack, scratch DB): `/discovery` run → healthy source cards, runs table, screened-out reasons; `/jobs` source badges; `/settings/search` save → "1 new job let through". Studio link opens the workflow run (after Studio sign-in).
 - Apify (MCP, 2026-11-10, ~$0.01): `valig/linkedin-jobs-scraper` returns full descriptions, `postedDate`, salary text, often an empty `applyUrl`; the `f_WT` workplace filter is ignored (on-site/hybrid results), so LinkedIn postings stay "remote unknown".
 - Live (2026-11-10, worktree DB copy): one manual run. Himalayas: 256 fetched, 145 new jobs, 16 merged, 95 screened out (almost all "remote only from <non-EU/US country>", a few "junior", "sales", "talent acquisition"). LinkedIn first attempt: 401 (the key in `.env` was not the active token; fixed by you, plus keys are now trimmed of whitespace/quotes).
@@ -173,3 +173,37 @@ Live models, offline web (fixtures). Judge scores are evidence, not truth. Detai
 - Apify boards, one tiny live run each through the adapters (2 phrases, 10 results, $0.05 cap): YC 12 fetched / 12 pass; Jobgether 20 / 18 (a long EMEA country list was cut and falsely rejected; such lists now count as unrestricted); Built In 29 / 9 with `remoteMode: "remote"` (46 / 3 without); Wellfound 2 / 2; HiringCafe 17 / 17, all with ATS apply links and full descriptions; Dice 18 / 2 (mostly on-site US, now off by default). The first YC/Jobgether runs failed with 400 until `dedupe.key` was sent. Total spend about $0.17 (research runs included).
 - Offline: unit tests for every parser, the RSS reader, region parsing, the feed and actor loops, source stats; e2e runs discovery on fixture feeds (cross-board merges, screen reasons from the new boards, source badges).
 - Not yet exercised: a full scheduled run with every source on Fly (the first one after this deploy).
+
+## ATS enrichment (M18, 2026-11-10)
+
+Live probe of `fantastic-jobs/career-site-job-listing-feed` (one run, $0.401, 4 s): the five default phrases, remote only, `limit: 200`.
+
+| | |
+| --- | --- |
+| Order / window | Newest first; 200 jobs covered 5 days (20 < 1 day, 50 1–3 days, 130 3–7 days) |
+| ATS mix | Zoho 45, Ashby 33, Lever 30, Workable 28, Greenhouse 22, Workday 14, others 28 |
+| Copies | 106 distinct company + title: one role listed per office (39× from one agency), and Jobgether reposting on its own Lever board |
+| Through our parser and screen (replayed) | 106 postings (one per title), 0 invalid, 63 pass (42 "remote only from" elsewhere), 40 with an ATS key, 35 with stated pay |
+
+Compared with the alternatives:
+
+- **The same vendor's `career-site-job-listing-api`** has a time range, so no repeats, but costs $0.012 per job. At about 40 new jobs a day that's ~$0.48 a day, the same as one feed pull, without the feed's built-in catch-up.
+- **A hand-built Greenhouse/Lever/Ashby/Workable resolver** (their free public job APIs) can only re-read jobs we already link to. From the saved M16 probes, few board items link to these four ATS at all (HiringCafe always does, We Work Remotely and Remotive rarely, Remote OK never), and those boards already give full descriptions. So it adds no jobs.
+
+Picked: the feed as the "Company career sites" source, run at most every 20 h (~$12 a month). The probe input had no agency, Jobgether or title-exclude filters, which the source now sends. `ats_key` is read from URLs for free. Unit tests cover the URL forms, cross-board merges under different URL forms, the backfill and the once-a-day skip.
+
+**Live run** of the real source through `runDiscoverySources` (temp database, no LLM funnel; $0.40):
+- 200 items became 117 postings, 0 of them invalid.
+- 39 were screened out; the other 78 became new jobs, 30 of those with an ATS key.
+- A second run straight after was skipped: "last good run 0 h ago (runs at most every 20 h)".
+- It recorded $0.001 because Apify's `usageTotalUsd` lags right after a run finishes (it read $0.401 20 s later). `runCost` now takes the larger of that and the final charged-event counts × prices. Earlier runs of every paid board may have recorded less than they cost, so the monthly budget check saw too little spend.
+
+## Sentry (2026-11-10)
+
+Live, on local production builds (bundled agent run like `start-prod.sh`, `next build` + `next start`) with the DSN and `environment=verification`. All three errors reached project `job-copilot`:
+
+- Agent startup crash (uncaught, bad `DATABASE_URL`): culprit `createStorage(storage.ts)`, so the source-mapped frames point at `src/`.
+- Failed chat run (invalid gateway key): `GatewayAuthenticationError`, tags `area=chat`, `service=agent`, release set. It still carried request data (a user-agent-derived `browser` tag, IP user): v11 collects by default, hence the explicit `SENTRY_DATA_COLLECTION` added after review.
+- Web route error (a temporary throwing route, removed afterwards): captured through `onRequestError`.
+
+Not verified: browser errors and web source-map upload (needs the `SENTRY_AUTH_TOKEN` repo secret), and the Fly deploy itself. Sentry stores the client IP as the event's user unless the project's "Prevent Storing of IP Addresses" setting is on.

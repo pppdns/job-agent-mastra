@@ -7,6 +7,7 @@ import { getJobDetail, listJobs } from "./assessments";
 import { createDb, type Db, migrateDb } from "./index";
 import {
   addSource,
+  backfillAtsKeys,
   backfillPostedDates,
   dedupeKey,
   findJobByUrl,
@@ -16,7 +17,7 @@ import {
   setJobStatus,
   upsertJob,
 } from "./jobs";
-import { sources } from "./schema";
+import { jobs, sources } from "./schema";
 
 let db: Db;
 
@@ -71,6 +72,51 @@ describe("upsertJob", () => {
     const a = await upsertJob(db, {});
     const b = await upsertJob(db, {});
     expect(a.job.id).not.toBe(b.job.id);
+  });
+});
+
+describe("ATS keys", () => {
+  const gh = "https://boards.greenhouse.io/northwind/jobs/5290677007";
+
+  it("matches the same ATS job under another URL form, with no title to go on", async () => {
+    const first = await upsertJob(db, { canonicalUrl: gh, ...northwind });
+    expect(first.job.atsKey).toBe("greenhouse:northwind:5290677007");
+    const again = await upsertJob(db, {
+      canonicalUrl: "https://job-boards.greenhouse.io/northwind/jobs/5290677007",
+      company: "Northwind",
+      title: "Platform Engineer (Remote)",
+    });
+    expect(again).toMatchObject({ created: false, job: { id: first.job.id } });
+    expect(await findJobByUrl(db, { urls: [`${gh}/apply?gh_src=li`] })).toMatchObject({
+      id: first.job.id,
+    });
+  });
+
+  it("keeps two ATS jobs with the same company and title apart, and fills a LinkedIn match", async () => {
+    const a = await upsertJob(db, { canonicalUrl: gh, ...northwind });
+    const b = await upsertJob(db, {
+      canonicalUrl: "https://boards.greenhouse.io/northwind/jobs/5290677008",
+      ...northwind,
+    });
+    expect(b.created).toBe(true);
+    // A LinkedIn job (no URL) later seen on the ATS gets the key; it never steals a taken one.
+    const li = await upsertJob(db, { linkedinJobId: "1", company: "Other", title: "Role" });
+    const filled = await upsertJob(db, {
+      linkedinJobId: "1",
+      canonicalUrl: "https://jobs.lever.co/other/9f47da32-dd07-46ea-94ea-1e77d661af92",
+    });
+    expect(filled.job).toMatchObject({ id: li.job.id, atsKey: expect.stringMatching(/^lever:/) });
+    const clash = await upsertJob(db, { linkedinJobId: "1", canonicalUrl: gh });
+    expect(clash.job.atsKey).toBe(filled.job.atsKey);
+    expect(a.job.id).not.toBe(b.job.id);
+  });
+
+  it("backfills keys from canonical URLs, once and without clashes", async () => {
+    const { job } = await upsertJob(db, { canonicalUrl: gh, ...northwind });
+    await db.update(jobs).set({ atsKey: null }).where(eq(jobs.id, job.id));
+    await upsertJob(db, { canonicalUrl: "https://example.com/careers/1", title: "x" });
+    expect(await backfillAtsKeys(db)).toBe(1);
+    expect(await backfillAtsKeys(db)).toBe(0);
   });
 });
 

@@ -5,6 +5,7 @@ import {
   type FetchContext,
   type FetchOutcome,
   type JobSource,
+  rawSampler,
   SourceError,
 } from "../types";
 import type { HttpJson } from "./http";
@@ -109,6 +110,7 @@ export function createHimalayasSource(
       const maxPages = context.backfill ? BACKFILL_MAX_PAGES : settings.sources.himalayas.maxPages;
       const byId = new Map<string, PostingInput>();
       let invalid = 0;
+      const raws = rawSampler();
       const failed: string[] = [];
       let requests = 0;
       let cooledDown = false;
@@ -133,8 +135,10 @@ export function createHimalayasSource(
               const posting = parseHimalayasJob(raw);
               if (!posting) {
                 invalid += 1;
+                raws.invalid(raw);
                 continue;
               }
+              raws.valid(raw);
               if (posting.postedAt && posting.postedAt < since) older += 1;
               else byId.set(posting.externalId, posting);
             }
@@ -161,6 +165,7 @@ export function createHimalayasSource(
         costUsd: 0,
         partial: failed.length > 0 ? `some searches failed: ${failed.join("; ")}` : undefined,
         failures: failed,
+        raw: raws.items(),
       };
     },
   };

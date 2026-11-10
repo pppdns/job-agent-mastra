@@ -1,9 +1,17 @@
-import type { DiscoverySource, PostingInput } from "@copilot/shared";
+import {
+  companyKey,
+  type DiscoverySource,
+  normalizeText,
+  type PostingInput,
+  screenPosting,
+} from "@copilot/shared";
 import {
   CooldownError,
   type FetchContext,
   type FetchOutcome,
   type JobSource,
+  type ProviderRun,
+  rawSampler,
   SourceError,
 } from "../types";
 import type { ActorPrices, ApifyRunner } from "./apify";
@@ -26,6 +34,12 @@ export type ActorBoard = {
   timeoutSecs?: number;
   searches(context: FetchContext): ActorSearch[];
   parse(raw: unknown): PostingInput | null;
+  /**
+   * Keep one posting per company and title within a run (a feed listing the same role once per
+   * office would otherwise become one job per office): the first variant that passes the screen,
+   * else the first one, so an eligible office is never dropped for an ineligible one.
+   */
+  onePerTitle?: boolean;
 };
 
 const RUN_TIMEOUT_SECS = 300;
@@ -44,6 +58,10 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
       const failures: string[] = [];
       const notes: string[] = [];
       let succeeded = 0;
+      const raws = rawSampler();
+      const providerRuns: ProviderRun[] = [];
+      /** Company + title → the kept variant's id, and whether it passes the screen. */
+      const titles = new Map<string, { id: string; pass: boolean }>();
       for (const [i, search] of searches.entries()) {
         context.onProgress?.(i, searches.length, search.label);
         const remaining = context.maxUsd - costUsd;
@@ -59,13 +77,33 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
             signal: context.signal,
           });
           costUsd += result.costUsd;
+          if (result.runId && result.datasetId) {
+            providerRuns.push({
+              label: search.label,
+              runId: result.runId,
+              datasetId: result.datasetId,
+            });
+          }
           if (result.partial) failures.push(result.partial);
           else succeeded += 1;
           for (const raw of result.items) {
             const posting = board.parse(raw);
+            if (!posting) {
+              invalid += 1;
+              raws.invalid(raw);
+              continue;
+            }
+            raws.valid(raw);
+            if (board.onePerTitle) {
+              const key = `${companyKey(posting.company)}|${normalizeText(posting.title)}`;
+              const pass = screenPosting(context.settings, posting).pass;
+              const kept = titles.get(key);
+              if (kept && (kept.pass || !pass)) continue;
+              if (kept) byId.delete(kept.id);
+              titles.set(key, { id: posting.externalId, pass });
+            }
             // Kept whatever its date (it's paid for): the screen's age limit drops old ones.
-            if (posting) byId.set(posting.externalId, posting);
-            else invalid += 1;
+            byId.set(posting.externalId, posting);
           }
         } catch (error) {
           if (context.signal?.aborted) throw error;
@@ -87,6 +125,8 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
         costUsd,
         partial: partial.length > 0 ? partial.slice(0, 5).join("; ") : undefined,
         failures,
+        raw: raws.items(),
+        providerRuns,
       };
     },
   };

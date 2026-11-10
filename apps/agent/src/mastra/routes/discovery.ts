@@ -12,6 +12,7 @@ import { z } from "zod";
 import { discoveryThreadId } from "../../discovery/funnel";
 import { BACKFILL_DAYS } from "../../discovery/run";
 import { assessJob } from "../../rescore/run";
+import { reportError } from "../../sentry";
 import { RunRecorder } from "../../usage/recorder";
 import { getAppDb } from "../app-db";
 import { DISCOVER_JOBS_WORKFLOW_ID } from "../workflows/discover-jobs";
@@ -75,6 +76,7 @@ export const assessJobRoute = registerApiRoute("/jobs/:jobId/assess", {
       await endRun(db, runId, "failed", error instanceof Error ? error.message : "failed");
       if (error instanceof AssessmentError) return c.json({ error: error.message }, 422);
       console.error("assessment failed", jobId, error);
+      reportError(error, { area: "assess" });
       return c.json({ error: "The assessment failed; try again." }, 502);
     }
   },

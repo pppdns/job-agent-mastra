@@ -16,6 +16,7 @@ export const DISCOVERY_SOURCES = [
   "builtin",
   "wellfound",
   "hiringcafe",
+  "careersites",
 ] as const;
 export type DiscoverySource = (typeof DISCOVERY_SOURCES)[number];
 
@@ -32,6 +33,7 @@ export const DISCOVERY_SOURCE_LABELS: Record<DiscoverySource, string> = {
   builtin: "Built In",
   wellfound: "Wellfound",
   hiringcafe: "HiringCafe",
+  careersites: "Company career sites",
 };
 
 /** Each board's home page (attribution links). */
@@ -48,6 +50,7 @@ export const DISCOVERY_SOURCE_SITES: Record<DiscoverySource, string> = {
   builtin: "https://builtin.com",
   wellfound: "https://wellfound.com",
   hiringcafe: "https://hiringcafe.com",
+  careersites: "https://fantastic.jobs",
 };
 
 /** Sources paid through Apify (they count against the monthly Apify budget). */
@@ -59,6 +62,7 @@ export const PAID_DISCOVERY_SOURCES: readonly DiscoverySource[] = [
   "builtin",
   "wellfound",
   "hiringcafe",
+  "careersites",
 ];
 
 /** Postings keep at most this much description (the full text goes into the job's snapshot). */

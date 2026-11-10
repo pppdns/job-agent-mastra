@@ -14,6 +14,7 @@
     "@ai-sdk/react": "4.0.163",
     "@copilot/db": "workspace:*",
     "@copilot/shared": "workspace:*",
+    "@sentry/nextjs": "11.11.0",
     "@shadcn/react": "^0.3.1",
     "ai": "~7.0.159",
     "class-variance-authority": "^0.7.1",

@@ -25,7 +25,32 @@ export type FetchOutcome = {
   partial?: string;
   /** Searches that failed (provider or network errors, rate limits); empty when only a cap stopped it. */
   failures?: string[];
+  /** Raw provider items kept for later parser checks (`RawSampler`). */
+  raw?: RawItems;
+  /** The Apify runs behind this outcome (their datasets stay in Apify for its retention time). */
+  providerRuns?: ProviderRun[];
 };
+
+export type RawItems = { invalid: unknown[]; sample: unknown[] };
+export type ProviderRun = { label: string; runId: string; datasetId: string };
+
+/** Raw items a run keeps per source: every item that failed parsing (up to a cap) and a few valid ones. */
+export const RAW_INVALID_CAP = 25;
+export const RAW_SAMPLE_CAP = 5;
+
+/** Collects raw items as a source parses them; `items()` is what goes into the outcome. */
+export function rawSampler() {
+  const kept: RawItems = { invalid: [], sample: [] };
+  return {
+    invalid(raw: unknown) {
+      if (kept.invalid.length < RAW_INVALID_CAP) kept.invalid.push(raw);
+    },
+    valid(raw: unknown) {
+      if (kept.sample.length < RAW_SAMPLE_CAP) kept.sample.push(raw);
+    },
+    items: (): RawItems => kept,
+  };
+}
 
 /** A job board adapter: a pure mapping plus a thin fetch. */
 export interface JobSource {

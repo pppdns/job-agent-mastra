@@ -7,6 +7,7 @@ import {
   normalizeText,
 } from "@copilot/shared";
 import { and, desc, eq, inArray, isNull, like, or, sql } from "drizzle-orm";
+import { atsKey } from "./ats";
 import type { Db } from "./index";
 import {
   type Job,
@@ -29,6 +30,8 @@ export const dedupeKey = (company: string, title: string) =>
 export type ListingIdentity = {
   linkedinJobId?: string | null;
   canonicalUrl?: string | null;
+  /** Defaults to `atsKey(canonicalUrl)`. */
+  atsKey?: string | null;
   company?: string | null;
   title?: string | null;
   location?: string | null;
@@ -42,8 +45,9 @@ export type UpsertOptions = {
 };
 
 /**
- * Finds the job for a listing or creates it. Match order: LinkedIn job id, canonical URL,
- * then company + title, but only against a job whose stable ids don't contradict ours.
+ * Finds the job for a listing or creates it. Match order: LinkedIn job id, ATS key (the same
+ * ATS job under any URL form), canonical URL, then company + title, but only against a job
+ * whose stable ids don't contradict ours.
  * Existing title/company are never overwritten; missing ids and location are filled in.
  */
 export function upsertJob(
@@ -62,24 +66,27 @@ export async function upsertJobUnlocked(
 ): Promise<{ job: Job; created: boolean }> {
   const key =
     identity.company && identity.title ? dedupeKey(identity.company, identity.title) : null;
+  const ats = identity.atsKey ?? atsKey(identity.canonicalUrl);
 
   return db.transaction(async (tx) => {
     const byId = identity.linkedinJobId
       ? await tx.query.jobs.findFirst({ where: eq(jobs.linkedinJobId, identity.linkedinJobId) })
       : undefined;
+    const byAts = ats ? await tx.query.jobs.findFirst({ where: eq(jobs.atsKey, ats) }) : undefined;
     const byUrl =
-      !byId && identity.canonicalUrl
+      !byId && !byAts && identity.canonicalUrl
         ? await tx.query.jobs.findFirst({ where: eq(jobs.canonicalUrl, identity.canonicalUrl) })
         : undefined;
     const byKey =
-      !byId && !byUrl && key
+      !byId && !byAts && !byUrl && key
         ? (await tx.query.jobs.findMany({ where: eq(jobs.dedupeKey, key) })).find(
             (job) =>
               compatible(job.linkedinJobId, identity.linkedinJobId) &&
+              compatible(job.atsKey, ats) &&
               compatible(job.canonicalUrl, identity.canonicalUrl),
           )
         : undefined;
-    const existing = byId ?? byUrl ?? byKey;
+    const existing = byId ?? byAts ?? byUrl ?? byKey;
     const now = new Date();
 
     if (existing) {
@@ -88,6 +95,8 @@ export async function upsertJobUnlocked(
         .set({
           linkedinJobId: existing.linkedinJobId ?? identity.linkedinJobId ?? null,
           canonicalUrl: existing.canonicalUrl ?? identity.canonicalUrl ?? null,
+          // Never take a key another job holds (matched by LinkedIn id, but on another ATS job).
+          atsKey: existing.atsKey ?? (byAts && byAts.id !== existing.id ? null : ats),
           company: existing.company ?? identity.company ?? null,
           title: existing.title ?? identity.title ?? null,
           location: existing.location ?? identity.location ?? null,
@@ -109,6 +118,7 @@ export async function upsertJobUnlocked(
         id: randomUUID(),
         linkedinJobId: identity.linkedinJobId ?? null,
         canonicalUrl: identity.canonicalUrl ?? null,
+        atsKey: ats,
         company: identity.company ?? null,
         title: identity.title ?? null,
         location: identity.location ?? null,
@@ -139,6 +149,11 @@ export async function findJobByUrl(
       where: eq(jobs.linkedinJobId, input.linkedinJobId),
     });
     if (job) return job;
+  }
+  const keys = [...new Set(input.urls.flatMap((u) => atsKey(u) ?? []))];
+  if (keys.length > 0) {
+    const byAts = await db.query.jobs.findFirst({ where: inArray(jobs.atsKey, keys) });
+    if (byAts) return byAts;
   }
   const wanted = new Set(input.urls.flatMap((u) => canonicalOrNull(u) ?? []));
   if (wanted.size === 0) return undefined;
@@ -285,6 +300,36 @@ export function backfillCompanyKeys(db: Db): Promise<number> {
       }
     });
     return rows.length;
+  });
+}
+
+/**
+ * Fills `ats_key` from the canonical URL for jobs saved before ATS keys existed, skipping a key
+ * another job already holds. Runs from `migrateDb`; afterwards only rows without an ATS URL
+ * match, and those get nothing.
+ */
+export function backfillAtsKeys(db: Db): Promise<number> {
+  return serializeWrites(db, async () => {
+    const rows = await db
+      .select({ id: jobs.id, canonicalUrl: jobs.canonicalUrl })
+      .from(jobs)
+      .where(and(isNull(jobs.atsKey), sql`${jobs.canonicalUrl} IS NOT NULL`));
+    const taken = new Set(
+      (
+        await db.select({ atsKey: jobs.atsKey }).from(jobs).where(sql`${jobs.atsKey} IS NOT NULL`)
+      ).map((r) => r.atsKey),
+    );
+    let filled = 0;
+    await db.transaction(async (tx) => {
+      for (const row of rows) {
+        const key = atsKey(row.canonicalUrl);
+        if (!key || taken.has(key)) continue;
+        taken.add(key);
+        await tx.update(jobs).set({ atsKey: key }).where(eq(jobs.id, row.id));
+        filled += 1;
+      }
+    });
+    return filled;
   });
 }
 

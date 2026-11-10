@@ -385,7 +385,8 @@ async function promote(db: Db, row: Posting, now: Date): Promise<boolean> {
   );
   await addSourceUnlocked(db, {
     jobId: job.id,
-    kind: "board",
+    // The career-sites feed reads the employer's own ATS posting.
+    kind: row.source === "careersites" ? "ats" : "board",
     provider: row.source,
     url: row.url,
     content: postingSnapshot(postingInputOf(row), DISCOVERY_SOURCE_LABELS[row.source]),

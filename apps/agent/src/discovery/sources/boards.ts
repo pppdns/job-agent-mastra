@@ -389,6 +389,105 @@ export const hiringCafeBoard: ActorBoard = {
   parse: parseHiringCafeItem,
 };
 
+// --- Company career sites (Fantastic.jobs ATS feed) ---------------------------------------
+
+const ARRANGEMENT_REMOTE: Record<string, boolean> = {
+  "Remote Solely": true,
+  "Remote OK": true,
+  Hybrid: false,
+  "On-site": false,
+};
+const UNIT_PERIOD: Record<string, SalaryPeriod> = {
+  HOUR: "hour",
+  DAY: "day",
+  WEEK: "week",
+  MONTH: "month",
+  YEAR: "year",
+};
+/** Feed dates carry no zone ("2026-11-10T11:55:40.183"); they are UTC. */
+const utcDate = (v: unknown) => {
+  const s = str(v, 40);
+  return date(s && /T[\d:.]+$/.test(s) ? `${s}Z` : s);
+};
+
+export function parseCareerSiteItem(raw: unknown): PostingInput | null {
+  const item = obj(raw);
+  const id = typeof item.id === "number" ? String(item.id) : str(item.id, 40);
+  const url = httpUrl(item.url);
+  if (!id || !/^\d+$/.test(id) || !url) return null;
+  const arrangement = str(item.ai_work_arrangement, 40);
+  const remote = arrangement ? (ARRANGEMENT_REMOTE[arrangement] ?? null) : null;
+  const places = strings(item.locations_derived).slice(0, 5);
+  const regions = remote
+    ? broadOrList(
+        strings(item.ai_remote_location_derived).length > 0
+          ? strings(item.ai_remote_location_derived)
+          : strings(item.ai_remote_location),
+      ).slice(0, 100)
+    : [];
+  const min = num(item.ai_salary_min_value) ?? num(item.ai_salary_value);
+  const max = num(item.ai_salary_max_value) ?? min;
+  const currency = str(item.ai_salary_currency, 10);
+  const period = UNIT_PERIOD[str(item.ai_salary_unit_text, 10) ?? ""];
+  const money = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  const experience = str(item.ai_experience_level, 10);
+  return posting({
+    source: "careersites",
+    externalId: id,
+    url,
+    applyUrl: url,
+    title: str(item.title) ?? "",
+    company: str(item.organization, 200) ?? "",
+    location:
+      remote && regions.length > 0
+        ? `Remote (${regions.slice(0, 5).join(", ")})`
+        : places.join("; ") || (remote ? "Remote" : null),
+    remote,
+    regions,
+    salaryMin: min !== null && period ? min : null,
+    salaryMax: min !== null && period ? max : null,
+    salaryCurrency: min !== null && period ? currency : null,
+    salaryPeriod: min !== null ? period : undefined,
+    salaryText:
+      min !== null && period
+        ? `${currency ?? ""} ${money(min)}${max && max !== min ? `–${money(max)}` : ""} per ${period}`.trim()
+        : null,
+    seniority: experience ? `${experience} years` : null,
+    employmentType: strings(item.ai_employment_type).join(", ") || null,
+    postedAt: utcDate(item.date_posted),
+    description: plainMarkdown(
+      typeof item.description_text === "string" ? item.description_text : "",
+    ),
+  });
+}
+
+/**
+ * Every active remote job whose title matches a phrase, newest first. No "since" input, so a run
+ * re-reads (and pays for) the last few days; known postings only count as seen. Agencies and
+ * Jobgether's own reposts (a source of its own) are left out.
+ */
+export const careerSitesBoard: ActorBoard = {
+  id: "careersites",
+  actorId: "fantastic-jobs/career-site-job-listing-feed",
+  prices: pricesOf(0.002, 0.001),
+  onePerTitle: true,
+  searches: ({ settings }) => [
+    {
+      label: "all phrases",
+      input: {
+        limit: settings.sources.careersites.limit,
+        titleSearch: settings.queries,
+        titleExclusionSearch: settings.titleExclude,
+        organizationExclusionSearch: ["Jobgether", ...settings.blockedCompanies],
+        aiWorkArrangementFilter: ["Remote OK", "Remote Solely"],
+        removeAgency: true,
+        descriptionType: "text",
+      },
+    },
+  ],
+  parse: parseCareerSiteItem,
+};
+
 export const ACTOR_BOARDS = [
   ycombinatorBoard,
   jobgetherBoard,
@@ -396,4 +495,5 @@ export const ACTOR_BOARDS = [
   builtInBoard,
   wellfoundBoard,
   hiringCafeBoard,
+  careerSitesBoard,
 ] as const;

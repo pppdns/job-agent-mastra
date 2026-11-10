@@ -86,7 +86,7 @@ describe("screenPosting", () => {
     expect(screenPosting(settings(), old, now, 60).pass).toBe(true);
   });
 
-  it("applies the salary floor only to stated pay in the same currency", () => {
+  it("applies the salary floor to stated pay in EUR or USD", () => {
     const floor = settings({ minSalary: { amount: 90_000, currency: "EUR" } });
     expect(
       screenPosting(
@@ -103,8 +103,23 @@ describe("screenPosting", () => {
       ).pass,
     ).toBe(true);
     expect(
-      screenPosting(floor, posting({ salaryMax: 50_000, salaryCurrency: "USD" }), now).pass,
+      screenPosting(floor, posting({ salaryMax: 50_000, salaryCurrency: "USD" }), now).reasons,
+    ).toEqual(["pay tops out at 50,000 USD/year (about 43,500 EUR)"]);
+    // Within the cross-currency margin: 100k USD ≈ 87k EUR, kept for triage.
+    expect(
+      screenPosting(floor, posting({ salaryMax: 100_000, salaryCurrency: "usd" }), now).pass,
     ).toBe(true);
+    // Other or missing currencies aren't compared.
+    expect(
+      screenPosting(floor, posting({ salaryMax: 50_000, salaryCurrency: "GBP" }), now).pass,
+    ).toBe(true);
+    expect(
+      screenPosting(floor, posting({ salaryMax: 50_000, salaryCurrency: null }), now).pass,
+    ).toBe(true);
+    const usdFloor = settings({ minSalary: { amount: 150_000, currency: "USD" } });
+    expect(
+      screenPosting(usdFloor, posting({ salaryMax: 100_000, salaryCurrency: "EUR" }), now).reasons,
+    ).toEqual(["pay tops out at 100,000 EUR/year (about 114,943 USD)"]);
   });
 
   it("checks remote region restrictions against allowed regions, expanding Europe", () => {

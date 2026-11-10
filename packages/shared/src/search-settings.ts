@@ -139,6 +139,21 @@ export const searchSettingsSchema = z.object({
         .prefault({}),
       /** HiringCafe, career-site jobs with ATS apply links (about $1.25 per 1,000; slow runs). */
       hiringcafe: actorBoard(true, 25, 0.15),
+      /**
+       * Company career sites on Greenhouse, Lever, Ashby, Workday and ~50 other ATS (Fantastic.jobs
+       * feed, $0.002 per job, at least 200 per run). The feed returns every matching active job,
+       * newest first, with no "since": 200 cover about 5 days, so it runs at most once a day.
+       */
+      careersites: z
+        .object({
+          enabled: z.boolean().default(true),
+          /** Jobs per run (the actor's minimum is 200; repeats are billed too). */
+          limit: z.number().int().min(200).max(1_000).default(200),
+          maxUsdPerRun: z.number().min(0.01).max(20).default(0.45),
+          /** Skip a run this soon after the last good one (hours; 0 = every run). */
+          minHoursBetweenRuns: z.number().int().min(0).max(168).default(20),
+        })
+        .prefault({}),
     })
     .prefault({}),
   /** All Apify sources together stop for the month once this is spent (USD, last 30 days). */

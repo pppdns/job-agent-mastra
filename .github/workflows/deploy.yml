@@ -28,6 +28,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - uses: superfly/flyctl-actions/setup-flyctl@1.5
-      - run: flyctl deploy --remote-only
+      # Tags Sentry events with the commit; SENTRY_AUTH_TOKEN (optional repo secret) uploads the
+      # web app's source maps during the image build.
+      - run: |
+          args=(--build-arg "SENTRY_RELEASE=$GITHUB_SHA")
+          if [[ -n "$SENTRY_AUTH_TOKEN" ]]; then args+=(--build-secret "SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN"); fi
+          flyctl deploy --remote-only "${args[@]}"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}

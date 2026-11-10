@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "14e0ea1a-4c77-4a11-8199-d71903201926",
+  "id": "f3ec46b9-c0ef-4182-836a-ea737a3dc1e7",
   "prevId": "68f4dc1a-848e-4955-94ac-3cbbaf58c933",
   "tables": {
     "app_approvals": {
@@ -254,13 +254,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "progress": {
-          "name": "progress",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "estimated_usd": {
           "name": "estimated_usd",
           "type": "real",
@@ -404,6 +397,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "ats_key": {
+          "name": "ats_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "company": {
           "name": "company",
           "type": "text",
@@ -536,6 +536,11 @@
         "app_jobs_canonical_url_unique": {
           "name": "app_jobs_canonical_url_unique",
           "columns": ["canonical_url"],
+          "isUnique": true
+        },
+        "app_jobs_ats_key_unique": {
+          "name": "app_jobs_ats_key_unique",
+          "columns": ["ats_key"],
           "isUnique": true
         },
         "app_jobs_dedupe_key_idx": {

@@ -1,12 +1,15 @@
 import {
   type Db,
+  discoveryRunsSince,
   finishDiscoveryRun,
   getDiscoveryRun,
   getSearchSettings,
   knownExternalIds,
   listDiscoveryRuns,
   type PostingOutcome,
+  pruneRawItems,
   recordPosting,
+  recordRawItems,
   recordSourceResult,
   type SourceRunResult,
   sourceSpendSince,
@@ -19,6 +22,7 @@ import {
   type SearchSettings,
   screenPosting,
 } from "@copilot/shared";
+import { reportError } from "../sentry";
 import { noProgress, type ProgressReporter } from "./progress";
 import { BACKFILL_USD_FACTOR } from "./sources/linkedin";
 import type { JobSource } from "./types";
@@ -66,6 +70,12 @@ const maxUsdOf = (source: DiscoverySource, settings: SearchSettings, backfill: b
   return "maxUsdPerRun" in config ? config.maxUsdPerRun * (backfill ? BACKFILL_USD_FACTOR : 1) : 0;
 };
 
+/** A source that re-reads the same window every run (no "since") runs at most this often. */
+const minHoursOf = (source: DiscoverySource, settings: SearchSettings) => {
+  const config = settings.sources[source];
+  return "minHoursBetweenRuns" in config ? config.minHoursBetweenRuns : 0;
+};
+
 export async function runDiscoverySources(
   db: Db,
   runId: string,
@@ -95,6 +105,8 @@ export async function runDiscoverySources(
     paidIds,
     new Date(started.getTime() - BUDGET_WINDOW_MS),
   );
+
+  await pruneRawItems(db, started).catch((e) => console.error("pruning raw items failed", e));
 
   const results: SourceRunResult[] = [];
   for (const id of ids) {
@@ -132,6 +144,27 @@ export async function runDiscoverySources(
       await finish({ ...base, status: "skipped", message: unavailable });
       continue;
     }
+    const lastOk = states.find((s) => s.source === id)?.lastOkAt;
+    const minHours = minHoursOf(id, settings);
+    // Read from every run in the interval, not the last 20 (skipped runs would push it out).
+    const lastPull =
+      minHours > 0 && !backfill
+        ? sourceStates(
+            (await discoveryRunsSince(db, new Date(started.getTime() - minHours * HOUR_MS))).filter(
+              (r) => r.id !== runId,
+            ),
+            [id],
+          )[0]?.lastOkAt
+        : null;
+    const hoursSince = lastPull ? (started.getTime() - lastPull.getTime()) / HOUR_MS : null;
+    if (!backfill && minHours > 0 && hoursSince !== null && hoursSince < minHours) {
+      await finish({
+        ...base,
+        status: "skipped",
+        message: `last good run ${Math.floor(hoursSince)} h ago (runs at most every ${minHours} h)`,
+      });
+      continue;
+    }
     const budget = settings.apifyMonthlyBudgetUsd;
     const maxUsd = source.paid ? Math.min(maxUsdOf(id, settings, backfill), budget - paidSpent) : 0;
     if (source.paid && maxUsd < 0.01) {
@@ -143,7 +176,6 @@ export async function runDiscoverySources(
       continue;
     }
 
-    const lastOk = states.find((s) => s.source === id)?.lastOkAt;
     const floor = started.getTime() - maxAgeDays * DAY_MS;
     const since = new Date(
       backfill || !lastOk ? floor : Math.max(floor, lastOk.getTime() - CURSOR_OVERLAP_MS),
@@ -189,10 +221,20 @@ export async function runDiscoverySources(
         merged: counts.merged,
         costUsd: outcome.costUsd,
         since: since.toISOString(),
+        ...(outcome.providerRuns?.length
+          ? { providerRuns: outcome.providerRuns.slice(0, 20) }
+          : {}),
       });
+      if (outcome.raw) {
+        // Diagnostics only: losing them never fails the source.
+        await recordRawItems(db, { runId, source: id, ...outcome.raw, now: now() }).catch((e) =>
+          console.error(`storing raw items of ${id} failed`, e),
+        );
+      }
     } catch (error) {
       if (options.signal?.aborted) throw error;
       console.error(`discovery source ${id} failed`, error);
+      reportError(error, { area: "discovery", source: id });
       await finish({
         ...base,
         status: "failed",

@@ -16,6 +16,7 @@ import {
 } from "../../discovery/run";
 import { discoverySources } from "../../discovery/sources";
 import { env } from "../../env";
+import { reportError } from "../../sentry";
 import { getAppDb } from "../app-db";
 
 // Scheduled job discovery: claim a run (one at a time), fetch and store every source, triage the
@@ -98,6 +99,7 @@ const fetchSources = createStep({
       });
       return { ...inputData, sources };
     } catch (error) {
+      reportError(error, { area: "discovery" });
       await finishDiscovery(db, inputData.runId, []).catch(() => undefined);
       throw error;
     }

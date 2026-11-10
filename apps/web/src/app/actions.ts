@@ -284,6 +284,18 @@ export async function saveSearchSettingsAction(
           current.sources.wellfound.maxUsdPerRun,
         ),
       },
+      careersites: {
+        enabled: formData.get("careersitesEnabled") === "on",
+        limit: numberOr(formData.get("careersitesLimit"), current.sources.careersites.limit),
+        maxUsdPerRun: numberOr(
+          formData.get("careersitesMaxUsdPerRun"),
+          current.sources.careersites.maxUsdPerRun,
+        ),
+        minHoursBetweenRuns: numberOr(
+          formData.get("careersitesMinHoursBetweenRuns"),
+          current.sources.careersites.minHoursBetweenRuns,
+        ),
+      },
       linkedin: {
         enabled: formData.get("linkedinEnabled") === "on",
         locations: lines(formData.get("linkedinLocations")),
