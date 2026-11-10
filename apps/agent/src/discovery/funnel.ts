@@ -123,6 +123,7 @@ async function triage(db: Db, runId: string, context: StepContext) {
     triageFailed: outcome.failed,
     triagePending: outcome.pending,
     matched: outcome.matched,
+    ...(outcome.errors.length > 0 ? { triageErrors: outcome.errors } : {}),
     llmUsd: await llmUsd(db, runId, recorder),
     ...(budget.stoppedBy ? { stoppedBy: budget.stoppedBy } : {}),
   };
@@ -149,6 +150,7 @@ async function assess(db: Db, runId: string, funnel: FunnelResult, context: Step
     ...funnel,
     assessed: outcome.assessed,
     assessFailed: outcome.failed,
+    ...(outcome.errors.length > 0 ? { assessErrors: outcome.errors } : {}),
     llmUsd: await llmUsd(db, runId, recorder),
     ...(budget.stoppedBy ? { stoppedBy: budget.stoppedBy } : {}),
   };

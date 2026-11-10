@@ -326,6 +326,10 @@ export type FunnelResult = {
   assessFailed: number;
   /** Model cost of triage + assessments (USD, estimated from tokens). */
   llmUsd: number;
+  /** The first few distinct reasons triage calls failed. */
+  triageErrors?: string[];
+  /** The first few distinct reasons assessments failed (e.g. a draft the rules rejected). */
+  assessErrors?: string[];
   /** Why triage or assessment stopped early (per-run cap, spend cap). */
   stoppedBy?: string;
   digest?: {

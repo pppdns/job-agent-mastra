@@ -113,6 +113,8 @@ const funnelSchema = z.object({
   matched: z.number(),
   assessed: z.number(),
   assessFailed: z.number(),
+  triageErrors: z.array(z.string()).optional(),
+  assessErrors: z.array(z.string()).optional(),
   llmUsd: z.number(),
   stoppedBy: z.string().optional(),
   digest: z

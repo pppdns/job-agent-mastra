@@ -473,6 +473,14 @@ function FunnelLine({ funnel }: { funnel: FunnelResult }) {
           {DIGEST_LABEL[funnel.digest.status]}: {funnel.digest.message}
         </span>
       )}
+      {[
+        ...(funnel.triageErrors ?? []).map((e) => `Triage failed: ${e}`),
+        ...(funnel.assessErrors ?? []).map((e) => `Assessment failed: ${e}`),
+      ].map((e) => (
+        <span key={e} className="block text-destructive">
+          {e}
+        </span>
+      ))}
       {funnel.stoppedBy && (
         <span className="block text-warning">Stopped early: {funnel.stoppedBy}</span>
       )}
