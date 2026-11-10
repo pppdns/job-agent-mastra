@@ -202,6 +202,7 @@ Scheduled ingestion from job boards, reported as an inbox plus an email digest. 
 - [x] Direct feeds: We Work Remotely (RSS), Remote OK (followed link-back), Remotive (attribution), NoDesk (RSS); a small RSS reader, no new dependency.
 - [x] Apify boards on a shared actor loop (LinkedIn moved onto it): YC Work at a Startup, Jobgether, Built In, Wellfound, HiringCafe (on), Dice (off: mostly on-site US roles). Welcome to the Jungle not added (the checked actor ignored the query, ~$3 per 1,000).
 - [x] Per-source stats on `/discovery` (30 days): postings, screen passes, matches and unique matches, overlap with other boards, cost per match.
+- [x] Live run progress on `/discovery` (step, current source and search, triage/assessment counts; also in `fly logs`), colored status icons and badges, the Apify budget shown once.
 - [x] Verified: unit tests, e2e on fixture feeds, live reads of every source ([verification.md](verification.md#more-sources-m16-2026-11-10)).
 
 ### M17 — Hosting

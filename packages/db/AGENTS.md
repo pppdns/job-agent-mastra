@@ -30,6 +30,7 @@ Drizzle schema (`src/schema.ts`, `app_*` tables), migrations in `drizzle/` (gene
 - **`app_discovery_runs`**:
   - one running at a time (`startDiscoveryRun` returns null otherwise)
   - per-source results as JSON (`recordSourceResult`)
+  - live `progress` while running (`recordProgress`, ignored once the run ended; cleared by `finishDiscoveryRun` and the startup sweep)
   - `sourceStates` derives each source's cursor (last good run) and health
   - `sourceSpendSince` gives the Apify budget
 - **Triage and matches:**
