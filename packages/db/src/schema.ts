@@ -28,6 +28,8 @@ export const jobs = sqliteTable(
     id: text("id").primaryKey(),
     linkedinJobId: text("linkedin_job_id").unique(),
     canonicalUrl: text("canonical_url").unique(),
+    /** `atsKey(url)` of an ATS job URL (`greenhouse:acme:123`): the strongest dedupe key. */
+    atsKey: text("ats_key").unique(),
     company: text("company"),
     title: text("title"),
     location: text("location"),
