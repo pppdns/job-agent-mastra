@@ -218,7 +218,9 @@ Scheduled ingestion from job boards, reported as an inbox plus an email digest. 
 - [x] Cut-off runs stay interrupted (no Mastra boot-time restart of `discover-jobs`); server times in Budapest time on Fly.
 - [x] `/discovery`: a "Last run" panel and an outcome per run ("All good", "N problems", "Interrupted", "Failed") with its problems; triage and assessment failure reasons kept on the run.
 - [x] Manual "Triage next batch", "Assess more matches" (runs without fetching) and "Stop run".
-- [ ] Verified live on Fly: Budapest times, Stop during a triage-only run, a full triage-only run.
+- [x] Verified live on Fly: Budapest times, full triage-only runs (400 triaged, ~$0.85 each, all model spend).
+- [ ] Verified live on Fly: Stop during a triage-only run.
+- [x] `/discovery` shows model spend: per run split into Apify, triage and assessments (live while running), and the last 30 days next to the Apify budget.
 
 ### Deployment — Fly.io (2026-11-10)
 - [x] Password login page (`APP_PASSWORD`, signed 30-day cookie, per-client throttle); off when unset.

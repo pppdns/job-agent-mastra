@@ -24,14 +24,24 @@ const STEP_LABEL: Record<DiscoveryStep, string> = {
   report: "Email",
 };
 
+const RUN_TITLE: Record<DiscoveryRun["trigger"], string> = {
+  schedule: "Scheduled run",
+  manual: "Manual run",
+  triage: "Triage-only run",
+  assess: "Assess-only run",
+};
+
 export function RunProgress({
   run,
   settings,
   now,
+  costUsd,
 }: {
   run: DiscoveryRun;
   settings: SearchSettings;
   now: number;
+  /** Estimated spend so far: paid sources and model calls. */
+  costUsd: number;
 }) {
   const progress = run.progress;
   const step = progress?.step ?? "fetch";
@@ -66,11 +76,12 @@ export function RunProgress({
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h2 className="flex items-center gap-2 font-medium">
           <StatusIcon status="running" />
-          {run.trigger === "schedule" ? "Scheduled run" : "Manual run"} in progress
+          {RUN_TITLE[run.trigger]} in progress
         </h2>
         <span className="text-sm text-muted-foreground tabular-nums">
           running for {formatDuration(now - run.startedAt.getTime())}
           {newJobs > 0 && ` · ${newJobs} new jobs so far`}
+          {costUsd > 0 && ` · $${costUsd.toFixed(2)} spent so far`}
         </span>
       </div>
 
