@@ -78,6 +78,10 @@ async function ActiveNav() {
 }
 
 async function Threads() {
+  // The chat list is fetched from the agent per request: without this, Cache Components
+  // prerenders it and the fetch is cut off when the prerender ends ("fetch() rejects when the
+  // prerender is complete"), which the catch below would log as a failure.
+  await connection();
   try {
     const threads = await listThreads();
     return (
