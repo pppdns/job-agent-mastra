@@ -49,7 +49,7 @@ Simple, polished, functional: shadcn/ui (Radix Nova preset) defaults. Clear visu
 | `pnpm db:migrate` | Apply Drizzle migrations for app tables |
 | `pnpm dev` | Agent (http://127.0.0.1:4111, Studio) + web (http://127.0.0.1:3000); other ports in a worktree, see [Worktrees](#worktrees) |
 | `pnpm check` | Biome + typecheck + unit tests (pre-commit and Claude Stop hook run this) |
-| `pnpm fly:secrets` | Set the Fly app's secrets (asks for the login password; never prints values). Deploys run from GitHub on push to `main`: [docs/deploy.md](docs/deploy.md) |
+| `pnpm fly:secrets` | Set the Fly app's secrets (asks for the login password; never prints values). Deploys run only from GitHub on push to `main`; don't `fly deploy` from a worktree: [docs/deploy.md](docs/deploy.md) |
 | `pnpm ngrok` | ngrok tunnel to the web app (basic auth required; login in `apps/web/.env.local` as `NGROK_BASIC_AUTH`, optional `NGROK_DOMAIN`). Run next to `pnpm dev` |
 | `pnpm e2e` | Playwright on an isolated mock stack; stop `pnpm dev` first |
 | `pnpm eval` | Live eval suite (real copilot + LLM judge, web fixtures, own `data/eval.db`); costs money. Report in `data/eval-report.md` |
