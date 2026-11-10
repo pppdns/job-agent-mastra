@@ -12,6 +12,7 @@ What building the Job Research Copilot (M1–M18, 2026-11-03 to 2026-11-10) taug
   - The Observer copied the approved profile into its observations (M7).
   - Chat A's local exception leaked into a shared draft (M5).
 - **Scheduled workflows are native but need guarding.** `createWorkflow({ schedule })` keeps its state in libSQL, and every worktree copies `.env` and the database. So the schedule is declared only on the production image or the main checkout's dev server, and a copied schedule row is deleted at boot elsewhere. Otherwise N checkouts would mean N runs, N bills and N emails (M13, M17).
+- **Pick one owner for interrupted runs.** The production server restarts active workflow runs at boot (`restartAllActiveWorkflowRuns`), while our startup marked them interrupted. After a deploy, discovery runs kept going unseen, never finished, and a second run started beside one. `autoRestartActiveRuns: false` leaves recovery to the next run (M18).
 - **Mastra builds have surprises in production.** `mastra build` writes its own `pnpm-workspace.yaml` into `.mastra/output`, so the agent couldn't find its migrations from there; it now starts from the repo root (Fly deploy). Durable agents don't emit the thread-title chunk, so the UI refreshes the sidebar itself (M7).
 - **Observability without another platform.** Mastra traces, logs and metrics in DuckDB were enough. Studio covers browsing, `app_run_events` per-call usage, and Sentry (added last) production errors. No Langfuse needed, as the brief asked.
 

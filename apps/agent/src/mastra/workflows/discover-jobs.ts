@@ -189,6 +189,10 @@ export const discoverJobsWorkflow = createWorkflow({
     "Fetches new job postings, screens and stores them, triages them, assesses the best and emails a digest",
   inputSchema: triggerSchema,
   outputSchema: finish.outputSchema,
+  // Mastra's server restarts active runs at boot, but startup already marks them interrupted
+  // (interruptStaleDiscoveryRuns): a restarted run would then run unseen, never finish, and
+  // let a second run start beside it. The next run catches up instead.
+  options: { autoRestartActiveRuns: false },
   ...(discoveryScheduleEnabled()
     ? {
         schedule: {
