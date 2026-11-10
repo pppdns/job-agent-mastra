@@ -3,6 +3,8 @@ app = "job-copilot-c456e8"
 primary_region = "fra"
 # Next build + DuckDB headroom on a 1 GB machine.
 swap_size_mb = 1024
+# Time for both servers to stop after SIGTERM before Fly kills them.
+kill_timeout = "30s"
 
 [build]
 

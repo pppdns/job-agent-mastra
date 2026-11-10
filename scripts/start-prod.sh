@@ -33,6 +33,17 @@ fi
 (cd apps/agent/.mastra/output && exec node index.mjs) &
 (cd apps/web && exec node_modules/.bin/next start --hostname 0.0.0.0 --port "${WEB_PORT:-3000}") &
 
+# Bash as PID 1 ignores SIGTERM unless trapped: forward Fly's stop signal so both servers close
+# the database cleanly instead of being killed after the timeout.
+stop() {
+  kill -TERM $(jobs -p) 2>/dev/null || true
+  wait
+  exit 0
+}
+trap stop TERM INT
+
 wait -n
 echo "start-prod: a server exited; stopping" >&2
+kill -TERM $(jobs -p) 2>/dev/null || true
+wait
 exit 1
