@@ -32,7 +32,7 @@ Set them with `pnpm fly:secrets` ([scripts/fly-secrets.sh](../scripts/fly-secret
 
 No value is printed or written to disk. Running it again rotates the password and the shared secret. For a single change, use `fly secrets set NAME=…` (restarts the machine), and `fly secrets list` to check (shows digests only).
 
-GitHub holds one repo secret, `FLY_API_TOKEN`: a deploy token for this app only (`fly tokens create deploy`).
+GitHub holds the repo secret `FLY_API_TOKEN`: a deploy token for this app only (`fly tokens create deploy`). An optional `SENTRY_AUTH_TOKEN` uploads source maps ([Sentry](#sentry)).
 
 Discovery: `pnpm fly:secrets` also copies `APIFY_API_KEY`, `HIMALAYAS_API_KEY`, `RESEND_API_KEY`, `DIGEST_FROM` and `DIGEST_TO` when they are set locally, and `APP_BASE_URL` in `fly.toml` points digest links here. The schedule (twice a day, `0 7,16 * * *` in `DISCOVERY_TZ`) runs on Fly once `DISCOVERY_SCHEDULE=on` is set there (`fly secrets set DISCOVERY_SCHEDULE=on`, or in `fly.toml` `[env]`): `discoveryScheduleEnabled()` allows it in the production image (`NODE_ENV=production`). Turn it off locally then (`DISCOVERY_SCHEDULE=off` in the main checkout's `apps/agent/.env`), or both machines run, bill and email against their own databases. Manual runs from `/discovery` always work.
 
@@ -41,6 +41,16 @@ Discovery: `pnpm fly:secrets` also copies `APIFY_API_KEY`, `HIMALAYAS_API_KEY`, 
 - **Normal:** merge to `main`. [.github/workflows/deploy.yml](../.github/workflows/deploy.yml) runs `pnpm check`, then `flyctl deploy --remote-only` (built on Fly's builders). Expect a few seconds of downtime per deploy, since there's one machine.
 - **Manual:** "Run workflow" on the Deploy action. Agents never run `fly deploy` from a worktree: there is one machine, so a branch deploy replaces whatever `main` (or another session) just shipped. Only for an outage fix, and say so; then merge it right away.
 - **Rollback:** `fly releases --image`, then `fly deploy --image <previous image>`.
+
+## Sentry
+
+Errors from both servers and the browser go to the Sentry project `job-copilot` (org `denes-43421`, https://denes-43421.sentry.io/projects/job-copilot/), told apart by the `service` tag (`agent`, `web`). It's on only in the production image: the SDKs initialize when `NODE_ENV=production` and a DSN is set, and the DSN exists only in `fly.toml` `[build.args]`. So `pnpm dev`, tests, e2e and evals send nothing. A local production run sends events only if you pass the DSN yourself (use `SENTRY_ENVIRONMENT` / `NEXT_PUBLIC_SENTRY_ENVIRONMENT=verification` so they don't mix with production).
+
+- **Agent** (`apps/agent/src/sentry.ts`): errors only. Mastra keeps the traces. It reports unhandled route errors (`server.onError`; HTTP 4xx stays out), failed chat runs, failed discovery fetches and failed "Assess fully" runs. Expected failures the model sees (fetch errors, `AssessmentError`) aren't reported. `bundler.sourcemap` + `node --enable-source-maps` keep its frames on `src/` files.
+- **Web** (`apps/web/src/instrumentation*.ts`, `src/lib/sentry.ts`, `app/global-error.tsx`): server/edge request errors (`onRequestError`), browser errors and render crashes, plus 10% of requests as traces.
+- **Privacy:** no `dataCollection`, so the SDK's conservative defaults apply: no headers, cookies, bodies or user info. No session replay.
+- **Release:** the deploy workflow passes `SENTRY_RELEASE=<commit SHA>` as a build arg.
+- **Source maps** (readable browser frames): add a Sentry auth token as the GitHub repo secret `SENTRY_AUTH_TOKEN` (an org token with `project:releases` / source-map upload scope). The workflow passes it as a Docker build secret, and `next build` uploads the maps. Without it, deploys still work but browser frames stay minified.
 
 ## Operating
 
