@@ -167,6 +167,12 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - [x] `/profile` edits apply right away (`editProfile`, checked against the version the page showed). Profile changes the copilot proposes in a chat still need approval (guards against injected memory changes).
 - [x] Verified: db tests (history, direct edits, stale edit refused, edit makes an older chat proposal stale), migration on a copy of the dev DB, e2e `assessments.spec.ts` (v1 → v2 with history, no approve controls), updated profile/rescore/listing/research specs.
 
+### Deployment — Fly.io (2026-11-10)
+- [x] Password login page (`APP_PASSWORD`, signed 30-day cookie, per-client throttle); off when unset.
+- [x] One image runs both servers ([Dockerfile](../Dockerfile), [scripts/start-prod.sh](../scripts/start-prod.sh)); `fly.toml`: one always-on machine, `/data` volume, agent and Studio only through `fly proxy`.
+- [x] Secrets via `pnpm fly:secrets`; GitHub Action deploys on push to `main`.
+- [ ] Verified live: login, chat turn, copied local DB, restart persistence, Studio via proxy, deploy from the Action.
+
 ## Simplifications chosen (tell me if any is unacceptable)
 
 1. **Reconnect across agent-server restarts** would need Redis (shared event cache). Plan: in-process cache — browser refresh/reconnect works; after a server restart the run is marked interrupted with partial results kept, and you re-ask. Redis can be added later without redesign.

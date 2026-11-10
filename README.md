@@ -79,6 +79,7 @@ No keys? Set `LLM_MODE=mock` (deterministic fake model) and `WEB_MODE=fixture` (
 | `pnpm eval:studio` | Studio on the eval database to browse experiments |
 | `pnpm agent:api …` | Authenticated `mastra api`, e.g. `agent run copilot '{"messages":"hi"}'`, `trace list` |
 | `pnpm ngrok` | Basic-auth tunnel to the web app |
+| `pnpm fly:secrets` | Set the Fly deployment's secrets ([docs/deploy.md](docs/deploy.md)) |
 
 ## Using it
 
@@ -93,7 +94,7 @@ Single local user: both servers bind to 127.0.0.1 and the web app calls the agen
 
 ## Limitations
 
-- Local, single-user prototype: no deployment, no multi-user auth.
+- Single user: one password login when deployed ([docs/deploy.md](docs/deploy.md)), no multi-user auth.
 - A run survives a browser refresh, but not an agent-server restart (the run is marked interrupted; partial results are kept).
 - Saved-job search is SQLite full-text search, not embeddings.
 - Costs and research budgets use a static price table, so they are estimates and soft caps.

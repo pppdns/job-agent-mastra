@@ -358,7 +358,7 @@ Deterministic code enforces everything that matters; the model only proposes.
 | Concern | Enforced by |
 | --- | --- |
 | Approvals | `decideApproval` in `@copilot/db`, called only from a web server action on a user click; payload hash + thread + version checks. `/profile` edits (`editProfile`) come only from a server action too |
-| Auth | Servers bound to 127.0.0.1; every agent route behind `SimpleAuth` with `AGENT_SHARED_SECRET`; memory pinned to the user's resource |
+| Auth | Deployed: password login on the web app (`APP_PASSWORD`, signed session cookie checked in `src/proxy.ts`), agent port never public ([deploy.md](deploy.md)). Servers bound to 127.0.0.1; every agent route behind `SimpleAuth` with `AGENT_SHARED_SECRET`; memory pinned to the user's resource |
 | Untrusted web text | URL guard on every fetch; page text marked untrusted; the UI renders replies without images or raw HTML |
 | Research spend | `ResearchBudget` aborts on tool calls, time or estimated USD |
 | Data integrity | Zod schemas on tool input; `@copilot/db` rejects assessments citing other jobs' sources or stale profile versions; serialized writes |
