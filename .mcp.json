@@ -19,6 +19,9 @@
     "tavily": {
       "type": "http",
       "url": "https://mcp.tavily.com/mcp"
+    },
+    "apify": {
+      "url": "https://mcp.apify.com"
     }
   }
 }
