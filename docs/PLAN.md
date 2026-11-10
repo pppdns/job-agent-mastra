@@ -203,7 +203,7 @@ Scheduled ingestion from job boards, reported as an inbox plus an email digest. 
 
 ### M17 — Hosting
 - [x] Fly.io: one always-on machine with a volume (agent + web), password login, daily volume snapshots, SQLite on the volume. See "Deployment — Fly.io" below and [deploy.md](deploy.md).
-- [ ] Turn the discovery schedule on there (`DISCOVERY_SCHEDULE`, discovery secrets).
+- [x] Turn the discovery schedule on there (`DISCOVERY_SCHEDULE`, discovery secrets).
 
 ### M18 — ATS enrichment
 - [ ] Compare the `fantastic-jobs/career-site-job-listing-feed` actor with a hand-built Greenhouse/Lever/Ashby/Workable resolver; `ats_key` as the strongest dedupe key. Skipped boards: TrueUp, Tech Jobs for Good, Arc.dev, JustRemote, PowerToFly, Climatebase, Levels.fyi (no maintained actor), FlexJobs (paid login), AIJobs.net (shut down).
