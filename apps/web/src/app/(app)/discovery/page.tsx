@@ -18,11 +18,15 @@ import {
   PAID_DISCOVERY_SOURCES,
 } from "@copilot/shared";
 import { cn } from "cn";
-import { ExternalLinkIcon, SettingsIcon } from "lucide-react";
+import { ExternalLinkIcon, LoaderCircleIcon, SettingsIcon } from "lucide-react";
 import Link from "next/link";
 import { connection } from "next/server";
+import type React from "react";
 import { Suspense } from "react";
+import { TONES, type Tone } from "@/components/assessment-visuals";
 import { DiscoveryControls, RefreshWhileRunning } from "@/components/discovery-controls";
+import { RunProgress } from "@/components/discovery-run-progress";
+import { formatDuration, STATUS_TEXT, StatusIcon } from "@/components/discovery-status";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -81,7 +85,8 @@ async function Discovery() {
     screenedOutSince(db, new Date(now - 7 * DAY_MS)),
   ]);
   const stats = await sourceStatsSince(db, DISCOVERY_SOURCES, monthAgo, settings.triageThreshold);
-  const running = runs[0]?.status === "running";
+  const current = runs[0]?.status === "running" ? runs[0] : null;
+  const running = current !== null;
   const states = sourceStates(runs, DISCOVERY_SOURCES);
   const linkedin = settings.sources.linkedin;
   const maxBackfillUsd = linkedin.enabled ? linkedin.maxUsdPerRun * BACKFILL_USD_FACTOR : null;
@@ -99,12 +104,17 @@ async function Discovery() {
         <DiscoveryControls running={running} maxBackfillUsd={maxBackfillUsd} />
       </section>
 
+      {current && <RunProgress run={current} settings={settings} now={now} />}
+
       <section aria-label="Sources" className="flex flex-col gap-2">
         <p className="text-xs text-muted-foreground">
           Last 30 days per source: postings found and passed by the screen, matches (triage at or
           above {settings.triageThreshold}, kept, or acted on) and how many no other board had, the
           share of jobs also seen on another board, and the cost per match.
         </p>
+        <div className="sm:max-w-sm">
+          <BudgetBar spent={spent} budget={settings.apifyMonthlyBudgetUsd} />
+        </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {states.map((state) => (
             <SourceCard
@@ -112,8 +122,6 @@ async function Discovery() {
               state={state}
               stats={stats.find((s) => s.source === state.source)}
               enabled={settings.sources[state.source].enabled}
-              spent={PAID_DISCOVERY_SOURCES.includes(state.source) ? spent : null}
-              budget={settings.apifyMonthlyBudgetUsd}
             />
           ))}
         </div>
@@ -172,101 +180,166 @@ async function Discovery() {
   );
 }
 
-const STATUS_VARIANT = {
-  ok: "secondary",
-  partial: "outline",
-  failed: "destructive",
-  skipped: "outline",
-} as const;
+const HEALTH: Record<"off" | "bad" | "good" | "new", { label: string; tone: Tone }> = {
+  off: { label: "Off", tone: "muted" },
+  bad: { label: "Needs a look", tone: "destructive" },
+  good: { label: "Healthy", tone: "success" },
+  new: { label: "Not run yet", tone: "muted" },
+};
+
+function ToneBadge({ tone, children }: { tone: Tone; children: React.ReactNode }) {
+  return (
+    <Badge variant="outline" className={TONES[tone]}>
+      {children}
+    </Badge>
+  );
+}
 
 function SourceCard({
   state,
   stats,
   enabled,
-  spent,
-  budget,
 }: {
   state: SourceState;
   stats: SourceStats | undefined;
   enabled: boolean;
-  spent: number | null;
-  budget: number;
 }) {
   const label = DISCOVERY_SOURCE_LABELS[state.source];
+  const health = HEALTH[!enabled ? "off" : state.unhealthy ? "bad" : state.last ? "good" : "new"];
+  const last = state.last;
   return (
-    <div className="flex flex-col gap-1 rounded-lg border p-3 text-sm">
-      <div className="flex items-center gap-2">
-        <a
-          href={DISCOVERY_SOURCE_SITES[state.source]}
-          target="_blank"
-          rel="noopener"
-          className="font-medium hover:underline"
-        >
-          {label}
-        </a>
-        {!enabled && <Badge variant="outline">Off</Badge>}
-        {enabled && state.unhealthy && <Badge variant="destructive">Needs a look</Badge>}
-        {enabled && !state.unhealthy && state.last && <Badge variant="secondary">Healthy</Badge>}
-      </div>
-      <p className="text-muted-foreground">
-        {state.lastOkAt ? `Last good run ${formatTime(state.lastOkAt)}` : "No good run yet"}
-        {spent !== null && ` · ${usd(spent)} of ${usd(budget)} in 30 days`}
-      </p>
-      {stats && stats.postings > 0 && (
-        <dl
-          aria-label={`${label} in the last 30 days`}
-          className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-muted-foreground"
-        >
-          <Stat label="Postings" value={`${stats.postings} (${stats.passed} passed)`} />
-          <Stat label="Matches" value={`${stats.matches} (${stats.uniqueMatches} only here)`} />
-          <Stat label="Match rate" value={percent(stats.matches, stats.jobs)} />
-          <Stat label="Also elsewhere" value={percent(stats.duplicates, stats.jobs)} />
-          {stats.costUsd > 0 && (
-            <Stat
-              label="Per match"
-              value={stats.matches > 0 ? usd(stats.costUsd / stats.matches) : "no matches"}
-            />
-          )}
-        </dl>
+    <div
+      className={cn(
+        "flex flex-col gap-3 rounded-lg border p-3 text-sm",
+        enabled && state.unhealthy && "border-destructive/40",
+        !enabled && "bg-muted/40",
       )}
-      {state.last?.message && (
-        <p className="text-xs text-muted-foreground">Last run: {state.last.message}</p>
+    >
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <a
+            href={DISCOVERY_SOURCE_SITES[state.source]}
+            target="_blank"
+            rel="noopener"
+            className="font-medium hover:underline"
+          >
+            {label}
+          </a>
+          <p className="text-xs text-muted-foreground">
+            {state.lastOkAt ? `Last good run ${formatTime(state.lastOkAt)}` : "No good run yet"}
+          </p>
+        </div>
+        <ToneBadge tone={health.tone}>{health.label}</ToneBadge>
+      </div>
+      {stats && stats.postings > 0 ? (
+        <>
+          <dl
+            aria-label={`${label} in the last 30 days`}
+            className="grid grid-cols-3 gap-2 text-xs text-muted-foreground"
+          >
+            <BigStat label="Postings" value={stats.postings} />
+            <BigStat label="Passed" value={stats.passed} />
+            <BigStat
+              label="Matches"
+              value={stats.matches}
+              className={stats.matches > 0 ? "text-success" : undefined}
+            />
+          </dl>
+          <p className="text-xs text-muted-foreground tabular-nums">
+            {[
+              `${percent(stats.matches, stats.jobs)} match rate`,
+              stats.uniqueMatches > 0 && `${stats.uniqueMatches} only here`,
+              `${percent(stats.duplicates, stats.jobs)} also elsewhere`,
+              stats.costUsd > 0 &&
+                (stats.matches > 0 ? `${usd(stats.costUsd / stats.matches)} per match` : null),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        </>
+      ) : (
+        <p className="text-xs text-muted-foreground">No postings in the last 30 days.</p>
+      )}
+      {last?.message && (
+        <p className={cn("flex gap-1.5 text-xs", STATUS_TEXT[last.status])}>
+          <StatusIcon status={last.status} className="mt-px size-3.5" />
+          <span className="min-w-0">Last run: {last.message}</span>
+        </p>
       )}
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function BigStat({
+  label,
+  value,
+  className,
+}: {
+  label: string;
+  value: number;
+  className?: string;
+}) {
   return (
-    <div className="flex justify-between gap-2">
+    <div className="flex flex-col">
       <dt>{label}</dt>
-      <dd className="tabular-nums text-foreground">{value}</dd>
+      <dd className={cn("text-lg font-semibold text-foreground tabular-nums", className)}>
+        {value.toLocaleString("en-US")}
+      </dd>
     </div>
   );
 }
+
+/** Apify spend of the paid sources (shared budget) over the last 30 days. */
+function BudgetBar({ spent, budget }: { spent: number; budget: number }) {
+  const share = budget > 0 ? spent / budget : 1;
+  return (
+    <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+      <div className="flex justify-between tabular-nums">
+        <span>Apify budget (paid boards), last 30 days</span>
+        <span>
+          {usd(spent)} of {usd(budget)}
+        </span>
+      </div>
+      <div className="h-1 overflow-hidden rounded-full bg-muted">
+        <div
+          className={cn(
+            "h-full rounded-full",
+            share >= 0.9 ? "bg-destructive" : share >= 0.6 ? "bg-warning" : "bg-success",
+          )}
+          style={{ width: `${Math.max(2, Math.min(100, share * 100))}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+const RUN_TONE: Record<DiscoveryRun["status"], Tone> = {
+  running: "info",
+  completed: "success",
+  failed: "destructive",
+  interrupted: "warning",
+};
 
 function RunRow({ run, studio }: { run: DiscoveryRun; studio: string }) {
+  const ran = run.sources.filter((s) => s.status !== "skipped");
+  const skipped = run.sources.filter((s) => s.status === "skipped");
+  const newJobs = run.sources.reduce((sum, s) => sum + s.newJobs, 0);
+  const duration = run.endedAt && formatDuration(run.endedAt.getTime() - run.startedAt.getTime());
   return (
     <TableRow className="align-top">
-      <TableCell className="whitespace-normal">
+      <TableCell className="whitespace-normal align-top">
         <div>{formatTime(run.startedAt)}</div>
         <div className="text-xs text-muted-foreground">
           {run.trigger === "schedule" ? "Scheduled" : "Manual"}
           {run.lookbackDays ? ` · ${run.lookbackDays}-day backfill` : ""}
+          {duration ? ` · ${duration}` : ""}
         </div>
       </TableCell>
-      <TableCell className="whitespace-normal">
-        <Badge
-          variant={
-            run.status === "failed"
-              ? "destructive"
-              : run.status === "running"
-                ? "outline"
-                : "secondary"
-          }
-        >
+      <TableCell className="whitespace-normal align-top">
+        <ToneBadge tone={RUN_TONE[run.status]}>
+          {run.status === "running" && <LoaderCircleIcon className="animate-spin" />}
           {run.status}
-        </Badge>
+        </ToneBadge>
         {run.workflowRunId && (
           <a
             href={`${studio}/workflows/discover-jobs/graph/${encodeURIComponent(run.workflowRunId)}`}
@@ -278,16 +351,31 @@ function RunRow({ run, studio }: { run: DiscoveryRun; studio: string }) {
           </a>
         )}
       </TableCell>
-      <TableCell className="whitespace-normal">
-        <ul className="flex flex-col gap-1">
-          {run.sources.map((s) => (
+      <TableCell className="whitespace-normal align-top">
+        <p className="mb-1.5 text-sm">
+          <span className="font-medium tabular-nums">{newJobs}</span> new jobs
+          {run.funnel && (
+            <>
+              {" · "}
+              <span
+                className={cn("font-medium tabular-nums", run.funnel.matched > 0 && "text-success")}
+              >
+                {run.funnel.matched}
+              </span>{" "}
+              matches
+            </>
+          )}
+        </p>
+        <ul className="flex flex-col gap-0.5">
+          {ran.map((s) => (
             <SourceLine key={s.source} result={s} />
           ))}
         </ul>
+        {skipped.length > 0 && <SkippedLine results={skipped} />}
         {run.funnel && <FunnelLine funnel={run.funnel} />}
         {run.error && <p className="text-xs text-destructive">{run.error}</p>}
       </TableCell>
-      <TableCell className="text-right tabular-nums">{usd(run.estimatedUsd)}</TableCell>
+      <TableCell className="text-right align-top tabular-nums">{usd(run.estimatedUsd)}</TableCell>
     </TableRow>
   );
 }
@@ -305,7 +393,7 @@ function FunnelLine({ funnel }: { funnel: FunnelResult }) {
     `models ${usd(funnel.llmUsd)}`,
   ].filter(Boolean);
   return (
-    <div className="mt-1 text-xs">
+    <div className="mt-1.5 border-t pt-1.5 text-xs">
       <span className="font-medium">Funnel</span>{" "}
       <span className="text-muted-foreground">{parts.join(" · ")}</span>
       {funnel.digest && (
@@ -319,32 +407,53 @@ function FunnelLine({ funnel }: { funnel: FunnelResult }) {
         </span>
       )}
       {funnel.stoppedBy && (
-        <span className="block text-muted-foreground">Stopped early: {funnel.stoppedBy}</span>
+        <span className="block text-warning">Stopped early: {funnel.stoppedBy}</span>
       )}
     </div>
   );
 }
 
 function SourceLine({ result }: { result: SourceRunResult }) {
-  const counts =
-    result.status === "skipped"
-      ? []
-      : [
-          `${result.fetched} fetched`,
-          `${result.newJobs} new`,
-          result.merged && `${result.merged} merged`,
-          result.seen && `${result.seen} seen before`,
-          `${result.filtered} screened out`,
-          result.invalid && `${result.invalid} invalid`,
-        ].filter(Boolean);
+  const counts = [
+    `${result.fetched} fetched`,
+    `${result.newJobs} new`,
+    result.merged && `${result.merged} merged`,
+    result.seen && `${result.seen} seen before`,
+    `${result.filtered} screened out`,
+    result.invalid && `${result.invalid} invalid`,
+    result.costUsd > 0 && usd(result.costUsd),
+  ].filter(Boolean);
   return (
-    <li className="text-xs">
-      <span className="font-medium">{DISCOVERY_SOURCE_LABELS[result.source]}</span>{" "}
-      <Badge variant={STATUS_VARIANT[result.status]} className={cn("h-4 px-1.5 text-[11px]")}>
-        {result.status}
-      </Badge>{" "}
-      <span className="text-muted-foreground">{counts.join(" · ")}</span>
-      {result.message && <span className="block text-muted-foreground">{result.message}</span>}
+    <li className="flex items-start gap-1.5 text-xs">
+      <StatusIcon status={result.status} className="mt-px size-3.5" />
+      <div className="min-w-0">
+        <span className="font-medium">{DISCOVERY_SOURCE_LABELS[result.source]}</span>{" "}
+        <span className="text-muted-foreground tabular-nums">{counts.join(" · ")}</span>
+        {result.message && (
+          <span className={cn("block", STATUS_TEXT[result.status])}>{result.message}</span>
+        )}
+      </div>
     </li>
+  );
+}
+
+/** Skipped sources in one line per reason (e.g. "turned off in search settings"). */
+function SkippedLine({ results }: { results: SourceRunResult[] }) {
+  const byReason = new Map<string, string[]>();
+  for (const r of results) {
+    const reason = r.message ?? "skipped";
+    byReason.set(reason, [...(byReason.get(reason) ?? []), DISCOVERY_SOURCE_LABELS[r.source]]);
+  }
+  return (
+    <ul className="mt-0.5 flex flex-col gap-0.5">
+      {[...byReason].map(([reason, labels]) => (
+        <li key={reason} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+          <StatusIcon status="skipped" className="mt-px size-3.5" />
+          <span>
+            Skipped {labels.join(", ")} ({reason})
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }

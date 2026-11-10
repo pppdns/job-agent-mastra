@@ -56,6 +56,7 @@ export function createFeedSource(options: {
       const raws = rawSampler();
       for (const [i, request] of requests.entries()) {
         if (i > 0) await sleep(pauseMs, context.signal);
+        context.onProgress?.(i, requests.length, request.label);
         try {
           for (const raw of await request.load(context.signal)) {
             const posting = options.parse(raw);

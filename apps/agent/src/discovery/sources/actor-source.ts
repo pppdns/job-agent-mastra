@@ -62,7 +62,8 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
       const providerRuns: ProviderRun[] = [];
       /** Company + title → the kept variant's id, and whether it passes the screen. */
       const titles = new Map<string, { id: string; pass: boolean }>();
-      for (const search of searches) {
+      for (const [i, search] of searches.entries()) {
+        context.onProgress?.(i, searches.length, search.label);
         const remaining = context.maxUsd - costUsd;
         if (remaining < 0.01) {
           notes.push(`spend cap reached after ${costUsd.toFixed(2)} USD`);

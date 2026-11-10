@@ -259,6 +259,7 @@ describe("discovery runs", () => {
       error: null,
       sources,
       funnel: null,
+      progress: null,
       estimatedUsd: 0,
       workflowRunId: null,
       startedAt: endedAt,
