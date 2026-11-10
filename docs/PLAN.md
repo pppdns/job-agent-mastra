@@ -186,7 +186,7 @@ Scheduled ingestion from job boards, reported as an inbox plus an email digest. 
 - [x] Source adapters: Himalayas API and a generic Apify runner with a `valig/linkedin-jobs-scraper` definition (`skipJobId` for known ids, caps, monthly budget check); fixtures (`WEB_MODE=fixture`).
 - [x] `discover-jobs` workflow: fetch → postings → screen → jobs + board snapshot → run record; schedule only in the main checkout with `DISCOVERY_SCHEDULE=on`; one run at a time; interrupted sweep at startup; manual "Run now" and 7/30-day backfills (`POST /discovery/run`).
 - [x] UI: `/settings/search` (save re-screens), `/discovery` runs with per-source health, cost and what the screen dropped, source badges on jobs.
-- [ ] Verified: unit tests, e2e on fixture sources, one live run.
+- [x] Verified: unit tests, e2e on fixture sources, live runs of both sources ([verification.md](verification.md)).
 
 ### M14 — Scoring funnel + report
 - [x] Triage agent (fast model, no tools, budgeted; a named hard conflict caps the score in code), `assessJob` shared with re-score, top-N assessments, usage on a `discovery:<runId>` thread; triage scores, reasons and "New" badges on `/jobs`, funnel per run on `/discovery`, triage controls in the search settings.
@@ -194,8 +194,9 @@ Scheduled ingestion from job boards, reported as an inbox plus an email digest. 
 - [x] Triage eval (match, hard conflict, injection) live 3/3. Not yet: a live scheduled fire in the main checkout.
 
 ### M15 — UI for daily volume + companies
-- [ ] Paging and tab counts in SQL; New tab as an inbox (score sort, unseen, filters, bulk shortlist/dismiss); "Screened out" tab with reasons and "Keep anyway".
-- [ ] Job page triage card, "Assess fully", "Seen on" postings; `app_companies` and a company page.
+- [x] Paging, filters, order and tab counts in SQL; New tab as an inbox (best match on one 0–100 scale for assessed and triaged jobs, "New" badges and an unseen-only filter, filters for source, minimum match, posted within; bulk shortlist/dismiss); "Screened out" tab with reasons and "Keep anyway"; re-triage after a profile change.
+- [x] Job page triage card, "Assess fully", "Seen on" postings; company pages by company key (no `app_companies` table: nothing to store per company yet) with "+N more roles here" in the list.
+- [x] Verified: db and web unit tests, e2e (unseen filter, keep anyway, company page, bulk dismiss), browser check on ~1,000 discovered jobs, live "Assess fully".
 
 ### M16 — More sources
 - [ ] Direct feeds: We Work Remotely, RemoteOK (followed link-back), Remotive (attribution), NoDesk. Apify definitions: HiringCafe, Welcome to the Jungle, Wellfound, Dice, Built In, YC, Jobgether. Per-source match rate, duplicate rate and cost per match.

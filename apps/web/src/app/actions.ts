@@ -9,12 +9,16 @@ import {
   editProfile,
   getApprovalView,
   getSearchSettings,
+  keepJob,
+  keepPosting,
   listJobs,
   markJobSeen,
   rescreenPostings,
+  resetStaleTriage,
   saveSearchSettings,
   setJobArchived,
   setJobStatus,
+  setJobsStatus,
 } from "@copilot/db";
 import {
   JOB_STATUSES,
@@ -296,4 +300,52 @@ export async function saveSearchSettingsAction(
 export async function markJobSeenAction(jobId: string): Promise<void> {
   await markJobSeen(await appDb(), jobIdSchema.parse(jobId));
   refresh();
+}
+
+const jobIdsSchema = z.array(jobIdSchema).min(1).max(200);
+
+/** Bulk Shortlist / Dismiss from the job list. */
+export async function setJobsStatusAction(jobIds: string[], status: string): Promise<number> {
+  const changed = await setJobsStatus(
+    await appDb(),
+    jobIdsSchema.parse(jobIds),
+    z.enum(JOB_STATUSES).parse(status),
+  );
+  refresh();
+  return changed;
+}
+
+/** "Keep anyway" on a job hidden by the triage threshold. */
+export async function keepJobAction(jobId: string): Promise<void> {
+  await keepJob(await appDb(), jobIdSchema.parse(jobId));
+  refresh();
+}
+
+/** "Keep anyway" on a posting the screen dropped: it becomes a job that stays visible. */
+export async function keepPostingAction(postingId: string): Promise<void> {
+  await keepPosting(await appDb(), jobIdSchema.parse(postingId));
+  refresh();
+}
+
+/** Clears triage made against an older profile; the next discovery run triages those again. */
+export async function resetStaleTriageAction(): Promise<number> {
+  const cleared = await resetStaleTriage(await appDb());
+  refresh();
+  return cleared;
+}
+
+export type AssessJobState = { ok: boolean; message: string } | null;
+
+/** "Assess fully" on a discovered job: one structured assessment on the agent (~30 s). */
+export async function assessJobAction(jobId: string): Promise<AssessJobState> {
+  const id = jobIdSchema.parse(jobId);
+  const response = await agentFetch(`/jobs/${encodeURIComponent(id)}/assess`, {
+    method: "POST",
+  }).catch(() => null);
+  refresh();
+  if (!response) return { ok: false, message: "The agent server is not reachable." };
+  const body = (await response.json().catch(() => ({}))) as { error?: string; version?: number };
+  if (!response.ok)
+    return { ok: false, message: body.error ?? `Assessment failed (${response.status}).` };
+  return { ok: true, message: `Assessment v${body.version} saved.` };
 }

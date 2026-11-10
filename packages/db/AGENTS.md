@@ -39,6 +39,7 @@ Drizzle schema (`src/schema.ts`, `app_*` tables), migrations in `drizzle/` (gene
   - `digestMatches`: the run's matches for the email.
   - `markJobSeen` / `unseenMatchCount`: the "new matches" badge.
   - `recordFunnel` stores the run's funnel; a run's `estimated_usd` = sources' provider cost + the funnel's model cost.
+- **The job list at volume** (`job-list.ts`): `listJobsPage` (one page: tab, search ids, filters for source / minimum match / posted within / unseen, `latest` or `fit` order, total), `jobTabCounts`, `assessedJobCounts` (Re-score banner). `fit` order uses `matchScoreSql`: a with-profile assessment's fit level mapped to the triage scale (strong 95, good 80, mixed 60, weak 35, poor 15), else the triage score; unscored last. Also `belowThresholdJobs` and `screenedOutPostings` (Screened out tab), `keepJob` / `keepPosting` ("Keep anyway": `kept_at`; a kept posting is promoted to a job), `setJobsStatus` (bulk), `companyJobCounts` / `companyJobs` (company pages), `staleTriageCount` / `resetStaleTriage` (re-triage after a profile change). `listJobs` stays the full-list read for tools and re-score.
 - **`company_key`** is on jobs too. `backfillCompanyKeys` (in `migrateDb`) fills it and recomputes `dedupe_key` for older jobs.
 - **Run markers:** `latestRunStatuses` skips `discovery:%` threads (discovery usage, M14), so they never show as chats.
 

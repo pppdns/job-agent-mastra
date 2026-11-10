@@ -11,6 +11,7 @@ export * from "./assessments";
 export * from "./claims";
 export * from "./discovery";
 export { AssessmentError, hashPayload } from "./hash";
+export * from "./job-list";
 export * from "./jobs";
 export { findWorkspaceRoot, resolveDatabaseUrl, resolveObservabilityPath } from "./paths";
 export * from "./profile";

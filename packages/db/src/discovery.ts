@@ -316,6 +316,22 @@ async function promote(db: Db, row: Posting, now: Date): Promise<boolean> {
 
 const postingInputOf = (row: Posting): PostingInput => ({ ...row });
 
+/**
+ * "Keep anyway" on a posting the screen dropped: it becomes a job (deduped like any passing
+ * posting) that stays visible whatever the screen or triage say. Returns the job id.
+ */
+export function keepPosting(db: Db, postingId: string): Promise<string | null> {
+  return serializeWrites(db, async () => {
+    const row = await db.query.postings.findFirst({ where: eq(postings.id, postingId) });
+    if (!row) return null;
+    if (!row.jobId) await promote(db, row, new Date());
+    const promoted = await db.query.postings.findFirst({ where: eq(postings.id, postingId) });
+    if (!promoted?.jobId) return null;
+    await db.update(jobs).set({ keptAt: new Date() }).where(eq(jobs.id, promoted.jobId));
+    return promoted.jobId;
+  });
+}
+
 export type RescreenResult = { checked: number; promoted: number; hidden: number; shown: number };
 
 /** When and how a posting arrived: age is judged as of then, with its run's backfill window. */
@@ -372,7 +388,7 @@ export function rescreenPostings(
  */
 export const visibleJobs = (triageThreshold: number) => sql`(
   ${jobs.origin} = 'chat' OR ${jobs.keptAt} IS NOT NULL OR ${jobs.status} != 'new' OR (
-    EXISTS (SELECT 1 FROM app_postings p WHERE p.job_id = ${jobs.id} AND p.screen_reasons IS NULL)
+    EXISTS (SELECT 1 FROM app_postings p WHERE p.job_id = "app_jobs"."id" AND p.screen_reasons IS NULL)
     AND (${jobs.triageScore} IS NULL OR ${jobs.triageScore} >= ${triageThreshold})
   )
 )`;
@@ -423,10 +439,13 @@ export async function screenedOutSince(db: Db, since: Date) {
     .limit(200);
 }
 
-/** A discovered job still worth a look: untouched (`new`, not archived), with a passing posting. */
+/**
+ * A discovered job still worth a look: untouched (`new`, not archived), with a passing posting
+ * or kept by the user (a kept posting keeps its screen reasons but is triaged like any other).
+ */
 const openDiscovered = sql`${jobs.origin} = 'discovery' AND ${jobs.status} = 'new'
   AND ${jobs.archivedAt} IS NULL
-  AND EXISTS (SELECT 1 FROM app_postings p WHERE p.job_id = ${jobs.id} AND p.screen_reasons IS NULL)`;
+  AND (${jobs.keptAt} IS NOT NULL OR EXISTS (SELECT 1 FROM app_postings p WHERE p.job_id = "app_jobs"."id" AND p.screen_reasons IS NULL))`;
 
 export type TriageCandidate = { id: string; title: string | null; company: string | null };
 
@@ -519,7 +538,7 @@ export async function digestMatches(
       headline: sql<
         string | null
       >`(select json_extract(d.assessment, '$.headline') from app_job_drafts d
-        where d.job_id = ${jobs.id} order by d.version desc limit 1)`,
+        where d.job_id = "app_jobs"."id" order by d.version desc limit 1)`,
     })
     .from(jobs)
     .where(

@@ -1,7 +1,18 @@
-import { listDiscoveryRuns } from "@copilot/db";
+import { randomUUID } from "node:crypto";
+import {
+  AssessmentError,
+  currentProfile,
+  endRun,
+  getJobDetail,
+  listDiscoveryRuns,
+  startRun,
+} from "@copilot/db";
 import { registerApiRoute } from "@mastra/core/server";
 import { z } from "zod";
+import { discoveryThreadId } from "../../discovery/funnel";
 import { BACKFILL_DAYS } from "../../discovery/run";
+import { assessJob } from "../../rescore/run";
+import { RunRecorder } from "../../usage/recorder";
 import { getAppDb } from "../app-db";
 import { DISCOVER_JOBS_WORKFLOW_ID } from "../workflows/discover-jobs";
 
@@ -35,5 +46,36 @@ export const discoveryRunRoute = registerApiRoute("/discovery/run", {
       },
     });
     return c.json({ workflowRunId: runId, workflowId: DISCOVER_JOBS_WORKFLOW_ID }, 202);
+  },
+});
+
+/**
+ * POST /jobs/:jobId/assess — "Assess fully" on one job (typically a discovered one that only
+ * has a triage score): the same structured assessment as re-score, saved as its next draft.
+ * Usage is recorded like discovery runs, under a `discovery:assess-<id>` thread.
+ */
+export const assessJobRoute = registerApiRoute("/jobs/:jobId/assess", {
+  method: "POST",
+  handler: async (c) => {
+    const jobId = c.req.param("jobId");
+    const db = await getAppDb();
+    if (!(await getJobDetail(db, jobId))) return c.json({ error: "Job not found" }, 404);
+    const runId = randomUUID();
+    const threadId = discoveryThreadId(`assess-${runId}`);
+    await startRun(db, { id: runId, threadId });
+    const recorder = new RunRecorder(db, threadId);
+    recorder.attach(runId);
+    try {
+      const result = await assessJob(jobId, await currentProfile(db), { db, recorder });
+      await recorder.flush();
+      await endRun(db, runId, "completed");
+      return c.json({ version: result.version });
+    } catch (error) {
+      await recorder.flush();
+      await endRun(db, runId, "failed", error instanceof Error ? error.message : "failed");
+      if (error instanceof AssessmentError) return c.json({ error: error.message }, 422);
+      console.error("assessment failed", jobId, error);
+      return c.json({ error: "The assessment failed; try again." }, 502);
+    }
   },
 });

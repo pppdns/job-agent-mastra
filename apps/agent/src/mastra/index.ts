@@ -8,7 +8,7 @@ import { allScorers } from "../evals/scorers";
 import { copilotAgent } from "./agents/copilot";
 import { researcherAgent } from "./agents/researcher";
 import { chatResumeRoute, chatRoute, chatStopRoute } from "./routes/chat";
-import { discoveryRunRoute } from "./routes/discovery";
+import { assessJobRoute, discoveryRunRoute } from "./routes/discovery";
 import { threadMessagesRoute } from "./routes/thread-messages";
 import { createStorage } from "./storage";
 import {
@@ -72,7 +72,14 @@ export const mastra = new Mastra({
       // returns 403 (or a mismatch error on /chat) for threads owned by anyone else.
       mapUserToResourceId: (user) => user.id,
     }),
-    apiRoutes: [chatRoute, chatResumeRoute, chatStopRoute, threadMessagesRoute, discoveryRunRoute],
+    apiRoutes: [
+      chatRoute,
+      chatResumeRoute,
+      chatStopRoute,
+      threadMessagesRoute,
+      discoveryRunRoute,
+      assessJobRoute,
+    ],
   },
 });
 
