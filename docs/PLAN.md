@@ -213,7 +213,7 @@ Scheduled ingestion from job boards, reported as an inbox plus an email digest. 
 - [x] One image runs both servers ([Dockerfile](../Dockerfile), [scripts/start-prod.sh](../scripts/start-prod.sh)); `fly.toml`: one always-on machine, `/data` volume, agent and Studio only through `fly proxy`.
 - [x] Secrets via `pnpm fly:secrets`; GitHub Action deploys on push to `main`.
 - [x] Verified live: copied local DB, restart persistence, Studio via proxy, auth redirects/401s ([verification](verification.md#flyio-deployment--password-login-2026-11-10)).
-- [ ] Verified live: sign-in with the real password + chat turn; deploy from the Action.
+- [x] Verified live: sign-in with the real password + chat turn (LinkedIn URL); deploy from the Action.
 
 ## Simplifications chosen (tell me if any is unacceptable)
 

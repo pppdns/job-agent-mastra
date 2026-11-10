@@ -12,6 +12,8 @@ Paste a LinkedIn or job-board URL (or the listing text), and the copilot:
 
 Intent and constraints: [project-brief.md](project-brief.md). Decisions and milestones: [docs/PLAN.md](docs/PLAN.md).
 
+**Hosted:** https://job-copilot-c456e8.fly.dev (Fly.io app `job-copilot-c456e8`, region `fra`; password login, private). Every push to `main` deploys there via GitHub Actions. See [docs/deploy.md](docs/deploy.md).
+
 ## How it works
 
 ```mermaid

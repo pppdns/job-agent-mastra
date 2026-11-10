@@ -157,7 +157,9 @@ Live models, offline web (fixtures). Judge scores are evidence, not truth. Detai
 - Offline: `pnpm check` incl. `session.test.ts` (token round-trip, expiry, tampering, password/secret change ends sessions, `next` sanitizing, throttle) and `proxy.test.ts` (no login when `APP_PASSWORD` is unset; redirect to `/login?next=`, 401 on `/api/*`, forged cookie rejected, valid session passes). Local `pnpm dev` without `APP_PASSWORD`: `/`, `/jobs`, `/profile` unchanged, no sign-out button.
 - Live on Fly (`job-copilot-c456e8`, fra): image built on Fly's remote builder (591 MB). Both servers start, migrations run, the health check passes. `/` → `/login`, `/jobs` → `/login?next=%2Fjobs`, `/api/run-status` → 401. Port 4111 isn't reachable publicly. Through `fly proxy` Studio loads, and the API without a token returns 401.
 - Data: an online `sqlite3 .backup` of the local DB (integrity ok) was uploaded as `/data/copilot.db.import` (sha256 matched) and swapped in at startup. Production reads 34 jobs and 87 threads, as locally. It survives `fly machine restart`; after the signal trap the machine shuts down cleanly ("Main child exited normally", volume unmounts).
-- Not exercised yet: signing in with the real password and a live chat turn in production (needs the user's password), a deploy from the GitHub Action (needs `FLY_API_TOKEN`), the local `docker run` (skipped: machine overloaded; the Fly build covers the image).
+- Live (user, 2026-11-10): signed in with the real password; a chat turn with a LinkedIn URL works. The GitHub Action deployed `main` (`pnpm check` + `flyctl deploy`).
+- Found live: the first chat failed (`Can't find meta/_journal.json`) because the agent ran from `.mastra/output`, where `mastra build` writes its own `pnpm-workspace.yaml`. Fixed by starting it from the repo root; checked inside the machine (`GET /chat/<thread>/stream` → 204).
+- Not exercised: a local `docker run` (skipped: machine overloaded; the Fly build covers the image).
 
 ## Discovery on Fly (after #26)
 
