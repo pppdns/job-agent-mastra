@@ -101,4 +101,5 @@ Claude Code reads this `AGENTS.md` directly. Do not add a `CLAUDE.md` or `CLAUDE
 - [docs/architecture.md](docs/architecture.md) — how it works, with mermaid diagrams (agent logic, tools, approvals, memory, research); update it when flows change
 - [docs/PLAN.md](docs/PLAN.md) — agreed decisions and milestone plan
 - [docs/verification.md](docs/verification.md) — live vs offline verification results
+- [docs/lessons.md](docs/lessons.md) — lessons learned and Mastra-specific decisions
 - [docs/deploy.md](docs/deploy.md) — Fly.io deployment, secrets, login, operating it
