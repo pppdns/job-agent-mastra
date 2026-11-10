@@ -309,7 +309,7 @@ The first implementation is successful when:
 
 ## Out of scope for the initial version
 
-- Automatic job discovery or scheduled monitoring.
+- Automatic job discovery or scheduled monitoring. (Superseded 2026-11-10: see "Job discovery" in [docs/PLAN.md](docs/PLAN.md).)
 - Submitting applications or contacting recruiters.
 - LinkedIn account automation requiring credentials/cookies.
 - Notion integration.

@@ -85,6 +85,7 @@ No keys? Set `LLM_MODE=mock` (deterministic fake model) and `WEB_MODE=fixture` (
 - **Chat** (`/c/<id>`): paste a URL or listing, ask for research ("look into their engineering practices and on-call"), state preferences ("remember I don't want regular on-call"), Profile changes it suggests appear as approval cards inline.
 - **Jobs** (`/jobs`): saved jobs sorted by latest or best fit; each job page shows the current assessment and its earlier versions. "Re-score" re-assesses jobs whose assessment predates your current profile.
 - **Profile** (`/profile`): the facts the copilot may use, with history; your edits here apply right away.
+- **Discovery** (`/discovery`): new jobs from Himalayas (free API) and LinkedIn (via Apify, `APIFY_API_KEY`), twice a day while the main checkout's `pnpm dev` runs with `DISCOVERY_SCHEDULE=on`, or on demand with "Run now" / "Backfill". Shows each source's health, every run's results and cost, and what the screen dropped. **Search settings** (`/settings/search`) hold the search phrases, the screen (title excludes, regions, salary floor, max age) and the Apify caps; saving re-screens recent postings. Set a usage limit in Apify Console (Billing → Usage limit) as a backstop to the app's monthly budget.
 - **Technical panel** (chat header): tokens, estimated cost, tool calls and links to Studio traces for the chat.
 
 ## Privacy and safety
@@ -93,7 +94,7 @@ Single local user: both servers bind to 127.0.0.1 and the web app calls the agen
 
 ## Limitations
 
-- Local, single-user prototype: no deployment, no multi-user auth.
+- Local, single-user prototype: no deployment, no multi-user auth. Scheduled discovery only fires while the main checkout's dev server runs; missed fires catch up on the next run.
 - A run survives a browser refresh, but not an agent-server restart (the run is marked interrupted; partial results are kept).
 - Saved-job search is SQLite full-text search, not embeddings.
 - Costs and research budgets use a static price table, so they are estimates and soft caps.

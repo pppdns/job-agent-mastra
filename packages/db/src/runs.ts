@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, max } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, max, notLike } from "drizzle-orm";
 import type { Db } from "./index";
 import {
   type NewRunEvent,
@@ -9,6 +9,9 @@ import {
   runs,
 } from "./schema";
 import { serializeWrites } from "./write-lock";
+
+/** Thread id prefix of discovery runs' usage records (`discovery:<runId>`). */
+export const DISCOVERY_THREAD_PREFIX = "discovery:";
 
 export function startRun(db: Db, input: { id: string; threadId: string }): Promise<Run> {
   return serializeWrites(db, async () => {
@@ -56,6 +59,8 @@ export async function latestRunStatuses(
   const latest = db
     .select({ threadId: runs.threadId, startedAt: max(runs.startedAt).as("latest_started_at") })
     .from(runs)
+    // Discovery runs record usage under a synthetic `discovery:<id>` thread: not a chat.
+    .where(notLike(runs.threadId, `${DISCOVERY_THREAD_PREFIX}%`))
     .groupBy(runs.threadId)
     .orderBy(desc(max(runs.startedAt)))
     .limit(limit)

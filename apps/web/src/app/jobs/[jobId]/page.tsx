@@ -10,6 +10,7 @@ import {
   GlobeIcon,
   type LucideIcon,
   MapPinIcon,
+  NewspaperIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -34,6 +35,7 @@ const SOURCE_LABELS = {
   ats: "Employer job posting",
   web: "Web page (research)",
   pasted: "Pasted text",
+  board: "Job board posting",
 } as const;
 
 const SOURCE_ICONS: Record<keyof typeof SOURCE_LABELS, LucideIcon> = {
@@ -41,6 +43,7 @@ const SOURCE_ICONS: Record<keyof typeof SOURCE_LABELS, LucideIcon> = {
   ats: Building2Icon,
   web: GlobeIcon,
   pasted: ClipboardPasteIcon,
+  board: NewspaperIcon,
 };
 
 const formatDate = (d: Date) =>

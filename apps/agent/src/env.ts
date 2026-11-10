@@ -1,7 +1,19 @@
 import { z } from "zod";
 
+/** Surrounding whitespace (incl. \r) and quotes pasted along with a key. */
+const cleanKey = (v: unknown) =>
+  typeof v === "string"
+    ? v
+        .trim()
+        .replace(/^(["'])(.*)\1$/, "$2")
+        .trim()
+    : v;
+
 /** Optional secret; an empty string counts as unset (e2e blanks keys that `mastra dev` would load from .env). */
-const optionalKey = z.preprocess((v) => (v === "" ? undefined : v), z.string().min(1).optional());
+const optionalKey = z.preprocess((v) => {
+  const key = cleanKey(v);
+  return key === "" ? undefined : key;
+}, z.string().min(1).optional());
 
 const envSchema = z.object({
   LLM_MODE: z.enum(["live", "mock"]).default("live"),
@@ -20,6 +32,14 @@ const envSchema = z.object({
   WEB_MODE: z.enum(["live", "fixture"]).default("live"),
   TAVILY_API_KEY: optionalKey,
   FIRECRAWL_API_KEY: optionalKey,
+  // Job discovery. Apify runs the paid board scrapers (LinkedIn); without it they are skipped.
+  APIFY_API_KEY: optionalKey,
+  // Optional free Himalayas key (higher rate limits); the API works without one.
+  HIMALAYAS_API_KEY: optionalKey,
+  // "on" schedules discovery twice a day, but only in the main checkout's dev server
+  // (see discoveryScheduleEnabled); worktrees, e2e and evals never schedule.
+  DISCOVERY_SCHEDULE: z.enum(["on", "off"]).default("off"),
+  DISCOVERY_TZ: z.string().min(1).default("Europe/Budapest"),
 });
 
 export type Env = z.infer<typeof envSchema>;

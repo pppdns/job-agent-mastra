@@ -1,0 +1,126 @@
+{
+  "comments": "Synthetic fixture shaped like the Himalayas search API. No real listings.",
+  "updatedAt": 1794308487,
+  "offset": 0,
+  "limit": 20,
+  "totalCount": 5,
+  "jobs": [
+    {
+      "title": "Founding Engineer",
+      "excerpt": "Own the product end to end.",
+      "companyName": "Quillfeather Health",
+      "companySlug": "quillfeather-health",
+      "companyLogo": "https://example.com/logo.png",
+      "employmentType": "Full Time",
+      "minSalary": 90000,
+      "maxSalary": 120000,
+      "seniority": ["Senior"],
+      "currency": "EUR",
+      "locationRestrictions": [
+        {
+          "alpha2": "DE",
+          "name": "Germany",
+          "slug": "germany"
+        },
+        {
+          "alpha2": "PT",
+          "name": "Portugal",
+          "slug": "portugal"
+        }
+      ],
+      "timezoneRestrictions": [],
+      "categories": ["Engineering"],
+      "parentCategories": ["Engineering"],
+      "description": "<h2>About Quillfeather Health</h2><p>Quillfeather Health is a small, remote-first team building tools for independent clinics.</p><h3>The role</h3><p>As our Founding Engineer you will own features end to end, from data model to UI, and work closely with the founders.</p><ul><li>TypeScript, React and Node.js</li><li>Shipping LLM-backed features to production</li><li>Mentoring two engineers</li></ul><p><a href='https://example.com/apply'>Apply here</a></p>",
+      "pubDate": 1794222087,
+      "expiryDate": 1796900487,
+      "applicationLink": "https://himalayas.app/companies/quillfeather-health/jobs/founding-engineer/apply",
+      "guid": "https://himalayas.app/companies/quillfeather-health/jobs/founding-engineer"
+    },
+    {
+      "title": "Applied AI Engineer",
+      "excerpt": "Ship LLM features.",
+      "companyName": "Lanternfish Analytics, Inc.",
+      "companySlug": "lanternfish-analytics",
+      "companyLogo": "https://example.com/logo2.png",
+      "employmentType": "Full Time",
+      "minSalary": null,
+      "maxSalary": null,
+      "seniority": ["Mid-level", "Senior"],
+      "currency": "USD",
+      "locationRestrictions": [],
+      "timezoneRestrictions": [],
+      "categories": ["Engineering"],
+      "parentCategories": ["Engineering"],
+      "description": "<h2>About Lanternfish Analytics</h2><p>Lanternfish Analytics is a small, remote-first team building tools for independent clinics.</p><h3>The role</h3><p>As our Applied AI Engineer you will own features end to end, from data model to UI, and work closely with the founders.</p><ul><li>TypeScript, React and Node.js</li><li>Shipping LLM-backed features to production</li><li>Mentoring two engineers</li></ul><p><a href='https://example.com/apply'>Apply here</a></p>",
+      "pubDate": 1794135687,
+      "expiryDate": 1796900487,
+      "applicationLink": "https://himalayas.app/companies/lanternfish-analytics/jobs/applied-ai-engineer/apply",
+      "guid": "https://himalayas.app/companies/lanternfish-analytics/jobs/applied-ai-engineer"
+    },
+    {
+      "title": "Software Engineering Intern",
+      "excerpt": "Summer internship.",
+      "companyName": "Pebblework",
+      "companySlug": "pebblework",
+      "companyLogo": "https://example.com/logo3.png",
+      "employmentType": "Intern",
+      "minSalary": null,
+      "maxSalary": null,
+      "seniority": ["Entry-level"],
+      "currency": "USD",
+      "locationRestrictions": [
+        {
+          "alpha2": "US",
+          "name": "United States",
+          "slug": "united-states"
+        }
+      ],
+      "timezoneRestrictions": [],
+      "categories": ["Engineering"],
+      "parentCategories": ["Engineering"],
+      "description": "<h2>About Pebblework</h2><p>Pebblework is a small, remote-first team building tools for independent clinics.</p><h3>The role</h3><p>As our Software Engineering Intern you will own features end to end, from data model to UI, and work closely with the founders.</p><ul><li>TypeScript, React and Node.js</li><li>Shipping LLM-backed features to production</li><li>Mentoring two engineers</li></ul><p><a href='https://example.com/apply'>Apply here</a></p>",
+      "pubDate": 1794222087,
+      "expiryDate": 1796900487,
+      "applicationLink": "https://himalayas.app/companies/pebblework/jobs/intern/apply",
+      "guid": "https://himalayas.app/companies/pebblework/jobs/intern"
+    },
+    {
+      "title": "Full Stack Engineer",
+      "excerpt": "Remote within APAC.",
+      "companyName": "Harbor Kettle",
+      "companySlug": "harbor-kettle",
+      "companyLogo": "https://example.com/logo4.png",
+      "employmentType": "Full Time",
+      "minSalary": null,
+      "maxSalary": null,
+      "seniority": ["Senior"],
+      "currency": "USD",
+      "locationRestrictions": [
+        {
+          "alpha2": "IN",
+          "name": "India",
+          "slug": "india"
+        },
+        {
+          "alpha2": "PH",
+          "name": "Philippines",
+          "slug": "philippines"
+        }
+      ],
+      "timezoneRestrictions": [],
+      "categories": ["Engineering"],
+      "parentCategories": ["Engineering"],
+      "description": "<h2>About Harbor Kettle</h2><p>Harbor Kettle is a small, remote-first team building tools for independent clinics.</p><h3>The role</h3><p>As our Full Stack Engineer you will own features end to end, from data model to UI, and work closely with the founders.</p><ul><li>TypeScript, React and Node.js</li><li>Shipping LLM-backed features to production</li><li>Mentoring two engineers</li></ul><p><a href='https://example.com/apply'>Apply here</a></p>",
+      "pubDate": 1794049287,
+      "expiryDate": 1796900487,
+      "applicationLink": "https://himalayas.app/companies/harbor-kettle/jobs/full-stack/apply",
+      "guid": "https://himalayas.app/companies/harbor-kettle/jobs/full-stack"
+    },
+    {
+      "title": "Not a job",
+      "companyName": "",
+      "guid": "no-url"
+    }
+  ]
+}
