@@ -124,21 +124,21 @@ export const searchSettingsSchema = z.object({
       ycombinator: actorBoard(true, 50, 0.05),
       /** Jobgether, remote-first (about $0.10 per 1,000; one run for all phrases). */
       jobgether: actorBoard(true, 50, 0.05),
-      /** Dice, US tech (about $1 per 1,000; on-site US roles are screened out). */
-      dice: actorBoard(true, 25, 0.1),
+      /** Dice, US tech (about $1 per 1,000; mostly on-site US roles, which the screen drops). */
+      dice: actorBoard(false, 25, 0.1),
       /** Built In (about $1.07 per 1,000, billed in pages of 25; one run for all phrases). */
       builtin: actorBoard(true, 25, 0.15),
       /** Wellfound, startups (about $2.80 per 1,000; searched by role pages, ~30 per page). */
       wellfound: z
         .object({
-          enabled: z.boolean().default(false),
+          enabled: z.boolean().default(true),
           /** Role slugs (`wellfound.com/role/r/<slug>`). */
           roles: slugs(["ai-engineer", "full-stack-engineer", "engineering-manager"]),
           maxUsdPerRun: z.number().min(0.01).max(20).default(0.15),
         })
         .prefault({}),
-      /** HiringCafe, career-site jobs with apply links (about $1.25 per 1,000; descriptions are often missing). */
-      hiringcafe: actorBoard(false, 25, 0.15),
+      /** HiringCafe, career-site jobs with ATS apply links (about $1.25 per 1,000; slow runs). */
+      hiringcafe: actorBoard(true, 25, 0.15),
     })
     .prefault({}),
   /** All Apify sources together stop for the month once this is spent (USD, last 30 days). */

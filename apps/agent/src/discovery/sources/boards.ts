@@ -26,6 +26,12 @@ const placeName = (place: string) => {
   }
 };
 
+/**
+ * A long country list ("EMEA" expanded to ~130 codes) restricts nothing useful and would be cut
+ * at the posting's region cap, dropping the countries that matter: treat it as not stated.
+ */
+const broadOrList = (places: string[]) => (places.length > 50 ? [] : places);
+
 const date = (v: unknown): Date | null => {
   const s = str(v, 40);
   if (!s) return null;
@@ -72,7 +78,9 @@ const nomadSearches = ({ settings, since }: FetchContext, limitPerSearch: number
       queries: settings.queries,
       postedWithin: `${daysSince(since)}d`,
       maxItems: Math.min(200, limitPerSearch * settings.queries.length),
-      dedupe: { enabled: false },
+      // Only remote roles: on-site ones (mostly the Bay Area) are screened out anyway.
+      locationTypes: ["remote"],
+      dedupe: { enabled: false, key: "" },
     },
   },
 ];
@@ -96,7 +104,7 @@ export function parseNomadRow(source: "ycombinator" | "jobgether") {
       company: str(row.company, 200) ?? "",
       location: locations.join(" / ").slice(0, 300) || (remote ? "Remote" : null),
       remote,
-      regions: remote ? strings(row.applicantLocations).map(placeName).slice(0, 100) : [],
+      regions: remote ? broadOrList(strings(row.applicantLocations).map(placeName)) : [],
       salaryMin: pay?.min ?? null,
       salaryMax: pay?.max ?? null,
       salaryCurrency: pay?.currency ?? null,
@@ -234,6 +242,8 @@ export const builtInBoard: ActorBoard = {
         searchQueries: settings.queries,
         postedWithinDays: String(windowFor(since, backfill ? [1, 3, 7, 30] : [1, 3, 7])),
         maxResultsPerQuery: settings.sources.builtin.limitPerSearch,
+        // Loose (hybrid roles still come back), but it drops most on-site ones we'd screen out.
+        remoteMode: "remote",
         fetchDescription: true,
       },
     },

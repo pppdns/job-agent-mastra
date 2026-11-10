@@ -62,11 +62,9 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
           else succeeded += 1;
           for (const raw of result.items) {
             const posting = board.parse(raw);
-            if (!posting) invalid += 1;
-            // Most boards can't be asked "since when" precisely: drop what's older here.
-            else if (!posting.postedAt || posting.postedAt >= context.since) {
-              byId.set(posting.externalId, posting);
-            }
+            // Kept whatever its date (it's paid for): the screen's age limit drops old ones.
+            if (posting) byId.set(posting.externalId, posting);
+            else invalid += 1;
           }
         } catch (error) {
           if (context.signal?.aborted) throw error;

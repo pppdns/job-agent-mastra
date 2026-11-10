@@ -169,8 +169,8 @@ describe("NoDesk", () => {
     const posting = parseNoDeskItem(items[0]);
     expect(posting).toMatchObject({
       source: "nodesk",
-      externalId: "brightwater-labs-platform-engineer",
-      title: "Platform Engineer",
+      externalId: "brightwater-labs-site-reliability-engineer",
+      title: "Site Reliability Engineer",
       company: "Brightwater Labs",
       remote: true,
     });
@@ -183,7 +183,7 @@ describe("NoDesk", () => {
 describe("feed sources", () => {
   const posting = parseRemotiveJob((json("remotive-jobs.json").jobs as unknown[])[0]);
 
-  it("drops items older than `since` and keeps going when one request fails", async () => {
+  it("keeps items whatever their date and keeps going when one request fails", async () => {
     const source = createFeedSource({
       id: "remotive",
       pauseMs: 0,
@@ -201,8 +201,9 @@ describe("feed sources", () => {
     const outcome = await source.fetch(context());
     expect(outcome.postings).toHaveLength(1);
     expect(outcome.partial).toBe("some requests failed: b: remotive.com answered 404");
+    // Remotive publishes a day late with the original date: an "old" item is still new to us.
     const later = await source.fetch(context({ since: new Date("2026-11-09T00:00:00Z") }));
-    expect(later.postings).toHaveLength(0);
+    expect(later.postings).toHaveLength(1);
   });
 
   it("fails when every request fails or a cooldown stops it with nothing read", async () => {

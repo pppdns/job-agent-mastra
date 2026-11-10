@@ -4,7 +4,7 @@ Fetches new postings from job boards, screens them, and stores the passing ones 
 
 ```mermaid
 flowchart LR
-  T["schedule (main checkout) / POST /discovery/run"] --> C[claim-run]
+  T["schedule (Fly or main checkout) / POST /discovery/run"] --> C[claim-run]
   C --> F[fetch-sources] --> TR[triage] --> AS[assess-top-matches] --> R[report] --> X[finish-run]
   F -->|each source| S[source.fetch] --> P[recordPosting]
   P -->|screen fails| PO[(app_postings only)]
@@ -41,6 +41,19 @@ flowchart LR
   - **Himalayas** (`himalayas.ts`): free official API (`/jobs/api/search`), `sort=recent`, paged until a page is older than `since`, with a 1.1 s pause between requests.
     - Terms: apply through `applicationLink` and show credit (the web app links the source).
     - Data refreshes daily. `HIMALAYAS_API_KEY` is optional.
+  - **Free feeds** (`feed.ts` loop: fixed requests one by one with a 1 s pause, one failing request never loses the others). Nothing is dropped by date: Remotive publishes a day late with the original date; known postings only count as seen, and the age screen drops old ones. Each needs credit and a followed link back to the job on the board (the job page's "Seen on" links do both):
+    - **We Work Remotely** (`weworkremotely.ts`): RSS per category from settings, full descriptions, a region ("USA Only"). Titles are "Company: Role".
+    - **Remote OK** (`remoteok.ts`): `/api`, the latest ~100 jobs of every kind (no search). Salary fields are often garbage, so only a plausible yearly USD range is kept; free-text locations never restrict regions.
+    - **Remotive** (`remotive.ts`): `/api/remote-jobs`, a small 24 h-delayed set (search parameters are ignored); terms ask for at most ~4 requests a day.
+    - **NoDesk** (`nodesk.ts`): RSS per category, about 10 items each, descriptions cut to the opening. Titles are "Role at Company".
+    - `rss.ts` is a minimal RSS 2.0 reader (no dependency); `regionList` (`text.ts`) turns region text into regions and returns none when unclear.
+  - **Apify boards** (`actor-source.ts` loop shared with LinkedIn: one actor run per search until the per-run cap is spent, every valid item kept (it's paid for); definitions in `boards.ts`, checked live 2026-11-10):
+    - **YC Work at a Startup** and **Jobgether** (`nomad-agent/*`, ~$0.10 per 1,000): one run for all phrases, remote only. Matching includes descriptions, so off-target titles come back for triage. The actors' server-side repeat suppression is off (we keep our own record). A list of more than 50 applicant countries counts as unrestricted.
+    - **Built In** (`solidcode/builtin-scraper`, ~$1.07 per 1,000, billed in pages of 25): one run for all phrases, `remoteMode: "remote"` (loose). `workplaceType` decides remote (`isRemote` is true on hybrid roles); currency is often missing.
+    - **Wellfound** (`clearpath/wellfound-api-ppe`, ~$2.80 per 1,000): role pages from settings, one page each, remote only, no per-item limit (the spend cap stops it). No apply URL.
+    - **HiringCafe** (`memo23/apify-hiring-cafe-scraper`, ~$1.25 per 1,000): one run per phrase, remote, slow (~2 min). ATS apply URLs; some descriptions arrive URL-encoded or missing (the requirements summary is the fallback).
+    - **Dice** (`shahidirfan/Dice-Job-Scraper`, ~$1 per 1,000): off by default; it has no remote-only filter, so most results are on-site US roles the screen drops. Pay is free text with mixed periods, kept as text only.
+    - Not added: Welcome to the Jungle (the checked actor ignored the query and costs ~$3 per 1,000; try `blackfalcondata/wttj-scraper` first).
   - **LinkedIn** (`linkedin.ts`): the Apify actor `valig/linkedin-jobs-scraper` (pay per result, about $0.36 per 1,000; prices in `LINKEDIN_PRICES`).
     - Runs one actor search per query × location, with `datePosted` covering `since`, `titleExclude`, `skipJobId` and per-run caps.
     - Guest data has no remote flag; the `f_WT` URL parameter is ignored. So `remote` stays null unless the location says "Remote", and triage decides.
@@ -50,7 +63,8 @@ flowchart LR
     - Cost is estimated from `chargedEventCounts` × prices.
     - Proxies are part of the event price, so there is nothing to configure.
   - **Fixtures:** with `WEB_MODE=fixture`, `sources/index.ts` serves `fixtures/sources/` (dates shifted to "a day ago") instead of the live APIs.
-- **Adding a board:** write a `JobSource` (an Apify actor needs an input builder plus an item parser, like `linkedin.ts`). Then add its id to `DISCOVERY_SOURCES` with a label, plus its settings under `sources`, a fixture and tests.
+- **Adding a board:** a free feed is a `createFeedSource` call, an Apify actor an `ActorBoard` in `boards.ts` (input builder + item parser). Then add its id to `DISCOVERY_SOURCES` with a label and site (and to `PAID_DISCOVERY_SOURCES` if paid), its settings under `sources`, the settings form, a fixture or a test, and check one tiny live run.
+- **Source stats** (`sourceStatsSince`, `/discovery` cards): last 30 days per source — postings and screen passes, matches (triage at or above the threshold, kept or acted on) and matches no other board had, overlap with other boards, cost per match. Use them to turn off boards that don't pay off.
 - **Funnel** (`funnel.ts`, after fetching). Each step records the run's `funnel` as it finishes; an unexpected error is recorded as `stoppedBy` instead of failing the run.
   - **Triage** (`triage.ts`): `triagerAgent` (fast model, no tools, structured `triageSchema`) scores every untouched discovered job without a score, newest first, 5 at a time, up to `maxTriagePerRun`. The prompt puts the marker, profile and criteria first (cacheable) and the untrusted posting last. App code caps the score at 39 when the model names a hard conflict. A failed call leaves the job "triage pending" for the next run.
   - **Assess** (`assess.ts`): the run's best matches (triaged in this run, at or above `triageThreshold`, no draft yet), best first, up to `maxAssessmentsPerRun`, through `assessJob` (shared with re-score; `saveDraft` rules apply).

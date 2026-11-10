@@ -8,8 +8,10 @@ import {
 } from "../types";
 
 // A free feed source: a few fixed requests per run (a JSON API or RSS feeds), each returning raw
-// items that a pure parser maps to postings. Feeds can't be asked "since when", so items older
-// than the run's `since` are dropped here. One failing request never loses the others.
+// items that a pure parser maps to postings. Feeds can't be asked "since when", and nothing is
+// dropped by date here: some publish late with the original date (Remotive, 24 h), known
+// postings are only marked seen, and the screen's age limit drops old ones. One failing request
+// never loses the others.
 
 export const FEED_PAUSE_MS = 1_000;
 
@@ -56,9 +58,7 @@ export function createFeedSource(options: {
           for (const raw of await request.load(context.signal)) {
             const posting = options.parse(raw);
             if (!posting) invalid += 1;
-            else if (!posting.postedAt || posting.postedAt >= context.since) {
-              byId.set(posting.externalId, posting);
-            }
+            else byId.set(posting.externalId, posting);
           }
         } catch (error) {
           if (context.signal?.aborted) throw error;

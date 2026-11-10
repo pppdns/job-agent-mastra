@@ -109,6 +109,9 @@ describe("YC Work at a Startup and Jobgether", () => {
       parseNomadRow("jobgether")({ ...row, postedAt: "2026-11-10", salary: null }),
     ).toMatchObject({ postedAt: new Date("2026-11-10T00:00:00Z"), salaryMax: null });
     expect(parseNomadRow("ycombinator")({ ...row, url: "javascript:x" })).toBeNull();
+    // An "EMEA" list of ~130 country codes restricts nothing useful.
+    const emea = Array.from({ length: 130 }, (_, i) => `C${i}`);
+    expect(parseNomadRow("jobgether")({ ...row, applicantLocations: emea })?.regions).toEqual([]);
   });
 
   it("screens an on-site role elsewhere out, a remote one from the UK through", () => {
@@ -262,7 +265,7 @@ describe("actor sources", () => {
     postedAt,
   });
 
-  it("runs each search within the spend cap and drops what's older than `since`", async () => {
+  it("runs each search within the spend cap and keeps every valid item", async () => {
     const calls: unknown[] = [];
     const runner: ApifyRunner = async (actorId, input, { maxUsd }) => {
       calls.push({ actorId, input, maxUsd });
@@ -277,7 +280,7 @@ describe("actor sources", () => {
     expect(outcome.costUsd).toBeCloseTo(0.09);
     expect(outcome.partial).toBe("spend cap reached after 0.09 USD");
     const yc = await createActorSource(ycombinatorBoard, runner).fetch(context());
-    expect(yc.postings.map((p) => p.externalId)).toEqual(["1"]);
+    expect(yc.postings.map((p) => p.externalId)).toEqual(["1", "2"]);
     expect(yc.invalid).toBe(1);
   });
 

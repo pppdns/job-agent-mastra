@@ -69,12 +69,16 @@ function Check({ name, label, checked }: { name: string; label: string; checked:
 const ACTOR_BOARDS = [
   { id: "ycombinator", label: "YC Work at a Startup", price: "about $0.10 per 1,000 results" },
   { id: "jobgether", label: "Jobgether", price: "about $0.10 per 1,000 results" },
-  { id: "dice", label: "Dice", price: "about $1 per 1,000 results, per phrase" },
+  {
+    id: "dice",
+    label: "Dice",
+    price: "about $1 per 1,000, per phrase; mostly on-site US roles",
+  },
   { id: "builtin", label: "Built In", price: "about $1.07 per 1,000, billed in pages of 25" },
   {
     id: "hiringcafe",
     label: "HiringCafe",
-    price: "about $1.25 per 1,000; descriptions often missing",
+    price: "about $1.25 per 1,000, per phrase; ATS apply links",
   },
 ] as const;
 

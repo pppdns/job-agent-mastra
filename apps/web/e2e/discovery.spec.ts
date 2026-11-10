@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 // Discovery on the fixture sources (fixtures/sources): a manual run stores screened jobs from
-// both boards (the cross-board duplicate merged), shows per-source results and what the screen
+// every board with a fixture (cross-board duplicates merged), shows per-source results and what the screen
 // dropped; loosening the settings re-screens and lets a dropped posting through; then the inbox
 // tools: unseen filter, Keep anyway, the company page and bulk dismiss.
 
@@ -14,14 +14,18 @@ test("run discovery, see screened jobs, loosen the screen", async ({ page }) => 
   await expect(runs).toContainText("Himalayas");
   await expect(runs).toContainText("1 merged");
   // Mock triage scores every new job; the best get a full (mock) assessment; no email in e2e.
-  await expect(runs).toContainText("3 triaged");
-  await expect(runs).toContainText("3 assessed");
+  await expect(runs).toContainText("We Work Remotely");
+  await expect(runs).toContainText("YC Work at a Startup");
+  await expect(runs).toContainText("7 triaged");
+  await expect(runs).toContainText("7 assessed");
   await expect(runs).toContainText("no email: email not configured");
 
   const screened = page.getByRole("region", { name: "Screened out" });
   await expect(screened).toContainText("Software Engineering Intern");
   await expect(screened).toContainText('title contains "intern"');
   await expect(screened).toContainText("remote only from India, Philippines");
+  await expect(screened).toContainText("remote only from Latin America");
+  await expect(screened).toContainText("not remote, in San Francisco, CA, US");
 
   // One job for the posting found on both boards, with both source badges.
   await page.goto("/jobs?q=Quillfeather");
@@ -30,14 +34,15 @@ test("run discovery, see screened jobs, loosen the screen", async ({ page }) => 
   await expect(row).toHaveCount(1);
   await expect(row).toContainText("Himalayas");
   await expect(row).toContainText("LinkedIn");
+  await expect(row).toContainText("We Work Remotely");
   await expect(row).toContainText("New");
 
   // New matches count on the Jobs nav item until opened.
   const badge = page.getByLabel(/^\d+ new match/).filter({ visible: true });
-  await expect(badge).toHaveText("3");
+  await expect(badge).toHaveText("7");
   await row.getByRole("link").first().click();
   await expect(page.getByText("Triage 88")).toBeVisible();
-  await expect(badge).toHaveText("2");
+  await expect(badge).toHaveText("6");
   await page.goto("/jobs?q=Pebblework");
   await expect(page.getByText(/No active jobs match/)).toBeVisible();
 

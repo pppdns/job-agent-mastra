@@ -92,9 +92,9 @@ async function Discovery() {
       <RefreshWhileRunning running={running} />
       <section className="flex flex-col gap-3">
         <p className="text-sm text-muted-foreground">
-          New postings are fetched twice a day while the main checkout's dev server runs (with{" "}
-          <code>DISCOVERY_SCHEDULE=on</code>). Each run asks every source for what was posted since
-          its last good run. Use a backfill for a first fill or after a long break.
+          New postings are fetched twice a day by the hosted app (or the main checkout's dev server,
+          with <code>DISCOVERY_SCHEDULE=on</code>). Each run asks every source for what was posted
+          since its last good run. Use a backfill for a first fill or after a long break.
         </p>
         <DiscoveryControls running={running} maxBackfillUsd={maxBackfillUsd} />
       </section>
