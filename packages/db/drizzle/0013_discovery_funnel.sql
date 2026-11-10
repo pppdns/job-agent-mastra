@@ -1,0 +1,1 @@
+ALTER TABLE `app_discovery_runs` ADD `funnel` text;

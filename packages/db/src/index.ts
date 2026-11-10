@@ -22,6 +22,7 @@ export type {
   DiscoveryRun,
   DiscoveryRunStatus,
   DiscoveryTrigger,
+  FunnelResult,
   Job,
   JobDraft,
   JobOrigin,

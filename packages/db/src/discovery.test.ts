@@ -11,19 +11,28 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { listJobs } from "./assessments";
 import {
+  countAwaitingTriage,
+  digestMatches,
   finishDiscoveryRun,
   getSearchSettings,
   interruptStaleDiscoveryRuns,
   jobPostings,
+  jobsAwaitingTriage,
+  jobsToAssess,
   knownExternalIds,
+  listDiscoveryRuns,
+  markJobSeen,
   postingSourcesByJob,
+  recordFunnel,
   recordPosting,
   recordSourceResult,
   rescreenPostings,
   saveSearchSettings,
+  saveTriage,
   sourceSpendSince,
   sourceStates,
   startDiscoveryRun,
+  unseenMatchCount,
 } from "./discovery";
 import { createDb, type Db, migrateDb } from "./index";
 import { backfillCompanyKeys, latestListingSource, setJobStatus, upsertJob } from "./jobs";
@@ -248,6 +257,7 @@ describe("discovery runs", () => {
       lookbackDays: null,
       error: null,
       sources,
+      funnel: null,
       estimatedUsd: 0,
       workflowRunId: null,
       startedAt: endedAt,
@@ -289,6 +299,69 @@ describe("discovery runs", () => {
     await startRun(db, { id: "r1", threadId: "discovery:abc" });
     await startRun(db, { id: "r2", threadId: "chat-1" });
     expect(Object.keys(await latestRunStatuses(db))).toEqual(["chat-1"]);
+  });
+});
+
+describe("triage and matches", () => {
+  it("lists untouched discovered jobs awaiting triage, then assess candidates and digest matches", async () => {
+    await record(posting());
+    await record(posting({ externalId: "h-2", title: "Applied AI Engineer", company: "Kite" }));
+    await record(posting({ externalId: "h-3", title: "Staff Engineer", company: "Mole" }));
+    const waiting = await jobsAwaitingTriage(db, 10);
+    expect(waiting).toHaveLength(3);
+    expect(await countAwaitingTriage(db)).toBe(3);
+
+    const start = new Date(Date.now() - 1_000);
+    const [a, b, c] = waiting;
+    await saveTriage(db, a?.id ?? "", { score: 90, reason: "Strong fit", profileVersion: 1 });
+    await saveTriage(db, b?.id ?? "", { score: 65, reason: "Decent", profileVersion: 1 });
+    await saveTriage(db, c?.id ?? "", {
+      score: 20,
+      reason: "On-site in Munich",
+      profileVersion: 1,
+    });
+    expect(await jobsAwaitingTriage(db, 10)).toHaveLength(0);
+
+    const toAssess = await jobsToAssess(db, { since: start, threshold: 60, limit: 1 });
+    expect(toAssess).toEqual([{ id: a?.id, triageScore: 90 }]);
+    const matches = await digestMatches(db, { since: start, threshold: 60 });
+    expect(matches.map((m) => m.triageScore)).toEqual([90, 65]);
+    expect(matches[0]?.sources).toEqual(["himalayas"]);
+    // Below the threshold: hidden from the list, not a match.
+    expect(await listJobs(db)).toHaveLength(2);
+
+    expect(await unseenMatchCount(db)).toBe(2);
+    await markJobSeen(db, a?.id ?? "");
+    expect(await unseenMatchCount(db)).toBe(1);
+  });
+
+  it("adds the funnel's model cost to the run's cost", async () => {
+    const run = await startDiscoveryRun(db, { trigger: "manual" });
+    const funnel = {
+      triaged: 3,
+      triageFailed: 0,
+      triagePending: 0,
+      matched: 2,
+      assessed: 1,
+      assessFailed: 0,
+      llmUsd: 0.05,
+    };
+    await recordFunnel(db, run?.id ?? "", funnel);
+    await recordSourceResult(db, run?.id ?? "", {
+      source: "linkedin",
+      status: "ok",
+      fetched: 1,
+      invalid: 0,
+      seen: 0,
+      filtered: 0,
+      newJobs: 1,
+      merged: 0,
+      costUsd: 0.1,
+      durationMs: 1,
+    });
+    const [row] = await listDiscoveryRuns(db, 1);
+    expect(row?.estimatedUsd).toBeCloseTo(0.15);
+    expect(row?.funnel).toEqual(funnel);
   });
 });
 

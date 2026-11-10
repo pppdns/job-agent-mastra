@@ -9,7 +9,7 @@ import {
   type ScreenResult,
   type SearchSettings,
 } from "@copilot/shared";
-import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, notExists, sql } from "drizzle-orm";
 import type { Db } from "./index";
 import { addSourceUnlocked, upsertJobUnlocked } from "./jobs";
 import {
@@ -17,6 +17,8 @@ import {
   type DiscoveryRunStatus,
   type DiscoveryTrigger,
   discoveryRuns,
+  type FunnelResult,
+  jobDrafts,
   jobs,
   type Posting,
   postings,
@@ -87,7 +89,23 @@ export function recordSourceResult(db: Db, runId: string, result: SourceRunResul
     const sources = [...run.sources.filter((s) => s.source !== result.source), result];
     await db
       .update(discoveryRuns)
-      .set({ sources, estimatedUsd: sources.reduce((sum, s) => sum + s.costUsd, 0) })
+      .set({ sources, estimatedUsd: runCost(sources, run.funnel) })
+      .where(eq(discoveryRuns.id, runId));
+  });
+}
+
+/** Provider cost of every source plus the model cost of the funnel. */
+const runCost = (sources: SourceRunResult[], funnel: FunnelResult | null) =>
+  sources.reduce((sum, s) => sum + s.costUsd, 0) + (funnel?.llmUsd ?? 0);
+
+/** Saves what the run did after fetching (replaces the previous funnel record). */
+export function recordFunnel(db: Db, runId: string, funnel: FunnelResult): Promise<void> {
+  return serializeWrites(db, async () => {
+    const run = await db.query.discoveryRuns.findFirst({ where: eq(discoveryRuns.id, runId) });
+    if (!run) return;
+    await db
+      .update(discoveryRuns)
+      .set({ funnel, estimatedUsd: runCost(run.sources, funnel) })
       .where(eq(discoveryRuns.id, runId));
   });
 }
@@ -392,4 +410,146 @@ export async function screenedOutSince(db: Db, since: Date) {
     )
     .orderBy(desc(postings.firstSeenAt))
     .limit(200);
+}
+
+/** A discovered job still worth a look: untouched (`new`, not archived), with a passing posting. */
+const openDiscovered = sql`${jobs.origin} = 'discovery' AND ${jobs.status} = 'new'
+  AND ${jobs.archivedAt} IS NULL
+  AND EXISTS (SELECT 1 FROM app_postings p WHERE p.job_id = ${jobs.id} AND p.screen_reasons IS NULL)`;
+
+export type TriageCandidate = { id: string; title: string | null; company: string | null };
+
+/** Discovered jobs waiting for triage, newest first (left-overs from earlier runs included). */
+export async function jobsAwaitingTriage(db: Db, limit: number): Promise<TriageCandidate[]> {
+  return db
+    .select({ id: jobs.id, title: jobs.title, company: jobs.company })
+    .from(jobs)
+    .where(and(openDiscovered, isNull(jobs.triageScore)))
+    .orderBy(desc(jobs.createdAt))
+    .limit(limit);
+}
+
+export async function countAwaitingTriage(db: Db): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(jobs)
+    .where(and(openDiscovered, isNull(jobs.triageScore)));
+  return row?.n ?? 0;
+}
+
+/** Stores a job's triage (score, one-line reason) against the profile version it used. */
+export function saveTriage(
+  db: Db,
+  jobId: string,
+  triage: { score: number; reason: string; profileVersion: number },
+): Promise<void> {
+  return serializeWrites(db, async () => {
+    await db
+      .update(jobs)
+      .set({
+        triageScore: triage.score,
+        triageReason: triage.reason,
+        triageProfileVersion: triage.profileVersion,
+        triagedAt: new Date(),
+      })
+      .where(eq(jobs.id, jobId));
+  });
+}
+
+/**
+ * The best new matches to assess fully: discovered jobs triaged since `since` at or above the
+ * threshold, still untouched and without an assessment, best first.
+ */
+export async function jobsToAssess(
+  db: Db,
+  input: { since: Date; threshold: number; limit: number },
+): Promise<{ id: string; triageScore: number | null }[]> {
+  if (input.limit <= 0) return [];
+  return db
+    .select({ id: jobs.id, triageScore: jobs.triageScore })
+    .from(jobs)
+    .where(
+      and(
+        openDiscovered,
+        gte(jobs.triagedAt, input.since),
+        gte(jobs.triageScore, input.threshold),
+        notExists(db.select({ x: sql`1` }).from(jobDrafts).where(eq(jobDrafts.jobId, jobs.id))),
+      ),
+    )
+    .orderBy(desc(jobs.triageScore), desc(jobs.createdAt))
+    .limit(input.limit);
+}
+
+export type DigestMatch = {
+  id: string;
+  title: string | null;
+  company: string | null;
+  location: string | null;
+  triageScore: number;
+  triageReason: string | null;
+  /** Headline of the full assessment, when the job got one. */
+  headline: string | null;
+  sources: DiscoverySource[];
+};
+
+/** Matches triaged since `since` at or above the threshold, still untouched, best first. */
+export async function digestMatches(
+  db: Db,
+  input: { since: Date; threshold: number; limit?: number },
+): Promise<DigestMatch[]> {
+  const rows = await db
+    .select({
+      id: jobs.id,
+      title: jobs.title,
+      company: jobs.company,
+      location: jobs.location,
+      triageScore: jobs.triageScore,
+      triageReason: jobs.triageReason,
+      headline: sql<
+        string | null
+      >`(select json_extract(d.assessment, '$.headline') from app_job_drafts d
+        where d.job_id = ${jobs.id} order by d.version desc limit 1)`,
+    })
+    .from(jobs)
+    .where(
+      and(
+        openDiscovered,
+        isNotNull(jobs.triageScore),
+        gte(jobs.triagedAt, input.since),
+        gte(jobs.triageScore, input.threshold),
+      ),
+    )
+    .orderBy(desc(jobs.triageScore), desc(jobs.createdAt))
+    .limit(input.limit ?? 50);
+  const sources = await postingSourcesByJob(
+    db,
+    rows.map((r) => r.id),
+  );
+  return rows.map((r) => ({
+    ...r,
+    triageScore: r.triageScore ?? 0,
+    sources: sources[r.id] ?? [],
+  }));
+}
+
+/** First time the user opens a discovered job: it stops counting as a new match. */
+export function markJobSeen(db: Db, jobId: string): Promise<void> {
+  return serializeWrites(db, async () => {
+    await db
+      .update(jobs)
+      .set({ seenAt: new Date() })
+      .where(and(eq(jobs.id, jobId), isNull(jobs.seenAt), eq(jobs.origin, "discovery")));
+  });
+}
+
+/** Discovered matches (visible, triaged) the user hasn't opened yet. */
+export async function unseenMatchCount(db: Db): Promise<number> {
+  const settings = await getSearchSettings(db);
+  const [row] = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(jobs)
+    .where(
+      and(openDiscovered, isNull(jobs.seenAt), gte(jobs.triageScore, settings.triageThreshold)),
+    );
+  return row?.n ?? 0;
 }

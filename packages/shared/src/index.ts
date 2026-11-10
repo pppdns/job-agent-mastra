@@ -17,3 +17,4 @@ export * from "./posting";
 export * from "./profile";
 export * from "./screening";
 export * from "./search-settings";
+export * from "./triage";

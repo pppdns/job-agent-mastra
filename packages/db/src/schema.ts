@@ -279,6 +279,24 @@ export type SourceRunResult = {
   since?: string;
 };
 
+/** What a run did after fetching: triage, full assessments of the best matches, the digest. */
+export type FunnelResult = {
+  /** Jobs triaged in this run (new ones and ones left over from earlier runs). */
+  triaged: number;
+  triageFailed: number;
+  /** Jobs still waiting for triage when the run stopped (budget or per-run cap). */
+  triagePending: number;
+  /** Triaged at or above the threshold. */
+  matched: number;
+  assessed: number;
+  assessFailed: number;
+  /** Model cost of triage + assessments (USD, estimated from tokens). */
+  llmUsd: number;
+  /** Why triage or assessment stopped early (per-run cap, spend cap). */
+  stoppedBy?: string;
+  digest?: { status: "sent" | "skipped" | "failed"; message: string; matches: number };
+};
+
 /** One discovery run (scheduled or manual) with per-source results. */
 export const discoveryRuns = sqliteTable(
   "app_discovery_runs",
@@ -290,6 +308,7 @@ export const discoveryRuns = sqliteTable(
     lookbackDays: integer("lookback_days"),
     error: text("error"),
     sources: text("sources", { mode: "json" }).$type<SourceRunResult[]>().notNull(),
+    funnel: text("funnel", { mode: "json" }).$type<FunnelResult>(),
     /** Provider + model cost of the run (USD, estimated). */
     estimatedUsd: real("estimated_usd").notNull().default(0),
     /** Mastra workflow run id, for the Studio link. */
