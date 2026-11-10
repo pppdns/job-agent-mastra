@@ -14,6 +14,16 @@ test("streams an agent reply through the web proxy", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible();
 });
 
+test("a new chat focuses the message input", async ({ page }) => {
+  await page.goto("/");
+  const input = () => page.getByRole("textbox", { name: "Message" }).filter({ visible: true });
+  await expect(input()).toBeFocused();
+
+  await page.getByRole("button", { name: "New chat" }).click();
+  await expect(page).toHaveURL(/\/c\//);
+  await expect(input()).toBeFocused();
+});
+
 test("the agent API rejects requests without the shared secret", async ({ request }) => {
   const response = await request.post(`${e2eAgentUrl}/chat`, { data: {} });
   expect(response.status()).toBe(401);
