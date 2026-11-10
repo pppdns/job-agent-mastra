@@ -14,6 +14,30 @@ Intent and constraints: [project-brief.md](project-brief.md). Decisions and mile
 
 **Hosted:** https://job-copilot-c456e8.fly.dev (Fly.io app `job-copilot-c456e8`, region `fra`; password login, private). Every push to `main` deploys there via GitHub Actions. See [docs/deploy.md](docs/deploy.md).
 
+### Mastra Studio on Fly
+
+Studio (traces, logs, metrics, agents) is never public; reach it through a tunnel over Fly's private network. From the repo root (it reads `fly.toml`), in a terminal you keep open:
+
+```bash
+fly proxy 4111
+```
+
+Print the token Studio needs, the production `AGENT_SHARED_SECRET` (it differs from your local one):
+
+```bash
+fly ssh console -C 'printenv AGENT_SHARED_SECRET'
+```
+
+Open http://localhost:4111. On the first screen enter:
+
+| Field | Value |
+| --- | --- |
+| Mastra instance URL | `http://localhost:4111` |
+| API prefix | leave empty (defaults to `/api`) |
+| Headers → Add header | name `Authorization`, value `Bearer <token>` (the word `Bearer`, a space, then the printed secret) |
+
+Then **Save configuration**. The browser remembers it, so next time only `fly proxy 4111` is needed. If Studio shows 401 errors, the secret was rotated (`pnpm fly:secrets` generates a new one): print it again and update the header. Stop the tunnel with Ctrl+C. If port 4111 is taken (a local `pnpm dev`), use `fly proxy 14111:4111` and http://localhost:14111 as both the page and the instance URL.
+
 ## How it works
 
 ```mermaid
