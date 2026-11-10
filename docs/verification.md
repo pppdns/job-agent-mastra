@@ -163,3 +163,4 @@ Live models, offline web (fixtures). Judge scores are evidence, not truth. Detai
 
 - Deploy of #26 (release 8): healthy, agent and Studio up. Production DB checked read-only over `fly ssh`: 14 migrations applied (incl. `0012_discovery`, `0013_discovery_funnel`), discovery tables present, 34 chat jobs kept, no discovery runs or schedule rows yet. Fly secrets include `APIFY_API_KEY`, `RESEND_API_KEY`, `DIGEST_TO`; `DISCOVERY_SCHEDULE` not set.
 - Found: `discoveryScheduleEnabled()` could never be true on Fly (it requires no `DATABASE_URL`). Now the production image (`NODE_ENV=production`) qualifies; dev worktrees, e2e and evals still never schedule (unit test). Not yet exercised: a run or a scheduled fire on Fly.
+- After #27 (release 11) `DISCOVERY_SCHEDULE=on` was set as a Fly secret. On restart Mastra registered `wf_discover-jobs` in `mastra_schedules` (`0 7,16 * * *`, Europe/Budapest, active, next fire 2026-11-10 16:00). A fired run hasn't been checked yet.
