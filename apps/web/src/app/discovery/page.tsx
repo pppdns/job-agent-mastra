@@ -1,5 +1,6 @@
 import {
   type DiscoveryRun,
+  type FunnelResult,
   getSearchSettings,
   listDiscoveryRuns,
   type SourceRunResult,
@@ -241,10 +242,44 @@ function RunRow({ run, studio }: { run: DiscoveryRun; studio: string }) {
             <SourceLine key={s.source} result={s} />
           ))}
         </ul>
+        {run.funnel && <FunnelLine funnel={run.funnel} />}
         {run.error && <p className="text-xs text-destructive">{run.error}</p>}
       </TableCell>
       <TableCell className="text-right tabular-nums">{usd(run.estimatedUsd)}</TableCell>
     </TableRow>
+  );
+}
+
+const DIGEST_LABEL = { sent: "email sent", skipped: "no email", failed: "email failed" } as const;
+
+function FunnelLine({ funnel }: { funnel: FunnelResult }) {
+  const parts = [
+    `${funnel.triaged} triaged`,
+    funnel.triageFailed && `${funnel.triageFailed} failed`,
+    funnel.triagePending && `${funnel.triagePending} waiting`,
+    `${funnel.matched} matches`,
+    `${funnel.assessed} assessed`,
+    funnel.assessFailed && `${funnel.assessFailed} assessments failed`,
+    `models ${usd(funnel.llmUsd)}`,
+  ].filter(Boolean);
+  return (
+    <div className="mt-1 text-xs">
+      <span className="font-medium">Funnel</span>{" "}
+      <span className="text-muted-foreground">{parts.join(" · ")}</span>
+      {funnel.digest && (
+        <span
+          className={cn(
+            "block",
+            funnel.digest.status === "failed" ? "text-destructive" : "text-muted-foreground",
+          )}
+        >
+          {DIGEST_LABEL[funnel.digest.status]}: {funnel.digest.message}
+        </span>
+      )}
+      {funnel.stoppedBy && (
+        <span className="block text-muted-foreground">Stopped early: {funnel.stoppedBy}</span>
+      )}
+    </div>
   );
 }
 

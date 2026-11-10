@@ -16,6 +16,7 @@ import {
 import { JobStatusMenu } from "@/components/job-status-menu";
 import { PageHeader } from "@/components/page-header";
 import { RescoreAllButton, RescoreButton } from "@/components/rescore-button";
+import { TriageScore } from "@/components/triage-score";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -276,16 +277,28 @@ function JobRow({
           {summary?.salary && <SalaryLabel salary={summary.salary} className="[&>svg]:size-3.5" />}
           <AgePill age={age} compact className="sm:hidden" />
           <JobFlags job={job} />
+          {job.origin === "discovery" && job.seenAt === null && job.triageScore !== null && (
+            <Badge className="h-4 px-1.5 text-[11px]">New</Badge>
+          )}
           {sources.map((source) => (
             <Badge key={source} variant="outline" className="h-4 px-1.5 text-[11px]">
               {DISCOVERY_SOURCE_LABELS[source]}
             </Badge>
           ))}
         </div>
-        {summary && (
+        {summary ? (
           <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground" title={summary.headline}>
             {summary.headline}
           </p>
+        ) : (
+          job.triageReason && (
+            <p
+              className="mt-0.5 line-clamp-1 text-xs text-muted-foreground"
+              title={job.triageReason}
+            >
+              {job.triageReason}
+            </p>
+          )
         )}
       </TableCell>
       <TableCell className="hidden sm:table-cell">
@@ -302,6 +315,8 @@ function JobRow({
             />
             <VerdictIcon verdict={summary.verdict} className="relative z-10" />
           </span>
+        ) : job.origin === "discovery" ? (
+          <TriageScore score={job.triageScore} muted={!fitColored} />
         ) : (
           <span className="text-xs text-muted-foreground">Not assessed</span>
         )}

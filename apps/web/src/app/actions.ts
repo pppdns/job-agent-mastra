@@ -10,6 +10,7 @@ import {
   getApprovalView,
   getSearchSettings,
   listJobs,
+  markJobSeen,
   rescreenPostings,
   saveSearchSettings,
   setJobArchived,
@@ -229,6 +230,13 @@ export async function saveSearchSettingsAction(
     onsitePlaces: lines(formData.get("onsitePlaces")),
     maxAgeDays: numberOr(formData.get("maxAgeDays"), current.maxAgeDays),
     minSalary: amount && currency ? { amount: Number(amount), currency } : null,
+    triageThreshold: numberOr(formData.get("triageThreshold"), current.triageThreshold),
+    maxAssessmentsPerRun: numberOr(
+      formData.get("maxAssessmentsPerRun"),
+      current.maxAssessmentsPerRun,
+    ),
+    maxTriagePerRun: numberOr(formData.get("maxTriagePerRun"), current.maxTriagePerRun),
+    maxLlmUsdPerRun: numberOr(formData.get("maxLlmUsdPerRun"), current.maxLlmUsdPerRun),
     apifyMonthlyBudgetUsd: numberOr(
       formData.get("apifyMonthlyBudgetUsd"),
       current.apifyMonthlyBudgetUsd,
@@ -282,4 +290,10 @@ export async function saveSearchSettingsAction(
     ok: true,
     message: `Saved. Re-screened ${result.checked} recent postings${changes.length ? `: ${changes.join(", ")}` : ", nothing changed"}.`,
   };
+}
+
+/** The user opened a discovered job: it no longer counts as a new match. */
+export async function markJobSeenAction(jobId: string): Promise<void> {
+  await markJobSeen(await appDb(), jobIdSchema.parse(jobId));
+  refresh();
 }

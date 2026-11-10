@@ -49,6 +49,9 @@ export default defineConfig({
         APIFY_API_KEY: "",
         HIMALAYAS_API_KEY: "",
         DISCOVERY_SCHEDULE: "off",
+        // No digest email from e2e.
+        RESEND_API_KEY: "",
+        DIGEST_TO: "",
       },
     },
     {

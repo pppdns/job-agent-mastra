@@ -179,6 +179,9 @@ export type JobOverview = {
   summary: AssessmentSummary | null;
   origin: JobOrigin;
   triageScore: number | null;
+  triageReason: string | null;
+  /** When the user first opened a discovered job (null = a new, unseen match). */
+  seenAt: Date | null;
 };
 
 export type ListJobsOptions = {
@@ -213,6 +216,8 @@ export async function listJobs(
       updatedAt: jobs.updatedAt,
       origin: jobs.origin,
       triageScore: jobs.triageScore,
+      triageReason: jobs.triageReason,
+      seenAt: jobs.seenAt,
       draftVersion: sql<
         number | null
       >`(select max(version) from app_job_drafts d where d.job_id = "app_jobs"."id")`,

@@ -5,21 +5,35 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
 
-/** Without `active`, renders the static links (prerendered fallback) without reading the URL. */
-export function NavLinks({ active = false }: { active?: boolean }) {
-  return active ? <ActiveNavLinks /> : <Links pathname="" />;
+/**
+ * Without `active`, renders the static links (prerendered fallback) without reading the URL.
+ * `newMatches`: discovered matches not opened yet (badge on Jobs).
+ */
+export function NavLinks({
+  active = false,
+  newMatches = 0,
+}: {
+  active?: boolean;
+  newMatches?: number;
+}) {
+  return active ? (
+    <ActiveNavLinks newMatches={newMatches} />
+  ) : (
+    <Links pathname="" newMatches={newMatches} />
+  );
 }
 
-function ActiveNavLinks() {
-  return <Links pathname={usePathname()} />;
+function ActiveNavLinks({ newMatches }: { newMatches: number }) {
+  return <Links pathname={usePathname()} newMatches={newMatches} />;
 }
 
-function Links({ pathname }: { pathname: string }) {
+function Links({ pathname, newMatches }: { pathname: string; newMatches: number }) {
   const { setOpenMobile } = useSidebar();
   return (
     <SidebarMenu>
@@ -30,6 +44,14 @@ function Links({ pathname }: { pathname: string }) {
             <span>Jobs</span>
           </Link>
         </SidebarMenuButton>
+        {newMatches > 0 && (
+          <SidebarMenuBadge
+            aria-label={`${newMatches} new match${newMatches === 1 ? "" : "es"}`}
+            title="New matches you haven't opened"
+          >
+            {newMatches > 99 ? "99+" : newMatches}
+          </SidebarMenuBadge>
+        )}
       </SidebarMenuItem>
       <SidebarMenuItem>
         <SidebarMenuButton
