@@ -5,13 +5,8 @@ import {
   type SearchSettings,
 } from "@copilot/shared";
 import { htmlToText, httpUrl, plainMarkdown, str } from "../text";
-import {
-  CooldownError,
-  type FetchContext,
-  type FetchOutcome,
-  type JobSource,
-  SourceError,
-} from "../types";
+import type { FetchContext, JobSource } from "../types";
+import { createActorSource } from "./actor-source";
 import { type ActorPrices, type ApifyRunner, RESULT_EVENT, START_EVENT } from "./apify";
 
 // LinkedIn via the Apify actor `valig/linkedin-jobs-scraper` (pay per result; guest job search).
@@ -25,10 +20,10 @@ export const LINKEDIN_ACTOR = "valig/linkedin-jobs-scraper";
 export const LINKEDIN_PRICES: ActorPrices = { [RESULT_EVENT]: 0.00036, [START_EVENT]: 0.0009 };
 
 const BACKFILL_LIMIT_FACTOR = 4;
-const BACKFILL_USD_FACTOR = 4;
+/** A backfill may spend this many times a paid source's per-run cap. */
+export const BACKFILL_USD_FACTOR = 4;
 /** Known ids sent as `skipJobId`, so re-asking a window (after a partial run) isn't billed. */
 const MAX_SKIP_IDS = 3_000;
-const RUN_TIMEOUT_SECS = 300;
 const HOUR_MS = 3_600_000;
 
 /**
@@ -144,61 +139,18 @@ export function parseLinkedInItem(raw: unknown): PostingInput | null {
 }
 
 export function createLinkedInSource(runActor: ApifyRunner | null): JobSource {
-  return {
-    id: "linkedin",
-    paid: true,
-    unavailable: () => (runActor ? null : "APIFY_API_KEY is not set"),
-    async fetch(context): Promise<FetchOutcome> {
-      if (!runActor) throw new SourceError("APIFY_API_KEY is not set");
-      const searches = linkedInSearches(context.settings, context);
-      const byId = new Map<string, PostingInput>();
-      let invalid = 0;
-      let costUsd = 0;
-      const failures: string[] = [];
-      const notes: string[] = [];
-      let succeeded = 0;
-      for (const search of searches) {
-        const remaining = context.maxUsd - costUsd;
-        if (remaining < 0.01) {
-          notes.push(`spend cap reached after ${costUsd.toFixed(2)} USD`);
-          break;
-        }
-        try {
-          const result = await runActor(LINKEDIN_ACTOR, search, {
-            maxUsd: remaining,
-            timeoutSecs: RUN_TIMEOUT_SECS,
-            prices: LINKEDIN_PRICES,
-            signal: context.signal,
-          });
-          costUsd += result.costUsd;
-          if (result.partial) failures.push(result.partial);
-          else succeeded += 1;
-          for (const raw of result.items) {
-            const posting = parseLinkedInItem(raw);
-            if (posting) byId.set(posting.externalId, posting);
-            else invalid += 1;
-          }
-        } catch (error) {
-          if (context.signal?.aborted) throw error;
-          const message = error instanceof Error ? error.message : "failed";
-          // The key or the account is the problem: no point in trying the other searches.
-          if (/401|402/.test(message)) throw new SourceError(message);
-          failures.push(`"${search.keywords}" in ${search.location}: ${message}`);
-          // Rate limited for longer than we retry: stop asking for this run.
-          if (error instanceof CooldownError) break;
-        }
-      }
-      if (succeeded === 0 && byId.size === 0 && failures.length > 0) {
-        throw new SourceError(`no search succeeded (${failures[0]})`);
-      }
-      const partial = [...failures, ...notes];
-      return {
-        postings: [...byId.values()],
-        invalid,
-        costUsd,
-        partial: partial.length > 0 ? partial.slice(0, 5).join("; ") : undefined,
-        failures,
-      };
+  return createActorSource(
+    {
+      id: "linkedin",
+      actorId: LINKEDIN_ACTOR,
+      prices: LINKEDIN_PRICES,
+      searches: (context) =>
+        linkedInSearches(context.settings, context).map((search) => ({
+          label: `"${search.keywords}" in ${search.location}`,
+          input: search,
+        })),
+      parse: parseLinkedInItem,
     },
-  };
+    runActor,
+  );
 }

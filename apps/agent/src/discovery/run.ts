@@ -19,7 +19,7 @@ import {
   type SearchSettings,
   screenPosting,
 } from "@copilot/shared";
-import { linkedInMaxUsd } from "./sources/linkedin";
+import { BACKFILL_USD_FACTOR } from "./sources/linkedin";
 import type { JobSource } from "./types";
 
 // One discovery run: claim the run (one at a time), ask each enabled source for what's new since
@@ -59,14 +59,17 @@ export async function claimDiscoveryRun(
 const enabled = (settings: SearchSettings, source: DiscoverySource) =>
   settings.sources[source].enabled;
 
-/** Per-run spend cap of a paid source. */
-const maxUsdOf = (source: DiscoverySource, settings: SearchSettings, backfill: boolean) =>
-  source === "linkedin" ? linkedInMaxUsd(settings, backfill) : 0;
+/** Per-run spend cap of a paid source (raised for a backfill). */
+const maxUsdOf = (source: DiscoverySource, settings: SearchSettings, backfill: boolean) => {
+  const config = settings.sources[source];
+  return "maxUsdPerRun" in config ? config.maxUsdPerRun * (backfill ? BACKFILL_USD_FACTOR : 1) : 0;
+};
 
 export async function runDiscoverySources(
   db: Db,
   runId: string,
-  sources: Record<DiscoverySource, JobSource>,
+  /** The sources to run (all of them in production; tests pass a few). */
+  sources: Partial<Record<DiscoverySource, JobSource>>,
   options: { now?: () => Date; signal?: AbortSignal } = {},
 ): Promise<SourceRunResult[]> {
   const now = options.now ?? (() => new Date());
@@ -83,7 +86,8 @@ export async function runDiscoverySources(
     recent.filter((r) => r.id !== runId),
     DISCOVERY_SOURCES,
   );
-  const paidIds = DISCOVERY_SOURCES.filter((id) => sources[id].paid);
+  const ids = DISCOVERY_SOURCES.filter((id) => sources[id]);
+  const paidIds = ids.filter((id) => sources[id]?.paid);
   let paidSpent = await sourceSpendSince(
     db,
     paidIds,
@@ -91,8 +95,9 @@ export async function runDiscoverySources(
   );
 
   const results: SourceRunResult[] = [];
-  for (const id of DISCOVERY_SOURCES) {
+  for (const id of ids) {
     const source = sources[id];
+    if (!source) continue;
     const t0 = Date.now();
     const base = {
       source: id,

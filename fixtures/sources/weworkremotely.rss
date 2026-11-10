@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <title>We Work Remotely: Full-Stack Programming Jobs (synthetic fixture)</title>
+    <link>https://weworkremotely.com/categories/remote-full-stack-programming-jobs</link>
+    <item>
+      <title>Brightwater Labs: Senior Full Stack Engineer</title>
+      <region>Anywhere in the World</region>
+      <country></country>
+      <state></state>
+      <skills>TypeScript, React, Node.js</skills>
+      <category>Full-Stack Programming</category>
+      <type>Full-Time</type>
+      <description>&lt;p&gt;&lt;strong&gt;Headquarters:&lt;/strong&gt; Remote&lt;/p&gt;&lt;p&gt;Brightwater Labs makes field-survey software for water utilities. Own features across a TypeScript stack, from the API to the React app.&lt;/p&gt;</description>
+      <pubDate>{{days-ago:1}}</pubDate>
+      <guid>https://weworkremotely.com/remote-jobs/brightwater-labs-senior-full-stack-engineer</guid>
+      <link>https://weworkremotely.com/remote-jobs/brightwater-labs-senior-full-stack-engineer</link>
+    </item>
+    <item>
+      <title>Quillfeather Health: Founding Engineer</title>
+      <region>Europe Only</region>
+      <country>Germany</country>
+      <type>Full-Time</type>
+      <description><![CDATA[<p>Quillfeather Health is hiring its first engineer to build the patient-intake product.</p>]]></description>
+      <pubDate>{{days-ago:2}}</pubDate>
+      <guid>https://weworkremotely.com/remote-jobs/quillfeather-health-founding-engineer</guid>
+      <link>https://weworkremotely.com/remote-jobs/quillfeather-health-founding-engineer</link>
+    </item>
+    <item>
+      <title>Saltmarsh Studio: Backend Engineer</title>
+      <region>Latin America Only</region>
+      <type>Contract</type>
+      <description>&lt;p&gt;Backend work on a booking platform, overlapping with São Paulo hours.&lt;/p&gt;</description>
+      <pubDate>{{days-ago:1}}</pubDate>
+      <guid>https://weworkremotely.com/remote-jobs/saltmarsh-studio-backend-engineer</guid>
+      <link>https://weworkremotely.com/remote-jobs/saltmarsh-studio-backend-engineer</link>
+    </item>
+  </channel>
+</rss>

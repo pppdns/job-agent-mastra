@@ -34,3 +34,24 @@ export const httpUrl = (v: unknown): string | null => {
   const s = str(v, 2_000);
   return s && /^https?:\/\//i.test(s) ? s : null;
 };
+
+/**
+ * A board's free-text remote region ("USA Only", "Anywhere in the World", "Europe, UK") as
+ * region names for the screen. Unclear text gives [] (not stated), which the screen passes.
+ */
+export function regionList(text: string | null | undefined): string[] {
+  const value = text?.trim();
+  if (!value || value.length > 300) return [];
+  if (/\b(anywhere|worldwide|global(ly)?)\b/i.test(value)) return ["Worldwide"];
+  return value
+    .split(/[,;/|]|\s+(?:or|and|&)\s+/i)
+    .map((part) =>
+      part
+        .replace(/\([^)]*\)/g, "")
+        .replace(/\b(only|remote|based|time ?zones?)\b/gi, "")
+        .replace(/\s+/g, " ")
+        .trim(),
+    )
+    .filter((part) => part.length > 1 && part.length <= 60)
+    .slice(0, 20);
+}

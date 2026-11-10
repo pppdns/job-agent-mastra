@@ -199,7 +199,10 @@ Scheduled ingestion from job boards, reported as an inbox plus an email digest. 
 - [x] Verified: db and web unit tests, e2e (unseen filter, keep anyway, company page, bulk dismiss), browser check on ~1,000 discovered jobs, live "Assess fully".
 
 ### M16 — More sources
-- [ ] Direct feeds: We Work Remotely, RemoteOK (followed link-back), Remotive (attribution), NoDesk. Apify definitions: HiringCafe, Welcome to the Jungle, Wellfound, Dice, Built In, YC, Jobgether. Per-source match rate, duplicate rate and cost per match.
+- [x] Direct feeds: We Work Remotely (RSS), Remote OK (followed link-back), Remotive (attribution), NoDesk (RSS); a small RSS reader, no new dependency.
+- [x] Apify boards on a shared actor loop (LinkedIn moved onto it): YC Work at a Startup, Jobgether, Built In, Wellfound, HiringCafe (on), Dice (off: mostly on-site US roles). Welcome to the Jungle not added (the checked actor ignored the query, ~$3 per 1,000).
+- [x] Per-source stats on `/discovery` (30 days): postings, screen passes, matches and unique matches, overlap with other boards, cost per match.
+- [x] Verified: unit tests, e2e on fixture feeds, live reads of every source ([verification.md](verification.md#more-sources-m16-2026-11-10)).
 
 ### M17 — Hosting
 - [x] Fly.io: one always-on machine with a volume (agent + web), password login, daily volume snapshots, SQLite on the volume. See "Deployment — Fly.io" below and [deploy.md](deploy.md).

@@ -5,11 +5,18 @@ import {
   listDiscoveryRuns,
   type SourceRunResult,
   type SourceState,
+  type SourceStats,
   screenedOutSince,
   sourceSpendSince,
   sourceStates,
+  sourceStatsSince,
 } from "@copilot/db";
-import { DISCOVERY_SOURCE_LABELS, DISCOVERY_SOURCES } from "@copilot/shared";
+import {
+  DISCOVERY_SOURCE_LABELS,
+  DISCOVERY_SOURCE_SITES,
+  DISCOVERY_SOURCES,
+  PAID_DISCOVERY_SOURCES,
+} from "@copilot/shared";
 import { cn } from "cn";
 import { ExternalLinkIcon, SettingsIcon } from "lucide-react";
 import Link from "next/link";
@@ -38,11 +45,8 @@ const formatTime = (d: Date) =>
   d.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
 const usd = (n: number) => `$${n.toFixed(n > 0 && n < 0.01 ? 4 : 2)}`;
 
-/** Free sources ask for credit on every page that shows their data. */
-const SOURCE_SITES: Record<string, string> = {
-  himalayas: "https://himalayas.app",
-  linkedin: "https://www.linkedin.com/jobs",
-};
+const percent = (part: number, whole: number) =>
+  whole > 0 ? `${Math.round((part / whole) * 100)}%` : "–";
 
 export default function DiscoveryPage() {
   return (
@@ -69,12 +73,14 @@ async function Discovery() {
   await connection(); // libsql is synchronous: keep these reads out of prerendering
   const db = await appDb();
   const now = Date.now();
+  const monthAgo = new Date(now - 30 * DAY_MS);
   const [runs, settings, spent, screenedOut] = await Promise.all([
     listDiscoveryRuns(db, 20),
     getSearchSettings(db),
-    sourceSpendSince(db, ["linkedin"], new Date(now - 30 * DAY_MS)),
+    sourceSpendSince(db, PAID_DISCOVERY_SOURCES, monthAgo),
     screenedOutSince(db, new Date(now - 7 * DAY_MS)),
   ]);
+  const stats = await sourceStatsSince(db, DISCOVERY_SOURCES, monthAgo, settings.triageThreshold);
   const running = runs[0]?.status === "running";
   const states = sourceStates(runs, DISCOVERY_SOURCES);
   const linkedin = settings.sources.linkedin;
@@ -86,23 +92,31 @@ async function Discovery() {
       <RefreshWhileRunning running={running} />
       <section className="flex flex-col gap-3">
         <p className="text-sm text-muted-foreground">
-          New postings are fetched twice a day while the main checkout's dev server runs (with{" "}
-          <code>DISCOVERY_SCHEDULE=on</code>). Each run asks every source for what was posted since
-          its last good run. Use a backfill for a first fill or after a long break.
+          New postings are fetched twice a day by the hosted app (or the main checkout's dev server,
+          with <code>DISCOVERY_SCHEDULE=on</code>). Each run asks every source for what was posted
+          since its last good run. Use a backfill for a first fill or after a long break.
         </p>
         <DiscoveryControls running={running} maxBackfillUsd={maxBackfillUsd} />
       </section>
 
-      <section aria-label="Sources" className="grid gap-3 sm:grid-cols-2">
-        {states.map((state) => (
-          <SourceCard
-            key={state.source}
-            state={state}
-            enabled={settings.sources[state.source].enabled}
-            spent={state.source === "linkedin" ? spent : null}
-            budget={settings.apifyMonthlyBudgetUsd}
-          />
-        ))}
+      <section aria-label="Sources" className="flex flex-col gap-2">
+        <p className="text-xs text-muted-foreground">
+          Last 30 days per source: postings found and passed by the screen, matches (triage at or
+          above {settings.triageThreshold}, kept, or acted on) and how many no other board had, the
+          share of jobs also seen on another board, and the cost per match.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {states.map((state) => (
+            <SourceCard
+              key={state.source}
+              state={state}
+              stats={stats.find((s) => s.source === state.source)}
+              enabled={settings.sources[state.source].enabled}
+              spent={PAID_DISCOVERY_SOURCES.includes(state.source) ? spent : null}
+              budget={settings.apifyMonthlyBudgetUsd}
+            />
+          ))}
+        </div>
       </section>
 
       <section aria-label="Runs" className="flex flex-col gap-2">
@@ -167,11 +181,13 @@ const STATUS_VARIANT = {
 
 function SourceCard({
   state,
+  stats,
   enabled,
   spent,
   budget,
 }: {
   state: SourceState;
+  stats: SourceStats | undefined;
   enabled: boolean;
   spent: number | null;
   budget: number;
@@ -181,7 +197,7 @@ function SourceCard({
     <div className="flex flex-col gap-1 rounded-lg border p-3 text-sm">
       <div className="flex items-center gap-2">
         <a
-          href={SOURCE_SITES[state.source]}
+          href={DISCOVERY_SOURCE_SITES[state.source]}
           target="_blank"
           rel="noopener"
           className="font-medium hover:underline"
@@ -196,9 +212,35 @@ function SourceCard({
         {state.lastOkAt ? `Last good run ${formatTime(state.lastOkAt)}` : "No good run yet"}
         {spent !== null && ` · ${usd(spent)} of ${usd(budget)} in 30 days`}
       </p>
+      {stats && stats.postings > 0 && (
+        <dl
+          aria-label={`${label} in the last 30 days`}
+          className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-muted-foreground"
+        >
+          <Stat label="Postings" value={`${stats.postings} (${stats.passed} passed)`} />
+          <Stat label="Matches" value={`${stats.matches} (${stats.uniqueMatches} only here)`} />
+          <Stat label="Match rate" value={percent(stats.matches, stats.jobs)} />
+          <Stat label="Also elsewhere" value={percent(stats.duplicates, stats.jobs)} />
+          {stats.costUsd > 0 && (
+            <Stat
+              label="Per match"
+              value={stats.matches > 0 ? usd(stats.costUsd / stats.matches) : "no matches"}
+            />
+          )}
+        </dl>
+      )}
       {state.last?.message && (
         <p className="text-xs text-muted-foreground">Last run: {state.last.message}</p>
       )}
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-2">
+      <dt>{label}</dt>
+      <dd className="tabular-nums text-foreground">{value}</dd>
     </div>
   );
 }

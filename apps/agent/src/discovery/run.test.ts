@@ -73,7 +73,7 @@ function stub(
   };
 }
 
-async function run(sources: Record<DiscoverySource, JobSource>, lookbackDays?: number) {
+async function run(sources: Partial<Record<DiscoverySource, JobSource>>, lookbackDays?: number) {
   const claim = await claimDiscoveryRun(db, { trigger: "manual", lookbackDays });
   if (!claim.runId) throw new Error("not claimed");
   const results = await runDiscoverySources(db, claim.runId, sources);

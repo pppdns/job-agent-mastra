@@ -326,8 +326,8 @@ flowchart LR
   subgraph WF[discover-jobs workflow]
     C[claim-run<br/>one at a time] --> F[fetch-sources] --> X[finish-run]
   end
-  F --> HIM[Himalayas API<br/>free]
-  F --> APIFY[Apify actor<br/>LinkedIn, per-run cap + monthly budget]
+  F --> HIM[Free APIs and feeds<br/>Himalayas, We Work Remotely, Remote OK, Remotive, NoDesk]
+  F --> APIFY[Apify actors<br/>LinkedIn, YC, Jobgether, Built In, Wellfound, HiringCafe, Dice<br/>per-run caps + monthly budget]
   F --> SCR{screenPosting<br/>clear misfits only}
   SCR -->|fails, with reasons| PO[(app_postings)]
   SCR -->|passes| DD[dedupe: apply URL or<br/>company key + title] --> J[(app_jobs + board snapshot)]
