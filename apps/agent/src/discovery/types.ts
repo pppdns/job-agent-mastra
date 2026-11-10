@@ -19,8 +19,10 @@ export type FetchOutcome = {
   invalid: number;
   /** Provider cost (USD, estimated from the source's own prices). */
   costUsd: number;
-  /** Set when only part of the work succeeded (e.g. one of several searches failed). */
+  /** Set when only part of the work was done (failed searches, or a cap stopped it). */
   partial?: string;
+  /** Searches that failed (provider or network errors, rate limits); empty when only a cap stopped it. */
+  failures?: string[];
 };
 
 /** A job board adapter: a pure mapping plus a thin fetch. */
@@ -35,3 +37,6 @@ export interface JobSource {
 
 /** A source failure with a short, secret-free message for the run page. */
 export class SourceError extends Error {}
+
+/** The provider asked us to wait longer than we retry for: stop asking it for this run. */
+export class CooldownError extends SourceError {}

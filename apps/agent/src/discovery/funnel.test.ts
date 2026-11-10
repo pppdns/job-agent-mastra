@@ -262,70 +262,99 @@ describe("problems and alerts", () => {
     assessFailed: 0,
     llmUsd: 0,
   };
+  const keys = (p: { key: string }[]) => p.map((x) => x.key);
 
-  it("names failed sources, budget stops, empty sources and failed steps, not expected caps", () => {
+  it("names failed sources and searches, budget stops, empty sources, failed calls and steps", () => {
     const problems = runProblems(
       {
         sources: [
-          result({ status: "failed", message: "Apify rejected the API key (401)" }),
-          result({ source: "himalayas", status: "ok", fetched: 0 }),
+          result({ status: "failed", message: "Apify run r1 failed" }),
+          result({
+            source: "himalayas",
+            status: "partial",
+            fetched: 0,
+            failures: ['"AI Engineer": himalayas.app answered 400'],
+          }),
         ],
       },
-      { ...funnel, stoppedBy: "triage failed: model down" },
+      { ...funnel, triaged: 0, triageFailed: 12, stoppedBy: "assessment failed: db locked" },
       [state({ unhealthy: true }), state({ source: "linkedin", unhealthy: true })],
     );
-    expect(problems).toEqual([
-      "LinkedIn failed: Apify rejected the API key (401)",
-      "Himalayas returned nothing in its last two runs",
-      "triage failed: model down",
+    expect(keys(problems)).toEqual([
+      "linkedin:failed",
+      "himalayas:searches-failed",
+      "himalayas:empty",
+      "triage:calls-failed",
+      "step:assessment",
     ]);
-    expect(
-      runProblems(
-        {
-          sources: [
-            result({
-              status: "skipped",
-              message: "monthly Apify budget reached (100.00 of 100.00 USD in 30 days)",
-            }),
-          ],
-        },
-        { ...funnel, stoppedBy: "per-run model spend cap ($2.00) reached" },
-        [],
-      ),
-    ).toEqual(["LinkedIn skipped: monthly Apify budget reached (100.00 of 100.00 USD in 30 days)"]);
-    expect(
-      runProblems(
-        { sources: [result({ status: "partial", message: "spend cap reached" })] },
-        funnel,
-        [],
-      ),
-    ).toEqual([]);
+    expect(problems[1]?.message).toBe(
+      'Himalayas: 1 search failed ("AI Engineer": himalayas.app answered 400)',
+    );
+    expect(problems[3]?.message).toBe("12 of 12 triage calls failed");
   });
 
-  it("sends a problems-only alert once a day, and puts problems on top of a digest", async () => {
+  it("ignores expected caps and a few failed calls", () => {
+    const capped = runProblems(
+      {
+        sources: [
+          result({ status: "partial", message: "spend cap reached after 0.50 USD", failures: [] }),
+        ],
+      },
+      {
+        ...funnel,
+        triaged: 396,
+        triageFailed: 4,
+        stoppedBy: "per-run model spend cap ($2.00) reached",
+      },
+      [],
+    );
+    expect(capped).toEqual([]);
+    expect(
+      keys(
+        runProblems(
+          {
+            sources: [
+              result({
+                status: "skipped",
+                message: "monthly Apify budget reached (100.00 of 100.00 USD in 30 days)",
+              }),
+            ],
+          },
+          funnel,
+          [],
+        ),
+      ),
+    ).toEqual(["linkedin:budget"]);
+  });
+
+  it("throttles alerts by stable keys within a day, and puts problems on top of a digest", async () => {
     const sent: { subject: string; text: string }[] = [];
     const http: HttpJson = async (_url, init) => {
       sent.push(init?.body as { subject: string; text: string });
       return { id: "e" };
     };
     const config = { apiKey: "re_x", to: "me@example.com", from: "a <b@c.d>", baseUrl: "http://x" };
-    const problems = ["LinkedIn failed: Apify run r1 failed"];
-    const alert = await sendDigest(http, config, [], problems);
-    expect(alert).toMatchObject({ status: "sent", alert: true, problems });
+    const first = [{ key: "linkedin:failed", message: "LinkedIn failed: Apify run r1 failed" }];
+    const alert = await sendDigest(http, config, [], first);
+    expect(alert).toMatchObject({ status: "sent", alert: true, problemKeys: ["linkedin:failed"] });
     expect(sent[0]?.subject).toBe(
       "Job discovery needs a look: LinkedIn failed: Apify run r1 failed",
     );
 
+    // The same failure with another run id in its message: still the same problem.
+    const again = [{ key: "linkedin:failed", message: "LinkedIn failed: Apify run r2 failed" }];
     const earlier = {
       id: "r0",
       startedAt: new Date(Date.now() - 3_600_000),
       funnel: { ...funnel, digest: alert },
     } as unknown as DiscoveryRun;
-    expect(alreadyAlerted(problems, [earlier])).toBe(true);
-    expect(await sendDigest(http, config, [], problems, [earlier])).toMatchObject({
+    expect(alreadyAlerted(again, [earlier])).toBe(true);
+    expect(await sendDigest(http, config, [], again, [earlier])).toMatchObject({
       status: "skipped",
       message: "same problems already emailed today",
     });
+    const dayOld = { ...earlier, startedAt: new Date(Date.now() - 25 * 3_600_000) } as DiscoveryRun;
+    expect(alreadyAlerted(again, [dayOld])).toBe(false);
     expect(sent).toHaveLength(1);
 
     const digest = await sendDigest(
@@ -343,7 +372,7 @@ describe("problems and alerts", () => {
           sources: [],
         },
       ],
-      problems,
+      again,
       [earlier],
     );
     expect(digest).toMatchObject({ status: "sent", message: "digest sent to me@example.com" });

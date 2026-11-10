@@ -164,6 +164,7 @@ export async function runDiscoverySources(
         ...base,
         status: outcome.partial ? "partial" : "ok",
         message: outcome.partial?.slice(0, 500),
+        ...(outcome.failures?.length ? { failures: outcome.failures.slice(0, 10) } : {}),
         fetched: outcome.postings.length,
         invalid: outcome.invalid,
         seen: counts.seen,

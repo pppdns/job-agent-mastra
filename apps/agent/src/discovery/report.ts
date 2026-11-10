@@ -23,43 +23,88 @@ export type Digest = { subject: string; text: string; html: string };
 /** Don't repeat an alert for the same problems within this long. */
 export const ALERT_REPEAT_MS = 24 * 3_600_000;
 
+/** Something that needs a look: a stable key (for the throttle) and a message (for the email). */
+export type Problem = { key: string; message: string };
+
+/** Per-job model failures count as a problem from this many, or when every call failed. */
+const MIN_FAILED_CALLS = 3;
+const MAX_FAILED_SHARE = 0.1;
+
+const failedMany = (failed: number, done: number) =>
+  failed > 0 &&
+  (done === 0 || (failed >= MIN_FAILED_CALLS && failed / (failed + done) >= MAX_FAILED_SHARE));
+
 /**
- * What needs a look after a run: failed sources, paid sources stopped by the monthly budget,
- * sources that returned nothing twice in a row, funnel steps that failed. Expected stops (the
- * per-run spend or triage caps) are not problems.
+ * What needs a look after a run: failed sources and failed searches of partial ones, paid
+ * sources stopped by the monthly budget, sources that returned nothing twice in a row, many
+ * failed triage or assessment calls, failed funnel steps. Expected stops (the per-run spend or
+ * triage caps) are not problems.
  */
 export function runProblems(
   run: Pick<DiscoveryRun, "sources">,
   funnel: FunnelResult,
   states: SourceState[],
-): string[] {
+): Problem[] {
   const label = (s: keyof typeof DISCOVERY_SOURCE_LABELS) => DISCOVERY_SOURCE_LABELS[s];
-  const problems = run.sources.flatMap((r) => {
-    if (r.status === "failed")
-      return [`${label(r.source)} failed: ${r.message ?? "unknown error"}`];
+  const problems: Problem[] = run.sources.flatMap((r): Problem[] => {
+    if (r.status === "failed") {
+      return [
+        {
+          key: `${r.source}:failed`,
+          message: `${label(r.source)} failed: ${r.message ?? "unknown error"}`,
+        },
+      ];
+    }
+    if (r.status === "partial" && r.failures?.length) {
+      const n = r.failures.length;
+      return [
+        {
+          key: `${r.source}:searches-failed`,
+          message: `${label(r.source)}: ${n} search${n === 1 ? "" : "es"} failed (${r.failures[0]})`,
+        },
+      ];
+    }
     if (r.status === "skipped" && /budget/i.test(r.message ?? "")) {
-      return [`${label(r.source)} skipped: ${r.message}`];
+      return [{ key: `${r.source}:budget`, message: `${label(r.source)} skipped: ${r.message}` }];
     }
     return [];
   });
   for (const state of states) {
     const result = run.sources.find((r) => r.source === state.source);
     if (state.unhealthy && result?.status !== "failed" && result?.status !== "skipped") {
-      problems.push(`${label(state.source)} returned nothing in its last two runs`);
+      problems.push({
+        key: `${state.source}:empty`,
+        message: `${label(state.source)} returned nothing in its last two runs`,
+      });
     }
   }
-  if (funnel.stoppedBy && / failed: /.test(funnel.stoppedBy)) problems.push(funnel.stoppedBy);
+  if (failedMany(funnel.triageFailed, funnel.triaged)) {
+    problems.push({
+      key: "triage:calls-failed",
+      message: `${funnel.triageFailed} of ${funnel.triageFailed + funnel.triaged} triage calls failed`,
+    });
+  }
+  if (failedMany(funnel.assessFailed, funnel.assessed)) {
+    problems.push({
+      key: "assess:calls-failed",
+      message: `${funnel.assessFailed} of ${funnel.assessFailed + funnel.assessed} assessments failed`,
+    });
+  }
+  const step = funnel.stoppedBy?.match(/^(\w+) failed: /)?.[1];
+  if (step && funnel.stoppedBy) problems.push({ key: `step:${step}`, message: funnel.stoppedBy });
   return problems;
 }
 
-/** An alert for these problems was already sent recently (by an earlier run). */
-export function alreadyAlerted(problems: string[], recent: DiscoveryRun[], now = Date.now()) {
-  const key = [...problems].sort().join("\n");
+const keyOf = (keys: string[]) => [...keys].sort().join("\n");
+
+/** An alert or digest naming the same problems was sent within ALERT_REPEAT_MS. */
+export function alreadyAlerted(problems: Problem[], recent: DiscoveryRun[], now = Date.now()) {
+  const key = keyOf(problems.map((p) => p.key));
   return recent.some(
     (r) =>
       r.funnel?.digest?.status === "sent" &&
-      (r.funnel.digest.problems ?? []).length > 0 &&
-      [...(r.funnel.digest.problems ?? [])].sort().join("\n") === key &&
+      (r.funnel.digest.problemKeys ?? []).length > 0 &&
+      keyOf(r.funnel.digest.problemKeys ?? []) === key &&
       now - r.startedAt.getTime() < ALERT_REPEAT_MS,
   );
 }
@@ -152,10 +197,15 @@ export async function sendDigest(
   http: HttpJson,
   config: DigestConfig,
   matches: DigestMatch[],
-  problems: string[] = [],
+  problems: Problem[] = [],
+  /** Runs of the last ALERT_REPEAT_MS (for the throttle). */
   recent: DiscoveryRun[] = [],
 ): Promise<NonNullable<FunnelResult["digest"]>> {
-  const base = { matches: matches.length, ...(problems.length > 0 ? { problems } : {}) };
+  const messages = problems.map((p) => p.message);
+  const base = {
+    matches: matches.length,
+    ...(problems.length > 0 ? { problems: messages, problemKeys: problems.map((p) => p.key) } : {}),
+  };
   if (matches.length === 0 && problems.length === 0) {
     return { status: "skipped", message: "no new matches", ...base };
   }
@@ -171,8 +221,8 @@ export async function sendDigest(
   }
   const alert = matches.length === 0;
   const email = alert
-    ? buildAlert(problems, config.baseUrl)
-    : buildDigest(matches, config.baseUrl, problems);
+    ? buildAlert(messages, config.baseUrl)
+    : buildDigest(matches, config.baseUrl, messages);
   try {
     await http(new URL(RESEND_URL), {
       method: "POST",

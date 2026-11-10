@@ -5,7 +5,13 @@ import {
   type SearchSettings,
 } from "@copilot/shared";
 import { htmlToText, httpUrl, plainMarkdown, str } from "../text";
-import { type FetchContext, type FetchOutcome, type JobSource, SourceError } from "../types";
+import {
+  CooldownError,
+  type FetchContext,
+  type FetchOutcome,
+  type JobSource,
+  SourceError,
+} from "../types";
 import { type ActorPrices, type ApifyRunner, RESULT_EVENT, START_EVENT } from "./apify";
 
 // LinkedIn via the Apify actor `valig/linkedin-jobs-scraper` (pay per result; guest job search).
@@ -148,11 +154,13 @@ export function createLinkedInSource(runActor: ApifyRunner | null): JobSource {
       const byId = new Map<string, PostingInput>();
       let invalid = 0;
       let costUsd = 0;
-      const problems: string[] = [];
+      const failures: string[] = [];
+      const notes: string[] = [];
+      let succeeded = 0;
       for (const search of searches) {
         const remaining = context.maxUsd - costUsd;
         if (remaining < 0.01) {
-          problems.push(`spend cap reached after ${costUsd.toFixed(2)} USD`);
+          notes.push(`spend cap reached after ${costUsd.toFixed(2)} USD`);
           break;
         }
         try {
@@ -163,7 +171,8 @@ export function createLinkedInSource(runActor: ApifyRunner | null): JobSource {
             signal: context.signal,
           });
           costUsd += result.costUsd;
-          if (result.partial) problems.push(result.partial);
+          if (result.partial) failures.push(result.partial);
+          else succeeded += 1;
           for (const raw of result.items) {
             const posting = parseLinkedInItem(raw);
             if (posting) byId.set(posting.externalId, posting);
@@ -174,17 +183,21 @@ export function createLinkedInSource(runActor: ApifyRunner | null): JobSource {
           const message = error instanceof Error ? error.message : "failed";
           // The key or the account is the problem: no point in trying the other searches.
           if (/401|402/.test(message)) throw new SourceError(message);
-          problems.push(`"${search.keywords}" in ${search.location}: ${message}`);
+          failures.push(`"${search.keywords}" in ${search.location}: ${message}`);
+          // Rate limited for longer than we retry: stop asking for this run.
+          if (error instanceof CooldownError) break;
         }
       }
-      if (byId.size === 0 && problems.length > 0 && problems.length >= searches.length) {
-        throw new SourceError(`every search failed (${problems[0]})`);
+      if (succeeded === 0 && byId.size === 0 && failures.length > 0) {
+        throw new SourceError(`no search succeeded (${failures[0]})`);
       }
+      const partial = [...failures, ...notes];
       return {
         postings: [...byId.values()],
         invalid,
         costUsd,
-        partial: problems.length > 0 ? problems.slice(0, 5).join("; ") : undefined,
+        partial: partial.length > 0 ? partial.slice(0, 5).join("; ") : undefined,
+        failures,
       };
     },
   };

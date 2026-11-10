@@ -141,6 +141,14 @@ export async function listDiscoveryRuns(db: Db, limit = 30): Promise<DiscoveryRu
   return db.query.discoveryRuns.findMany({ orderBy: desc(discoveryRuns.startedAt), limit });
 }
 
+/** Runs started since a date, newest first (e.g. the alert throttle's 24 hours). */
+export async function discoveryRunsSince(db: Db, since: Date): Promise<DiscoveryRun[]> {
+  return db.query.discoveryRuns.findMany({
+    where: gte(discoveryRuns.startedAt, since),
+    orderBy: desc(discoveryRuns.startedAt),
+  });
+}
+
 export async function getDiscoveryRun(db: Db, runId: string): Promise<DiscoveryRun | undefined> {
   return db.query.discoveryRuns.findFirst({ where: eq(discoveryRuns.id, runId) });
 }

@@ -1,6 +1,12 @@
 import { type PostingInput, postingInputSchema, type SalaryPeriod } from "@copilot/shared";
 import { htmlToText, httpUrl, num, str } from "../text";
-import { type FetchContext, type FetchOutcome, type JobSource, SourceError } from "../types";
+import {
+  CooldownError,
+  type FetchContext,
+  type FetchOutcome,
+  type JobSource,
+  SourceError,
+} from "../types";
 import type { HttpJson } from "./http";
 
 // Himalayas' official, free Remote Jobs API (https://himalayas.app/docs/remote-jobs-api).
@@ -105,6 +111,7 @@ export function createHimalayasSource(
       let invalid = 0;
       const failed: string[] = [];
       let requests = 0;
+      let cooledDown = false;
       for (const query of settings.queries) {
         try {
           for (let page = 1; page <= maxPages; page++) {
@@ -136,16 +143,23 @@ export function createHimalayasSource(
         } catch (error) {
           if (signal?.aborted) throw error;
           failed.push(`"${query}": ${error instanceof Error ? error.message : "failed"}`);
+          // Rate limited for longer than we retry: stop asking for this run.
+          if (error instanceof CooldownError) {
+            cooledDown = true;
+            break;
+          }
         }
       }
-      if (failed.length === settings.queries.length && settings.queries.length > 0) {
-        throw new SourceError(`every search failed (${failed[0]})`);
+      const allFailed = failed.length > 0 && failed.length === settings.queries.length;
+      if (byId.size === 0 && (allFailed || cooledDown)) {
+        throw new SourceError(`${allFailed ? "every search failed" : "stopped"} (${failed[0]})`);
       }
       return {
         postings: [...byId.values()],
         invalid,
         costUsd: 0,
         partial: failed.length > 0 ? `some searches failed: ${failed.join("; ")}` : undefined,
+        failures: failed,
       };
     },
   };
