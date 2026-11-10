@@ -167,6 +167,45 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - [x] `/profile` edits apply right away (`editProfile`, checked against the version the page showed). Profile changes the copilot proposes in a chat still need approval (guards against injected memory changes).
 - [x] Verified: db tests (history, direct edits, stale edit refused, edit makes an older chat proposal stale), migration on a copy of the dev DB, e2e `assessments.spec.ts` (v1 → v2 with history, no approve controls), updated profile/rescore/listing/research specs.
 
+## Job discovery (agreed 2026-11-10)
+
+Scheduled ingestion from job boards, reported as an inbox plus an email digest. This supersedes the brief's "automatic job discovery" out-of-scope line.
+
+| Area | Choice | Why |
+| --- | --- | --- |
+| Scheduler | Mastra scheduled workflow `discover-jobs` (`schedule.cron`, state in libSQL, Studio `/workflows/schedules`), twice a day; "Run now" for gaps | Native, traced, no extra service; needs a long-lived process (local `pnpm dev`, later a host) |
+| Funnel | Deterministic screen → Haiku triage score (0–100 + reason) → full Sonnet assessment for the top N per run | About $1–2/day instead of $10–20 for assessing everything |
+| Criteria | Structured search settings (one JSON row) for the screen and source queries; triage and assessment read the profile facts | Deterministic filters must be predictable and debuggable (reasons are stored) |
+| Volume | Postings failing the screen stay in `app_postings` and never become jobs; jobs under the triage threshold are hidden by one predicate | Chat tools, FTS, re-score keep working on jobs worth seeing |
+| Dedupe | Posting (source, external id) → off-board apply URL → company key + title; ATS id later | Same job on several boards becomes one job with several postings |
+| Hard sites | Apify actors (LinkedIn, Wellfound, HiringCafe), low volume, capped | Maintained scrapers; accepted ToS risk for personal use |
+
+### M13 — Discovery foundation (Himalayas + We Work Remotely, no LLM)
+- [ ] `app_postings`, `app_search_settings`, `app_discovery_runs`; `app_jobs` gains `origin`, `company_key`, triage, `kept_at`, `seen_at`; dedupe key uses the company key (backfill).
+- [ ] Shared search settings, posting schema, `screenPosting` (reasons), `companyKey`.
+- [ ] Source adapters (Himalayas API, WWR RSS) with fixtures (`WEB_MODE=fixture`).
+- [ ] `discover-jobs` workflow: fetch → postings → screen → jobs + board snapshot → run record; schedule only in the main checkout with `DISCOVERY_SCHEDULE=on`; one run at a time; interrupted sweep at startup.
+- [ ] UI: `/settings/search` (save re-screens), `/discovery` runs with per-source health, "Run now", source badge on jobs.
+- [ ] Verified: unit tests, e2e on fixture sources, one live run.
+
+### M14 — Scoring funnel + report
+- [ ] Triage agent (fast model, no tools, budgeted), `assessJob` shared with re-score, top-N assessments, usage on a `discovery:<runId>` thread.
+- [ ] Resend email digest; "new matches" badge from unseen jobs.
+- [ ] Triage evals (match, hard conflict, injection); live scheduled fire.
+
+### M15 — UI for daily volume + companies
+- [ ] Paging and tab counts in SQL; New tab as an inbox (score sort, unseen, filters, bulk shortlist/dismiss); "Screened out" tab with reasons and "Keep anyway".
+- [ ] Job page triage card, "Assess fully", "Seen on" postings; `app_companies` and a company page.
+
+### M16 — More easy sources + ATS enrichment
+- [ ] RemoteOK, Remotive (attribution), NoDesk, Tech Jobs for Good; ATS resolver (Greenhouse, Lever, Ashby, Workable) as the strongest dedupe key; YC jobs sitemap; Built In / Arc via Firecrawl; per-source match and duplicate rates.
+
+### M17 — Hosting
+- [ ] One long-lived host with a volume (agent + web), real auth, backups; SQLite on the volume or Turso.
+
+### M18 — Hard and medium sources
+- [ ] Apify actors for LinkedIn, Wellfound, HiringCafe (caps per source); Welcome to the Jungle, Dice, Levels.fyi, TrueUp, Jobgether, PowerToFly, JustRemote, Climatebase via Firecrawl or Apify. Skipped: FlexJobs (paid login), AIJobs.net (shut down).
+
 ## Simplifications chosen (tell me if any is unacceptable)
 
 1. **Reconnect across agent-server restarts** would need Redis (shared event cache). Plan: in-process cache — browser refresh/reconnect works; after a server restart the run is marked interrupted with partial results kept, and you re-ask. Redis can be added later without redesign.
