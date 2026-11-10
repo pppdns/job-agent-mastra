@@ -144,8 +144,9 @@ describe("LinkedIn (Apify)", () => {
       skipJobId: ["1", "2"],
       titleExclude: s.titleExclude,
     });
-    expect(datePostedFor(new Date("2026-11-05T00:00:00Z"), now)).toBe("r604800");
-    expect(datePostedFor(new Date("2026-10-11T00:00:00Z"), now)).toBe("r2592000");
+    expect(datePostedFor(new Date("2026-11-05T00:00:00Z"), false, now)).toBe("r604800");
+    expect(datePostedFor(new Date("2026-10-27T00:00:00Z"), false, now)).toBe("r604800");
+    expect(datePostedFor(new Date("2026-10-11T00:00:00Z"), true, now)).toBe("r2592000");
     const backfill = linkedInSearches(s, { since: now, backfill: true, knownIds: [] }, now);
     expect(backfill[0]?.limit).toBe(200);
   });
@@ -185,7 +186,9 @@ describe("Apify runner", () => {
       urls.push(`${init?.method ?? "GET"} ${url.pathname}${url.search}`);
       if (url.pathname.endsWith("/runs")) return run("RUNNING");
       if (url.pathname.includes("/actor-runs/"))
-        return run("SUCCEEDED", { chargedEventCounts: { result: 2, "apify-actor-start": 1 } });
+        return run("SUCCEEDED", {
+          chargedEventCounts: { "apify-default-dataset-item": 2, "apify-actor-start": 1 },
+        });
       return [{ id: "1" }, { id: "2" }];
     };
     const result = await createApifyRunner(http, "token")(
@@ -223,7 +226,22 @@ describe("Apify runner", () => {
     await expect(createApifyRunner(broke, "t")("a/b", {}, options)).rejects.toThrow("usage limit");
   });
 
-  it("estimates cost from item count when the run doesn't report events", () => {
+  it("takes Apify's reported cost, else the run's event prices, else ours", () => {
+    expect(runCost({ usageTotalUsd: 0.0189 }, LINKEDIN_PRICES, 50)).toBe(0.0189);
+    expect(
+      runCost(
+        {
+          chargedEventCounts: { "apify-default-dataset-item": 50, "apify-actor-start": 1 },
+          pricingInfo: {
+            pricingPerEvent: {
+              actorChargeEvents: { "apify-default-dataset-item": { eventPriceUsd: 0.001 } },
+            },
+          },
+        },
+        LINKEDIN_PRICES,
+        50,
+      ),
+    ).toBeCloseTo(50 * 0.001 + 0.0009);
     expect(runCost({}, LINKEDIN_PRICES, 10)).toBeCloseTo(10 * 0.00036 + 0.0009);
   });
 });

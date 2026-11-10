@@ -11,7 +11,7 @@ const PAGE = 1_000;
 const MAX_ITEMS = 5_000;
 const TERMINAL = new Set(["SUCCEEDED", "FAILED", "TIMED-OUT", "ABORTED"]);
 
-/** Event prices of an actor (USD per event), for the cost estimate. */
+/** Event prices of an actor (USD per Apify event name), used when a run doesn't report its cost. */
 export type ActorPrices = Record<string, number>;
 
 export type ActorRunResult = {
@@ -25,8 +25,17 @@ type Run = {
   id: string;
   status: string;
   defaultDatasetId: string;
+  /** What Apify charged for the run (pay-per-event actors: the events), USD. */
+  usageTotalUsd?: number;
   chargedEventCounts?: Record<string, number>;
+  pricingInfo?: {
+    pricingPerEvent?: { actorChargeEvents?: Record<string, { eventPriceUsd?: number }> };
+  };
 };
+
+/** Apify's event names for one dataset result and the start fee of pay-per-event actors. */
+export const RESULT_EVENT = "apify-default-dataset-item";
+export const START_EVENT = "apify-actor-start";
 
 export type ApifyRunner = (
   actorId: string,
@@ -34,10 +43,23 @@ export type ApifyRunner = (
   options: { maxUsd: number; timeoutSecs: number; prices: ActorPrices; signal?: AbortSignal },
 ) => Promise<ActorRunResult>;
 
-/** Estimated charge: the run's own event counts times the actor's prices. */
-export function runCost(run: Pick<Run, "chargedEventCounts">, prices: ActorPrices, items: number) {
-  const counts = run.chargedEventCounts ?? { result: items, "apify-actor-start": 1 };
-  return Object.entries(counts).reduce((sum, [event, n]) => sum + (prices[event] ?? 0) * n, 0);
+/**
+ * What the run cost: Apify's own `usageTotalUsd` when it reports one; otherwise the charged
+ * event counts times the run's event prices (falling back to our price table); otherwise items
+ * plus one start at our prices.
+ */
+export function runCost(
+  run: Pick<Run, "usageTotalUsd" | "chargedEventCounts" | "pricingInfo">,
+  prices: ActorPrices,
+  items: number,
+) {
+  if (typeof run.usageTotalUsd === "number" && run.usageTotalUsd > 0) return run.usageTotalUsd;
+  const runPrices = run.pricingInfo?.pricingPerEvent?.actorChargeEvents ?? {};
+  const counts = run.chargedEventCounts ?? { [RESULT_EVENT]: items, [START_EVENT]: 1 };
+  return Object.entries(counts).reduce(
+    (sum, [event, n]) => sum + (runPrices[event]?.eventPriceUsd ?? prices[event] ?? 0) * n,
+    0,
+  );
 }
 
 export function createApifyRunner(http: HttpJson, token: string): ApifyRunner {

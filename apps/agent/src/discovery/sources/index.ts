@@ -4,7 +4,7 @@ import { findWorkspaceRoot } from "@copilot/db";
 import type { DiscoverySource } from "@copilot/shared";
 import { env } from "../../env";
 import type { JobSource } from "../types";
-import { type ApifyRunner, createApifyRunner } from "./apify";
+import { type ApifyRunner, createApifyRunner, RESULT_EVENT } from "./apify";
 import { createHimalayasSource } from "./himalayas";
 import { type HttpJson, httpJson } from "./http";
 import { createLinkedInSource } from "./linkedin";
@@ -51,7 +51,7 @@ const fixtureRunner: ApifyRunner = async (_actor, _input, { prices }) => {
       i.postedDate = new Date(ms).toISOString();
     },
   );
-  return { items, costUsd: (prices.result ?? 0) * items.length };
+  return { items, costUsd: (prices[RESULT_EVENT] ?? 0) * items.length };
 };
 
 /** The discovery sources, live or (WEB_MODE=fixture) offline. */

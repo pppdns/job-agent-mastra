@@ -6,7 +6,7 @@ import {
 } from "@copilot/shared";
 import { htmlToText, httpUrl, plainMarkdown, str } from "../text";
 import { type FetchContext, type FetchOutcome, type JobSource, SourceError } from "../types";
-import type { ActorPrices, ApifyRunner } from "./apify";
+import { type ActorPrices, type ApifyRunner, RESULT_EVENT, START_EVENT } from "./apify";
 
 // LinkedIn via the Apify actor `valig/linkedin-jobs-scraper` (pay per result; guest job search).
 // LinkedIn's guest data has no reliable remote flag (the workplace URL filter is ignored), so
@@ -15,8 +15,8 @@ import type { ActorPrices, ApifyRunner } from "./apify";
 
 export const LINKEDIN_ACTOR = "valig/linkedin-jobs-scraper";
 
-/** Bronze-tier event prices (Apify Store, 2026-11-10); only used to estimate cost. */
-export const LINKEDIN_PRICES: ActorPrices = { result: 0.00036, "apify-actor-start": 0.0009 };
+/** Bronze-tier event prices (Apify, 2026-11-10); only used when a run doesn't report its cost. */
+export const LINKEDIN_PRICES: ActorPrices = { [RESULT_EVENT]: 0.00036, [START_EVENT]: 0.0009 };
 
 const BACKFILL_LIMIT_FACTOR = 4;
 const BACKFILL_USD_FACTOR = 4;
@@ -24,11 +24,16 @@ const MAX_SKIP_IDS = 1_000;
 const RUN_TIMEOUT_SECS = 300;
 const HOUR_MS = 3_600_000;
 
-/** LinkedIn's posting-age filter that covers everything since `since`. */
-export function datePostedFor(since: Date, now: Date = new Date()): string {
+/**
+ * LinkedIn's posting-age filter covering `since`. Only a backfill may ask for the past month:
+ * LinkedIn has no 14-day window, and paying for a month of results the age screen then drops
+ * (measured: about a third of a first run) isn't worth it. A long gap without a backfill reads
+ * the past week.
+ */
+export function datePostedFor(since: Date, backfill: boolean, now: Date = new Date()): string {
   const hours = (now.getTime() - since.getTime()) / HOUR_MS;
   if (hours <= 24) return "r86400";
-  if (hours <= 24 * 7) return "r604800";
+  if (hours <= 24 * 7 || !backfill) return "r604800";
   return "r2592000";
 }
 
@@ -53,7 +58,7 @@ export function linkedInSearches(
     locations.map((location) => ({
       keywords,
       location,
-      datePosted: datePostedFor(context.since, now),
+      datePosted: datePostedFor(context.since, context.backfill, now),
       limit,
       titleExclude: settings.titleExclude,
       skipJobId: context.knownIds.slice(0, MAX_SKIP_IDS),
