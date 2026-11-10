@@ -173,3 +173,13 @@ Live models, offline web (fixtures). Judge scores are evidence, not truth. Detai
 - Apify boards, one tiny live run each through the adapters (2 phrases, 10 results, $0.05 cap): YC 12 fetched / 12 pass; Jobgether 20 / 18 (a long EMEA country list was cut and falsely rejected; such lists now count as unrestricted); Built In 29 / 9 with `remoteMode: "remote"` (46 / 3 without); Wellfound 2 / 2; HiringCafe 17 / 17, all with ATS apply links and full descriptions; Dice 18 / 2 (mostly on-site US, now off by default). The first YC/Jobgether runs failed with 400 until `dedupe.key` was sent. Total spend about $0.17 (research runs included).
 - Offline: unit tests for every parser, the RSS reader, region parsing, the feed and actor loops, source stats; e2e runs discovery on fixture feeds (cross-board merges, screen reasons from the new boards, source badges).
 - Not yet exercised: a full scheduled run with every source on Fly (the first one after this deploy).
+
+## Sentry (2026-11-10)
+
+Live, on local production builds (bundled agent run like `start-prod.sh`, `next build` + `next start`) with the DSN and `environment=verification`. All three errors reached project `job-copilot`:
+
+- Agent startup crash (uncaught, bad `DATABASE_URL`): culprit `createStorage(storage.ts)`, so the source-mapped frames point at `src/`.
+- Failed chat run (invalid gateway key): `GatewayAuthenticationError`, tags `area=chat`, `service=agent`, release set. No headers, cookies or body.
+- Web route error (a temporary throwing route, removed afterwards): captured through `onRequestError`.
+
+Not verified: browser errors and web source-map upload (needs the `SENTRY_AUTH_TOKEN` repo secret), and the Fly deploy itself. Sentry stores the client IP as the event's user unless the project's "Prevent Storing of IP Addresses" setting is on.
