@@ -201,10 +201,18 @@ Scheduled ingestion from job boards, reported as an inbox plus an email digest. 
 - [ ] Direct feeds: We Work Remotely, RemoteOK (followed link-back), Remotive (attribution), NoDesk. Apify definitions: HiringCafe, Welcome to the Jungle, Wellfound, Dice, Built In, YC, Jobgether. Per-source match rate, duplicate rate and cost per match.
 
 ### M17 — Hosting
-- [ ] One long-lived host with a volume (agent + web), real auth, backups; SQLite on the volume or Turso.
+- [x] Fly.io: one always-on machine with a volume (agent + web), password login, daily volume snapshots, SQLite on the volume. See "Deployment — Fly.io" below and [deploy.md](deploy.md).
+- [ ] Turn the discovery schedule on there (`DISCOVERY_SCHEDULE`, discovery secrets).
 
 ### M18 — ATS enrichment
 - [ ] Compare the `fantastic-jobs/career-site-job-listing-feed` actor with a hand-built Greenhouse/Lever/Ashby/Workable resolver; `ats_key` as the strongest dedupe key. Skipped boards: TrueUp, Tech Jobs for Good, Arc.dev, JustRemote, PowerToFly, Climatebase, Levels.fyi (no maintained actor), FlexJobs (paid login), AIJobs.net (shut down).
+
+### Deployment — Fly.io (2026-11-10)
+- [x] Password login page (`APP_PASSWORD`, signed 30-day cookie, per-client throttle); off when unset.
+- [x] One image runs both servers ([Dockerfile](../Dockerfile), [scripts/start-prod.sh](../scripts/start-prod.sh)); `fly.toml`: one always-on machine, `/data` volume, agent and Studio only through `fly proxy`.
+- [x] Secrets via `pnpm fly:secrets`; GitHub Action deploys on push to `main`.
+- [x] Verified live: copied local DB, restart persistence, Studio via proxy, auth redirects/401s ([verification](verification.md#flyio-deployment--password-login-2026-11-10)).
+- [ ] Verified live: sign-in with the real password + chat turn; deploy from the Action.
 
 ## Simplifications chosen (tell me if any is unacceptable)
 

@@ -1,21 +1,26 @@
 import { unseenMatchCount } from "@copilot/db";
+import { LogOutIcon } from "lucide-react";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { logoutAction } from "@/app/login/actions";
 import { NavLinks } from "@/components/nav-links";
 import { NewChatButton } from "@/components/new-chat-button";
 import { ThreadList } from "@/components/thread-list";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { appDb } from "@/server/db";
+import { loginEnabled } from "@/server/session";
 import { listThreads } from "@/server/threads";
 
 export function AppSidebar() {
@@ -39,7 +44,30 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <Suspense fallback={null}>
+        <SignOut />
+      </Suspense>
     </Sidebar>
+  );
+}
+
+/** Runtime check: the image is built without APP_PASSWORD, so a prerendered value would be wrong. */
+async function SignOut() {
+  await connection();
+  if (!loginEnabled()) return null;
+  return (
+    <SidebarFooter>
+      <form action={logoutAction}>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton type="submit">
+              <LogOutIcon />
+              Sign out
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </form>
+    </SidebarFooter>
   );
 }
 

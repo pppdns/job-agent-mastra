@@ -62,8 +62,9 @@ export const mastra = new Mastra({
     },
   }),
   server: {
-    // Single-user local mode: loopback only, every API call needs the shared secret.
-    host: "127.0.0.1",
+    // Loopback by default; every API call needs the shared secret. Fly sets AGENT_HOST="::" so
+    // `fly proxy` reaches Studio over the private org network (never a public port; docs/deploy.md).
+    host: process.env.AGENT_HOST || "127.0.0.1",
     port: Number(process.env.AGENT_PORT ?? 4111),
     auth: new SimpleAuth({
       tokens: { [env.AGENT_SHARED_SECRET]: { id: LOCAL_USER_ID } },
