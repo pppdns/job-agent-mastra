@@ -1,3 +1,4 @@
+import { SENTRY_DATA_COLLECTION } from "@copilot/shared";
 import type { ContextWithMastra } from "@mastra/core/server";
 import * as Sentry from "@sentry/node";
 
@@ -13,7 +14,8 @@ if (sentryEnabled) {
     dsn: process.env.SENTRY_DSN,
     environment: process.env.SENTRY_ENVIRONMENT || "production",
     release: process.env.SENTRY_RELEASE || undefined,
-    // No dataCollection: the SDK's conservative defaults (no headers, cookies, bodies or user info).
+    // Everything off: v11 would otherwise send headers, cookies, bodies, user info and model I/O.
+    dataCollection: SENTRY_DATA_COLLECTION,
     // Agent traces stay in Mastra's own observability; Sentry gets errors only.
     tracesSampleRate: 0,
     initialScope: { tags: { service: "agent" } },
