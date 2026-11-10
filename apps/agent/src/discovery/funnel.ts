@@ -2,20 +2,24 @@ import {
   type Db,
   DISCOVERY_THREAD_PREFIX,
   digestMatches,
+  discoveryRunsSince,
   endRun,
   type FunnelResult,
   getDiscoveryRun,
   getSearchSettings,
+  listDiscoveryRuns,
   recordFunnel,
+  sourceStates,
   startRun,
   threadUsage,
 } from "@copilot/db";
+import { DISCOVERY_SOURCES } from "@copilot/shared";
 import type { TracingContext } from "@mastra/core/observability";
 import { env } from "../env";
 import { RunRecorder } from "../usage/recorder";
 import { assessTopMatches } from "./assess";
 import { DiscoveryBudget } from "./budget";
-import { sendDigest } from "./report";
+import { ALERT_REPEAT_MS, runProblems, sendDigest } from "./report";
 import { httpJson } from "./sources/http";
 import { triageJobs } from "./triage";
 
@@ -139,7 +143,14 @@ async function assess(db: Db, runId: string, funnel: FunnelResult, context: Step
 }
 
 async function report(db: Db, runId: string, funnel: FunnelResult) {
-  const [run, settings] = await Promise.all([getDiscoveryRun(db, runId), getSearchSettings(db)]);
+  const [run, settings, recent, lastDay] = await Promise.all([
+    getDiscoveryRun(db, runId),
+    getSearchSettings(db),
+    listDiscoveryRuns(db, 20),
+    // The whole throttle window, however many runs it holds.
+    discoveryRunsSince(db, new Date(Date.now() - ALERT_REPEAT_MS)),
+  ]);
+  const problems = run ? runProblems(run, funnel, sourceStates(recent, DISCOVERY_SOURCES)) : [];
   const matches = await digestMatches(db, {
     since: run?.startedAt ?? new Date(),
     threshold: settings.triageThreshold,
@@ -153,6 +164,8 @@ async function report(db: Db, runId: string, funnel: FunnelResult) {
       baseUrl: env.APP_BASE_URL,
     },
     matches,
+    problems,
+    lastDay.filter((r) => r.id !== runId),
   );
   const next: FunnelResult = { ...funnel, digest };
   await recordFunnel(db, runId, next);

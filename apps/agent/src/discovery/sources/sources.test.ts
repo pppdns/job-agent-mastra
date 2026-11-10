@@ -4,7 +4,7 @@ import { findWorkspaceRoot } from "@copilot/db";
 import { DEFAULT_SEARCH_SETTINGS, type SearchSettings } from "@copilot/shared";
 import { describe, expect, it } from "vitest";
 import type { FetchContext } from "../types";
-import { SourceError } from "../types";
+import { CooldownError, SourceError } from "../types";
 import { type ApifyRunner, createApifyRunner, runCost } from "./apify";
 import { createHimalayasSource, parseHimalayasJob } from "./himalayas";
 import type { HttpJson } from "./http";
@@ -67,7 +67,7 @@ describe("Himalayas", () => {
       const pubDate = page === 1 ? 2_000_000_000 : 1_000;
       return { jobs: jobs.slice(0, 2).map((j) => ({ ...(j as object), pubDate })) };
     };
-    const source = createHimalayasSource(http);
+    const source = createHimalayasSource(http, undefined, 0);
     const result = await source.fetch(
       context({
         settings: settings({ queries: ["a", "b"] }),
@@ -79,17 +79,38 @@ describe("Himalayas", () => {
     expect(result.partial).toBeUndefined();
   });
 
+  it("stops every search once rate limited for longer than it retries", async () => {
+    const asked: string[] = [];
+    const limited: HttpJson = async (url) => {
+      asked.push(url.searchParams.get("q") ?? "");
+      if (asked.length === 1)
+        return {
+          jobs: jobs.slice(0, 1).map((j) => ({ ...(j as object), pubDate: 2_000_000_000 })),
+        };
+      throw new CooldownError("himalayas.app is rate limiting (asked to wait 120 s)");
+    };
+    const result = await createHimalayasSource(limited, undefined, 0).fetch(
+      context({ settings: settings({ queries: ["a", "b", "c", "d"] }), since: new Date(0) }),
+    );
+    // Page 1 of "a" worked, page 2 of "a" hit the cooldown: "b", "c" and "d" were never asked.
+    expect(asked).toEqual(["a", "a"]);
+    expect(result.postings).toHaveLength(1);
+    expect(result.failures).toEqual(['"a": himalayas.app is rate limiting (asked to wait 120 s)']);
+  });
+
   it("reports some failed searches as partial and all failed as an error", async () => {
     const flaky: HttpJson = async (url) => {
       if (url.searchParams.get("q") === "bad") throw new SourceError("himalayas.app answered 400");
       return { jobs: [] };
     };
-    const partial = await createHimalayasSource(flaky).fetch(
+    const partial = await createHimalayasSource(flaky, undefined, 0).fetch(
       context({ settings: settings({ queries: ["good", "bad"] }) }),
     );
     expect(partial.partial).toContain('"bad": himalayas.app answered 400');
     await expect(
-      createHimalayasSource(flaky).fetch(context({ settings: settings({ queries: ["bad"] }) })),
+      createHimalayasSource(flaky, undefined, 0).fetch(
+        context({ settings: settings({ queries: ["bad"] }) }),
+      ),
     ).rejects.toThrow("every search failed");
   });
 });
@@ -164,6 +185,24 @@ describe("LinkedIn (Apify)", () => {
     expect(result.costUsd).toBeCloseTo(0.6);
     expect(result.postings).toHaveLength(2);
     expect(result.partial).toContain("spend cap reached");
+    expect(result.failures).toEqual([]);
+  });
+
+  it("separates failed searches from cap stops, and stops at a cooldown", async () => {
+    let runs = 0;
+    const runner: ApifyRunner = async () => {
+      runs += 1;
+      if (runs === 1) return { items: items.slice(0, 2), costUsd: 0.01 };
+      throw new CooldownError("api.apify.com is rate limiting (asked to wait 300 s)");
+    };
+    const result = await createLinkedInSource(runner).fetch(
+      context({ settings: settings({ queries: ["a", "b", "c"] }) }),
+    );
+    expect(runs).toBe(2);
+    expect(result.postings).toHaveLength(2);
+    expect(result.failures).toEqual([
+      '"a" in United States: api.apify.com is rate limiting (asked to wait 300 s)',
+    ]);
   });
 
   it("is unavailable without an Apify key and fails fast on 402", async () => {

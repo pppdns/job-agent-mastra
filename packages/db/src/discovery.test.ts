@@ -286,6 +286,14 @@ describe("discovery runs", () => {
     const [himalayas, linkedin] = sourceStates(runs, ["himalayas", "linkedin"]);
     expect(himalayas).toMatchObject({ lastOkAt: new Date(3), unhealthy: true });
     expect(linkedin).toMatchObject({ lastOkAt: new Date(1), unhealthy: true });
+
+    // A partial run (one search failed) doesn't move the cursor past the failed window.
+    const partial = [
+      run([{ ...base, source: "linkedin", status: "partial", fetched: 3 }], new Date(5)),
+      ...runs,
+    ];
+    const [, afterPartial] = sourceStates(partial, ["himalayas", "linkedin"]);
+    expect(afterPartial).toMatchObject({ lastOkAt: new Date(1), unhealthy: false });
   });
 
   it("lists known board ids for a source", async () => {

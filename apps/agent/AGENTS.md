@@ -12,6 +12,6 @@
 - Only one `mastra dev` can run per project; `mastra build` is blocked while it runs. `mastra build` also fails at its install step: the Mastra deployer can't parse pnpm 12's two-document `pnpm-lock.yaml`. Builds aren't used (local dev only). `mastra dev` loads `.env`, so the e2e config blanks provider keys to stay offline.
 - Job discovery: the `discover-jobs` workflow (scheduled only in the main checkout with `DISCOVERY_SCHEDULE=on`) and `POST /discovery/run` ("Run now", backfills); sources Himalayas (free API) and LinkedIn (Apify, `APIFY_API_KEY`); then triage (`triagerAgent`, fast model), full assessments of the best (`assessJob`, shared with re-score) and an email digest (Resend: `RESEND_API_KEY`, `DIGEST_TO`). See [src/discovery/AGENTS.md](src/discovery/AGENTS.md).
 - Usage accounting: [src/usage/AGENTS.md](src/usage/AGENTS.md). Any new model call outside an agent's steps must be metered (`meteredModel` or a hook), or the panel will undercount.
-- Provider calls retry via `withRetry` (`src/web/retry.ts`): only `RetryableError` (network, timeout, 429, 5xx), max 2.
+- Provider calls retry via `withRetry` (`src/web/retry.ts`): only `RetryableError` (network, timeout, 429, 5xx), max 2, waiting the server's `Retry-After` when it sends one (over 60 s: give up).
 - Scorers, datasets and `pnpm eval`: [src/evals/AGENTS.md](src/evals/AGENTS.md). Copilot turns are scored live only with `LLM_MODE=live`.
 - Look up APIs in `node_modules/@mastra/*/dist/docs/` (see the `mastra` skill) before writing Mastra code.

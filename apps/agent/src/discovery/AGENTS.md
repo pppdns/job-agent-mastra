@@ -29,15 +29,16 @@ flowchart LR
   - lets the screen accept postings that old
   - raises the paid sources' per-run caps 4×
 - **Per source, per run** (`runDiscoverySources`):
-  - **`since`:** the source's last good run minus 1 h, never further back than `maxAgeDays` (or the backfill window).
+  - **`since`:** the source's last fully good (`ok`) run minus 1 h, never further back than `maxAgeDays` (or the backfill window). A `partial` run (one search failed, or the spend cap stopped the searches) doesn't move it, so the next run asks for that window again; known postings are skipped (LinkedIn gets up to 3,000 known ids as `skipJobId`, so repeats aren't billed).
   - **`knownIds`:** board ids stored in the last 30 days, so a paid source can skip them.
   - **`maxUsd`:** the source's per-run cap, never more than what's left of `apifyMonthlyBudgetUsd` (spend summed from `app_discovery_runs` over 30 days).
   - **Skipped** (`skipped` with a reason) when the source is off in the settings, unavailable (no key), or over budget.
 - **Sources** (`sources/`): each implements `JobSource` (`types.ts`).
   - **Pure parsing:** `parse…` functions validate every item against `postingInputSchema`. Bad items are counted as `invalid`, not stored. Descriptions become link-free markdown (`text.ts`).
-  - **HTTP:** goes through `sources/http.ts`, which adds a timeout, a size cap, `withRetry`, and errors that name only the host and status.
+  - **HTTP:** goes through `sources/http.ts`, which adds a timeout, a size cap, `withRetry` (honouring a 429/5xx `Retry-After` up to 60 s), and errors that name only the host and status. A longer `Retry-After` becomes a `CooldownError`: the source stops asking for this run and keeps what it has (partial).
+  - **Failed searches:** a source reports them in `failures` (a partial run caused only by a cap has none); they are emailed as problems.
   - **Errors:** a `SourceError` message is shown on the Discovery page, so it must never contain a secret.
-  - **Himalayas** (`himalayas.ts`): free official API (`/jobs/api/search`), `sort=recent`, paged until a page is older than `since`.
+  - **Himalayas** (`himalayas.ts`): free official API (`/jobs/api/search`), `sort=recent`, paged until a page is older than `since`, with a 1.1 s pause between requests.
     - Terms: apply through `applicationLink` and show credit (the web app links the source).
     - Data refreshes daily. `HIMALAYAS_API_KEY` is optional.
   - **LinkedIn** (`linkedin.ts`): the Apify actor `valig/linkedin-jobs-scraper` (pay per result, about $0.36 per 1,000; prices in `LINKEDIN_PRICES`).
@@ -55,7 +56,7 @@ flowchart LR
   - **Assess** (`assess.ts`): the run's best matches (triaged in this run, at or above `triageThreshold`, no draft yet), best first, up to `maxAssessmentsPerRun`, through `assessJob` (shared with re-score; `saveDraft` rules apply).
   - **Budget** (`budget.ts`): per run, `maxLlmUsdPerRun` and `maxTriagePerRun`. Triage reserves $0.002 per call and settles with real tokens; assessments reserve $0.08. What stopped it goes into `stoppedBy`.
   - **Usage:** every model call is an `app_run_events` row under the `app_runs` row whose id is the discovery run id and whose thread is `discovery:<runId>`. The funnel's `llmUsd` is summed from those events.
-  - **Report** (`report.ts`): the run's matches (`digestMatches`) go to `DIGEST_TO` through Resend (`RESEND_API_KEY`, `DIGEST_FROM`, links to `APP_BASE_URL`). Skipped without matches or config; every value is HTML-escaped and links point only to the app. Resend's default test sender (`onboarding@resend.dev`) only delivers to the Resend account's own address.
+  - **Report** (`report.ts`): the run's matches (`digestMatches`) go to `DIGEST_TO` through Resend (`RESEND_API_KEY`, `DIGEST_FROM`, links to `APP_BASE_URL`), with a "Needs a look" block on top when the run had problems (`runProblems`: failed sources and failed searches, paid sources skipped for the monthly budget, sources empty two runs in a row, triage or assessment calls failing (3+ and at least 10%, or all), failed funnel steps; the per-run caps are expected and don't count). Without matches, problems go out as a short alert, at most once per 24 hours for the same problems: the throttle compares stable keys (`linkedin:failed`, `triage:calls-failed`, …), not messages, over every run of the last 24 hours. Every value is HTML-escaped and links point only to the app. Resend's default test sender (`onboarding@resend.dev`) only delivers to the Resend account's own address.
   - **Mock model:** a prompt starting with `TRIAGE_MARKER` gets a deterministic triage (88 for "Founding", 35 for "intern", else 70), so e2e runs the whole funnel offline.
 - **Storage and screening** (`@copilot/db` `discovery.ts`, `@copilot/shared` `screening.ts`): see [packages/db/AGENTS.md](../../../../packages/db/AGENTS.md#discovery).
   - The screen is deliberately permissive: it never requires a title match, and unknown fields pass.

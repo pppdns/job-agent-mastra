@@ -1,6 +1,12 @@
 import { type PostingInput, postingInputSchema, type SalaryPeriod } from "@copilot/shared";
 import { htmlToText, httpUrl, num, str } from "../text";
-import { type FetchContext, type FetchOutcome, type JobSource, SourceError } from "../types";
+import {
+  CooldownError,
+  type FetchContext,
+  type FetchOutcome,
+  type JobSource,
+  SourceError,
+} from "../types";
 import type { HttpJson } from "./http";
 
 // Himalayas' official, free Remote Jobs API (https://himalayas.app/docs/remote-jobs-api).
@@ -9,6 +15,22 @@ import type { HttpJson } from "./http";
 
 const SEARCH_URL = "https://himalayas.app/jobs/api/search";
 const BACKFILL_MAX_PAGES = 10;
+/** Pause between requests: well under the keyed limit (60/min), polite on the shared one. */
+export const HIMALAYAS_PAUSE_MS = 1_100;
+
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    if (ms <= 0) return resolve();
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
 
 const PERIODS: Record<string, SalaryPeriod> = {
   hourly: "hour",
@@ -73,7 +95,11 @@ export function parseHimalayasJob(raw: unknown): PostingInput | null {
   return parsed.success ? parsed.data : null;
 }
 
-export function createHimalayasSource(http: HttpJson, apiKey?: string): JobSource {
+export function createHimalayasSource(
+  http: HttpJson,
+  apiKey?: string,
+  pauseMs: number = HIMALAYAS_PAUSE_MS,
+): JobSource {
   return {
     id: "himalayas",
     paid: false,
@@ -84,9 +110,12 @@ export function createHimalayasSource(http: HttpJson, apiKey?: string): JobSourc
       const byId = new Map<string, PostingInput>();
       let invalid = 0;
       const failed: string[] = [];
+      let requests = 0;
+      let cooledDown = false;
       for (const query of settings.queries) {
         try {
           for (let page = 1; page <= maxPages; page++) {
+            if (requests++ > 0) await sleep(pauseMs, signal);
             const url = new URL(SEARCH_URL);
             url.searchParams.set("q", query);
             url.searchParams.set("sort", "recent");
@@ -114,16 +143,23 @@ export function createHimalayasSource(http: HttpJson, apiKey?: string): JobSourc
         } catch (error) {
           if (signal?.aborted) throw error;
           failed.push(`"${query}": ${error instanceof Error ? error.message : "failed"}`);
+          // Rate limited for longer than we retry: stop asking for this run.
+          if (error instanceof CooldownError) {
+            cooledDown = true;
+            break;
+          }
         }
       }
-      if (failed.length === settings.queries.length && settings.queries.length > 0) {
-        throw new SourceError(`every search failed (${failed[0]})`);
+      const allFailed = failed.length > 0 && failed.length === settings.queries.length;
+      if (byId.size === 0 && (allFailed || cooledDown)) {
+        throw new SourceError(`${allFailed ? "every search failed" : "stopped"} (${failed[0]})`);
       }
       return {
         postings: [...byId.values()],
         invalid,
         costUsd: 0,
         partial: failed.length > 0 ? `some searches failed: ${failed.join("; ")}` : undefined,
+        failures: failed,
       };
     },
   };

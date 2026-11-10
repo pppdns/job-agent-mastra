@@ -261,6 +261,8 @@ export type SourceRunResult = {
   status: (typeof SOURCE_RUN_STATUSES)[number];
   /** Short, secret-free explanation for failed/partial/skipped. */
   message?: string;
+  /** Searches of a partial run that failed (not set when only a cap stopped it). */
+  failures?: string[];
   fetched: number;
   /** Items the source returned that failed validation. */
   invalid: number;
@@ -294,7 +296,17 @@ export type FunnelResult = {
   llmUsd: number;
   /** Why triage or assessment stopped early (per-run cap, spend cap). */
   stoppedBy?: string;
-  digest?: { status: "sent" | "skipped" | "failed"; message: string; matches: number };
+  digest?: {
+    status: "sent" | "skipped" | "failed";
+    message: string;
+    matches: number;
+    /** Problems this run reported (failed sources, budget stops, failed steps). */
+    problems?: string[];
+    /** Stable keys of those problems (e.g. `linkedin:failed`), for the once-a-day throttle. */
+    problemKeys?: string[];
+    /** A problems-only alert (no matches) rather than a digest. */
+    alert?: boolean;
+  };
 };
 
 /** One discovery run (scheduled or manual) with per-source results. */

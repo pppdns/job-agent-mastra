@@ -5,11 +5,14 @@ import {
   createDb,
   type Db,
   type DigestMatch,
+  type DiscoveryRun,
   getJobDetail,
   latestRunStatuses,
   listJobs,
   migrateDb,
   recordPosting,
+  type SourceRunResult,
+  type SourceState,
   saveSearchSettings,
   startDiscoveryRun,
   threadUsage,
@@ -24,7 +27,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { assessTopMatches } from "./assess";
 import { ASSESS_RESERVE_USD, DiscoveryBudget, TRIAGE_RESERVE_USD } from "./budget";
 import { assessStep, closeUsage, discoveryThreadId, reportStep, triageStep } from "./funnel";
-import { buildDigest, sendDigest } from "./report";
+import { alreadyAlerted, buildDigest, runProblems, sendDigest } from "./report";
 import type { HttpJson } from "./sources/http";
 import { criteriaSummary, settleScore, triageJobs, triagePrompt } from "./triage";
 
@@ -217,7 +220,7 @@ describe("digest", () => {
     );
     expect(await sendDigest(ok, config, [match()])).toEqual({
       status: "sent",
-      message: "sent to me@example.com",
+      message: "digest sent to me@example.com",
       matches: 1,
     });
     expect(sent[0]?.url).toBe("https://api.resend.com/emails");
@@ -226,6 +229,155 @@ describe("digest", () => {
       throw new Error("api.resend.com answered 403");
     };
     expect(await sendDigest(down, config, [match()])).toMatchObject({ status: "failed" });
+  });
+});
+
+describe("problems and alerts", () => {
+  const result = (over: Partial<SourceRunResult>): SourceRunResult => ({
+    source: "linkedin",
+    status: "ok",
+    fetched: 5,
+    invalid: 0,
+    seen: 0,
+    filtered: 0,
+    newJobs: 5,
+    merged: 0,
+    costUsd: 0,
+    durationMs: 1,
+    ...over,
+  });
+  const state = (over: Partial<SourceState> = {}): SourceState => ({
+    source: "himalayas",
+    lastOkAt: null,
+    last: null,
+    unhealthy: false,
+    ...over,
+  });
+  const funnel = {
+    triaged: 0,
+    triageFailed: 0,
+    triagePending: 0,
+    matched: 0,
+    assessed: 0,
+    assessFailed: 0,
+    llmUsd: 0,
+  };
+  const keys = (p: { key: string }[]) => p.map((x) => x.key);
+
+  it("names failed sources and searches, budget stops, empty sources, failed calls and steps", () => {
+    const problems = runProblems(
+      {
+        sources: [
+          result({ status: "failed", message: "Apify run r1 failed" }),
+          result({
+            source: "himalayas",
+            status: "partial",
+            fetched: 0,
+            failures: ['"AI Engineer": himalayas.app answered 400'],
+          }),
+        ],
+      },
+      { ...funnel, triaged: 0, triageFailed: 12, stoppedBy: "assessment failed: db locked" },
+      [state({ unhealthy: true }), state({ source: "linkedin", unhealthy: true })],
+    );
+    expect(keys(problems)).toEqual([
+      "linkedin:failed",
+      "himalayas:searches-failed",
+      "himalayas:empty",
+      "triage:calls-failed",
+      "step:assessment",
+    ]);
+    expect(problems[1]?.message).toBe(
+      'Himalayas: 1 search failed ("AI Engineer": himalayas.app answered 400)',
+    );
+    expect(problems[3]?.message).toBe("12 of 12 triage calls failed");
+  });
+
+  it("ignores expected caps and a few failed calls", () => {
+    const capped = runProblems(
+      {
+        sources: [
+          result({ status: "partial", message: "spend cap reached after 0.50 USD", failures: [] }),
+        ],
+      },
+      {
+        ...funnel,
+        triaged: 396,
+        triageFailed: 4,
+        stoppedBy: "per-run model spend cap ($2.00) reached",
+      },
+      [],
+    );
+    expect(capped).toEqual([]);
+    expect(
+      keys(
+        runProblems(
+          {
+            sources: [
+              result({
+                status: "skipped",
+                message: "monthly Apify budget reached (100.00 of 100.00 USD in 30 days)",
+              }),
+            ],
+          },
+          funnel,
+          [],
+        ),
+      ),
+    ).toEqual(["linkedin:budget"]);
+  });
+
+  it("throttles alerts by stable keys within a day, and puts problems on top of a digest", async () => {
+    const sent: { subject: string; text: string }[] = [];
+    const http: HttpJson = async (_url, init) => {
+      sent.push(init?.body as { subject: string; text: string });
+      return { id: "e" };
+    };
+    const config = { apiKey: "re_x", to: "me@example.com", from: "a <b@c.d>", baseUrl: "http://x" };
+    const first = [{ key: "linkedin:failed", message: "LinkedIn failed: Apify run r1 failed" }];
+    const alert = await sendDigest(http, config, [], first);
+    expect(alert).toMatchObject({ status: "sent", alert: true, problemKeys: ["linkedin:failed"] });
+    expect(sent[0]?.subject).toBe(
+      "Job discovery needs a look: LinkedIn failed: Apify run r1 failed",
+    );
+
+    // The same failure with another run id in its message: still the same problem.
+    const again = [{ key: "linkedin:failed", message: "LinkedIn failed: Apify run r2 failed" }];
+    const earlier = {
+      id: "r0",
+      startedAt: new Date(Date.now() - 3_600_000),
+      funnel: { ...funnel, digest: alert },
+    } as unknown as DiscoveryRun;
+    expect(alreadyAlerted(again, [earlier])).toBe(true);
+    expect(await sendDigest(http, config, [], again, [earlier])).toMatchObject({
+      status: "skipped",
+      message: "same problems already emailed today",
+    });
+    const dayOld = { ...earlier, startedAt: new Date(Date.now() - 25 * 3_600_000) } as DiscoveryRun;
+    expect(alreadyAlerted(again, [dayOld])).toBe(false);
+    expect(sent).toHaveLength(1);
+
+    const digest = await sendDigest(
+      http,
+      config,
+      [
+        {
+          id: "j",
+          title: "AI Engineer",
+          company: "Kite",
+          location: null,
+          triageScore: 80,
+          triageReason: "fit",
+          headline: null,
+          sources: [],
+        },
+      ],
+      again,
+      [earlier],
+    );
+    expect(digest).toMatchObject({ status: "sent", message: "digest sent to me@example.com" });
+    expect(sent[1]?.text.startsWith("Needs a look:")).toBe(true);
+    expect(buildDigest([], "http://x", ["<b>"]).html).toContain("&lt;b&gt;");
   });
 });
 
