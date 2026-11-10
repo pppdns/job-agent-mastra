@@ -65,6 +65,12 @@ const maxUsdOf = (source: DiscoverySource, settings: SearchSettings, backfill: b
   return "maxUsdPerRun" in config ? config.maxUsdPerRun * (backfill ? BACKFILL_USD_FACTOR : 1) : 0;
 };
 
+/** A source that re-reads the same window every run (no "since") runs at most this often. */
+const minHoursOf = (source: DiscoverySource, settings: SearchSettings) => {
+  const config = settings.sources[source];
+  return "minHoursBetweenRuns" in config ? config.minHoursBetweenRuns : 0;
+};
+
 export async function runDiscoverySources(
   db: Db,
   runId: string,
@@ -123,6 +129,17 @@ export async function runDiscoverySources(
       await finish({ ...base, status: "skipped", message: unavailable });
       continue;
     }
+    const lastOk = states.find((s) => s.source === id)?.lastOkAt;
+    const minHours = minHoursOf(id, settings);
+    const hoursSince = lastOk ? (started.getTime() - lastOk.getTime()) / HOUR_MS : null;
+    if (!backfill && minHours > 0 && hoursSince !== null && hoursSince < minHours) {
+      await finish({
+        ...base,
+        status: "skipped",
+        message: `last good run ${Math.floor(hoursSince)} h ago (runs at most every ${minHours} h)`,
+      });
+      continue;
+    }
     const budget = settings.apifyMonthlyBudgetUsd;
     const maxUsd = source.paid ? Math.min(maxUsdOf(id, settings, backfill), budget - paidSpent) : 0;
     if (source.paid && maxUsd < 0.01) {
@@ -134,7 +151,6 @@ export async function runDiscoverySources(
       continue;
     }
 
-    const lastOk = states.find((s) => s.source === id)?.lastOkAt;
     const floor = started.getTime() - maxAgeDays * DAY_MS;
     const since = new Date(
       backfill || !lastOk ? floor : Math.max(floor, lastOk.getTime() - CURSOR_OVERLAP_MS),

@@ -1,4 +1,9 @@
-import type { DiscoverySource, PostingInput } from "@copilot/shared";
+import {
+  companyKey,
+  type DiscoverySource,
+  normalizeText,
+  type PostingInput,
+} from "@copilot/shared";
 import {
   CooldownError,
   type FetchContext,
@@ -26,6 +31,11 @@ export type ActorBoard = {
   timeoutSecs?: number;
   searches(context: FetchContext): ActorSearch[];
   parse(raw: unknown): PostingInput | null;
+  /**
+   * Keep one posting per company and title within a run (a feed listing the same role once per
+   * office would otherwise become one job per office).
+   */
+  onePerTitle?: boolean;
 };
 
 const RUN_TIMEOUT_SECS = 300;
@@ -44,6 +54,7 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
       const failures: string[] = [];
       const notes: string[] = [];
       let succeeded = 0;
+      const titles = new Set<string>();
       for (const search of searches) {
         const remaining = context.maxUsd - costUsd;
         if (remaining < 0.01) {
@@ -62,9 +73,17 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
           else succeeded += 1;
           for (const raw of result.items) {
             const posting = board.parse(raw);
+            if (!posting) {
+              invalid += 1;
+              continue;
+            }
+            if (board.onePerTitle) {
+              const key = `${companyKey(posting.company)}|${normalizeText(posting.title)}`;
+              if (titles.has(key)) continue;
+              titles.add(key);
+            }
             // Kept whatever its date (it's paid for): the screen's age limit drops old ones.
-            if (posting) byId.set(posting.externalId, posting);
-            else invalid += 1;
+            byId.set(posting.externalId, posting);
           }
         } catch (error) {
           if (context.signal?.aborted) throw error;
