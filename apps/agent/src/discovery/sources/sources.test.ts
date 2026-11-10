@@ -266,7 +266,14 @@ describe("Apify runner", () => {
   });
 
   it("takes Apify's reported cost, else the run's event prices, else ours", () => {
-    expect(runCost({ usageTotalUsd: 0.0189 }, LINKEDIN_PRICES, 50)).toBe(0.0189);
+    const counts = { "apify-default-dataset-item": 200, "apify-actor-start": 1 };
+    expect(runCost({ usageTotalUsd: 0.5, chargedEventCounts: counts }, LINKEDIN_PRICES, 200)).toBe(
+      0.5,
+    );
+    // Read right after the run: usage still shows only the start fee, the counts are final.
+    expect(
+      runCost({ usageTotalUsd: 0.001, chargedEventCounts: counts }, { ...LINKEDIN_PRICES }, 200),
+    ).toBeCloseTo(200 * 0.00036 + 0.0009);
     expect(
       runCost(
         {

@@ -327,10 +327,10 @@ flowchart LR
     C[claim-run<br/>one at a time] --> F[fetch-sources] --> X[finish-run]
   end
   F --> HIM[Free APIs and feeds<br/>Himalayas, We Work Remotely, Remote OK, Remotive, NoDesk]
-  F --> APIFY[Apify actors<br/>LinkedIn, YC, Jobgether, Built In, Wellfound, HiringCafe, Dice<br/>per-run caps + monthly budget]
+  F --> APIFY[Apify actors<br/>LinkedIn, YC, Jobgether, Built In, Wellfound, HiringCafe, Dice,<br/>company career sites (ATS feed, daily)<br/>per-run caps + monthly budget]
   F --> SCR{screenPosting<br/>clear misfits only}
   SCR -->|fails, with reasons| PO[(app_postings)]
-  SCR -->|passes| DD[dedupe: apply URL or<br/>company key + title] --> J[(app_jobs + board snapshot)]
+  SCR -->|passes| DD[dedupe: ATS key, apply URL or<br/>company key + title] --> J[(app_jobs + board snapshot)]
   J --> TRI[triage<br/>fast model, budgeted] --> ASS[assess best N<br/>main model] --> MAIL[email digest<br/>Resend]
   SET["/settings/search"] -->|save → rescreenPostings| PO
 ```

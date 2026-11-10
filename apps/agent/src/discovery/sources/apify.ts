@@ -44,22 +44,24 @@ export type ApifyRunner = (
 ) => Promise<ActorRunResult>;
 
 /**
- * What the run cost: Apify's own `usageTotalUsd` when it reports one; otherwise the charged
- * event counts times the run's event prices (falling back to our price table); otherwise items
- * plus one start at our prices.
+ * What the run cost: the larger of Apify's own `usageTotalUsd` and the charged event counts
+ * times the run's event prices (falling back to our price table; without counts, items plus one
+ * start). `usageTotalUsd` lags right after a run finishes (seen: $0.001, then $0.401 20 s later),
+ * while the event counts are final, so the larger one is never an undercount.
  */
 export function runCost(
   run: Pick<Run, "usageTotalUsd" | "chargedEventCounts" | "pricingInfo">,
   prices: ActorPrices,
   items: number,
 ) {
-  if (typeof run.usageTotalUsd === "number" && run.usageTotalUsd > 0) return run.usageTotalUsd;
   const runPrices = run.pricingInfo?.pricingPerEvent?.actorChargeEvents ?? {};
   const counts = run.chargedEventCounts ?? { [RESULT_EVENT]: items, [START_EVENT]: 1 };
-  return Object.entries(counts).reduce(
+  const events = Object.entries(counts).reduce(
     (sum, [event, n]) => sum + (runPrices[event]?.eventPriceUsd ?? prices[event] ?? 0) * n,
     0,
   );
+  const usage = typeof run.usageTotalUsd === "number" ? run.usageTotalUsd : 0;
+  return Math.max(usage, events);
 }
 
 export function createApifyRunner(http: HttpJson, token: string): ApifyRunner {
