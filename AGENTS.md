@@ -4,6 +4,8 @@
 
 Job Research Copilot: a private, single-user chat assistant that assesses job listings against an approved personal profile and researches the companies behind them. Built to learn the full Mastra agent stack (tools, memory, approvals, compaction, streaming, traces, evals). Intent: [project-brief.md](project-brief.md). Decisions and milestones: [docs/PLAN.md](docs/PLAN.md).
 
+Hosted at https://job-copilot-c456e8.fly.dev: Fly.io app `job-copilot-c456e8` (region `fra`), one machine, password login. Pushes to `main` deploy it through GitHub Actions; production holds the user's real data. See [docs/deploy.md](docs/deploy.md).
+
 ## Tech Stack
 
 pnpm workspaces + Turborepo, TypeScript, Mastra (agent server + Studio), Next.js App Router + AI SDK UI + shadcn/ui chat components, libSQL (SQLite) with Drizzle for app tables, Vercel AI Gateway for models, Tavily + Firecrawl for web access, Biome, Vitest, Playwright. Exact versions live in `package.json` files.
