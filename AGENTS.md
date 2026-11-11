@@ -63,7 +63,7 @@ Later: `pnpm smoke:live`. Evals: [apps/agent/src/evals/AGENTS.md](apps/agent/src
 
 ## Database
 
-Single local libSQL file under `data/` (gitignored), shared by Mastra storage and app tables (`app_*`, managed by Drizzle in `packages/db`). Mastra observability (traces, logs, metrics) lives in a DuckDB file next to it (`data/copilot.duckdb`).
+Single local libSQL file under `data/` (gitignored), shared by Mastra storage and app tables (`app_*`, managed by Drizzle in `packages/db`). Mastra observability (traces, logs, metrics) lives in a DuckDB file next to it (`data/copilot.duckdb`), kept for 7 days: the agent prunes it every 6 h (`pruneObservability` in `apps/agent/src/mastra/storage.ts`).
 
 ## Agent Workflow
 
