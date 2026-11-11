@@ -15,12 +15,29 @@ const optionalKey = z.preprocess((v) => {
   return key === "" ? undefined : key;
 }, z.string().min(1).optional());
 
+/** AI SDK's portable reasoning effort; the gateway maps it to each provider's own setting. */
+export const REASONING_LEVELS = [
+  "provider-default",
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const;
+export type ReasoningLevel = (typeof REASONING_LEVELS)[number];
+
 const envSchema = z.object({
   LLM_MODE: z.enum(["live", "mock"]).default("live"),
   AI_GATEWAY_API_KEY: optionalKey,
   // Vercel AI Gateway model ids (provider/model)
   COPILOT_MODEL: z.string().min(1).default("anthropic/claude-sonnet-5.5"),
   COPILOT_FAST_MODEL: z.string().min(1).default("anthropic/claude-haiku-5.5"),
+  // Batch re-scoring and discovery's full assessments; default COPILOT_MODEL. Reasoning effort
+  // is AI SDK's portable setting (none … max); unset keeps the provider default.
+  RESCORE_MODEL: z.string().min(1).optional(),
+  RESCORE_REASONING: z.enum(REASONING_LEVELS).optional(),
   // LLM judge for scorers (live sampling and `pnpm eval`): another provider than the copilot.
   EVAL_JUDGE_MODEL: z.string().min(1).default("openai/gpt-6.1-sol"),
   AGENT_SHARED_SECRET: z.string().min(24, "must be at least 24 characters"),

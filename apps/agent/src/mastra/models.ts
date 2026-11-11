@@ -1,9 +1,9 @@
 import { gateway } from "@ai-sdk/gateway";
 import type { LanguageModelV4, LanguageModelV4Prompt } from "@ai-sdk/provider";
 import { RESEARCH_TOPIC_LABELS, RESEARCH_TOPICS } from "@copilot/shared";
-import { simulateReadableStream } from "ai";
+import { simulateReadableStream, wrapLanguageModel } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
-import { env } from "../env";
+import { env, type ReasoningLevel } from "../env";
 
 export type ModelRole = "main" | "fast";
 
@@ -17,6 +17,32 @@ export const TRIAGE_MARKER = "Triage this job posting.";
 export function getModel(role: ModelRole): LanguageModelV4 {
   const modelId = role === "main" ? env.COPILOT_MODEL : env.COPILOT_FAST_MODEL;
   return env.LLM_MODE === "mock" ? createMockModel(modelId) : gateway(modelId);
+}
+
+/** A gateway model, optionally with a fixed reasoning effort on every call. */
+export function gatewayModel(modelId: string, reasoning?: ReasoningLevel): LanguageModelV4 {
+  const model = gateway(modelId);
+  if (!reasoning) return model;
+  return wrapLanguageModel({
+    model,
+    middleware: {
+      specificationVersion: "v4",
+      transformParams: async ({ params }) => ({
+        ...params,
+        reasoning: params.reasoning ?? reasoning,
+      }),
+    },
+  });
+}
+
+/** Model for batch re-scoring and discovery's full assessments (RESCORE_MODEL, default main). */
+export const rescoreModelId = () => env.RESCORE_MODEL ?? env.COPILOT_MODEL;
+
+export function getRescoreModel(): LanguageModelV4 {
+  const modelId = rescoreModelId();
+  return env.LLM_MODE === "mock"
+    ? createMockModel(modelId)
+    : gatewayModel(modelId, env.RESCORE_REASONING);
 }
 
 /**

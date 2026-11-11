@@ -14,10 +14,11 @@ import {
   modelAssessmentSchema,
   normalizeModelAssessment,
 } from "@copilot/shared";
+import type { Agent } from "@mastra/core/agent";
 import type { TracingContext } from "@mastra/core/observability";
-import { env } from "../env";
 import { parseStoredListing } from "../ingest/listing";
 import { rescorerAgent } from "../mastra/agents/rescorer";
+import { rescoreModelId } from "../mastra/models";
 import { formatProfile } from "../mastra/profile-context";
 import type { RunRecorder } from "../usage/recorder";
 
@@ -131,7 +132,12 @@ export type Profile = Awaited<ReturnType<typeof currentProfile>>;
 export type AssessDeps = Pick<
   RescoreDeps,
   "db" | "threadId" | "signal" | "tracingContext" | "recorder"
->;
+> & {
+  /** Another rescorer (model comparison evals); default the RESCORE_MODEL agent. */
+  rescorer?: { agent: Agent; modelId: string };
+  /** Each model call's usage and provider metadata (evals read the gateway's cost). */
+  onModelCall?: (step: { usage?: unknown; providerMetadata?: unknown }) => void;
+};
 
 /**
  * One full assessment of a saved job against `profile` (structured output, no tools), saved as
@@ -167,14 +173,21 @@ export async function assessJob(jobId: string, profile: Profile, deps: AssessDep
     .filter(Boolean)
     .join("\n\n");
 
+  const { agent, modelId } = deps.rescorer ?? {
+    agent: rescorerAgent,
+    modelId: rescoreModelId(),
+  };
   const generate = async (text: string) => {
     const started = Date.now();
-    const generated = await rescorerAgent.generate(text, {
+    const generated = await agent.generate(text, {
       structuredOutput: { schema: modelAssessmentSchema },
+      // OpenAI's strict JSON mode rejects schemas with optional fields (quote, salary, …).
+      providerOptions: { openai: { strictJsonSchema: false } },
       abortSignal: deps.signal,
       tracingContext: deps.tracingContext,
-      onStepFinish: ({ usage }) => {
-        deps.recorder?.llm("rescorer", env.COPILOT_MODEL, usage ?? {}, Date.now() - started);
+      onStepFinish: ({ usage, providerMetadata }) => {
+        deps.recorder?.llm("rescorer", modelId, usage ?? {}, Date.now() - started);
+        deps.onModelCall?.({ usage, providerMetadata });
       },
     });
     return normalizeModelAssessment(generated.object);
