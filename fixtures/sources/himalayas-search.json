@@ -71,9 +71,9 @@
       "currency": "USD",
       "locationRestrictions": [
         {
-          "alpha2": "US",
-          "name": "United States",
-          "slug": "united-states"
+          "alpha2": "DE",
+          "name": "Germany",
+          "slug": "germany"
         }
       ],
       "timezoneRestrictions": [],
