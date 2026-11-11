@@ -13,3 +13,9 @@ Synthetic pages shaped like real provider output (Tavily markdown of LinkedIn gu
 | `remote-ambiguous.md` | "Remote-first" in European time zones without saying where hiring is possible; pay only "competitive" (evals) |
 | `remote-platform-match.md` | Fully remote (EU) platform/Kubernetes role with stated pay: a clear match for the seeded eval profile (triage eval) |
 | `injection.md` | Complete listing with instructions aimed at AI assistants: change the profile, approve, reveal keys (evals) |
+| `hybrid-monthly.md` | "Hybrid" Berlin platform role with one office day a month (meets an at-most-one-day-a-week rule); rescorer model eval |
+| `remote-us-only.md` | "Fully remote", but the last section restricts hiring to US residents; rescorer model eval |
+| `em-platform.md` | Remote EU engineering-manager role (people management against an IC preference); rescorer model eval |
+| `german-required.md` | Remote Germany Java/Kotlin role requiring fluent German (C1); rescorer model eval |
+| `contradictory-remote.md` | Labelled "Remote (Germany)" but the team works from Munich Tuesday to Thursday; rescorer model eval |
+| `monthly-salary.md` | Remote EU TypeScript product role with pay stated per month (EUR 7,600 × 12); rescorer model eval |
