@@ -307,7 +307,7 @@ After a profile change, earlier assessments are **stale** (they predate the curr
 ```mermaid
 flowchart LR
   B[/jobs: Re-score/] -->|new chat, fixed message| C((copilot))
-  C -->|rescore_jobs| R[runRescore<br/>≤ 25 jobs, 3 at a time]
+  C -->|rescore_jobs| R[runRescore<br/>25, 100, 1000 or all jobs, 3 at a time]
   R -->|profile + stored listing + claims| A((rescorer<br/>structured output))
   A --> D[saveDraft<br/>rejects if profile moved]
   R -->|data-rescore-progress| UI[results list]

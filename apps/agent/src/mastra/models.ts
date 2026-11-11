@@ -269,8 +269,9 @@ function mockTurn({
       };
     }
     if (name === "rescore_jobs") {
-      const results = (value as { results?: { status: string }[] }).results ?? [];
-      const saved = results.filter((r) => r.status === "saved").length;
+      // Small batches come back in full, big ones as counts (the tool's toModelOutput).
+      const out = value as { results?: { status: string }[]; saved?: number };
+      const saved = out.saved ?? out.results?.filter((r) => r.status === "saved").length ?? 0;
       return { kind: "text", text: `Mock reply: rescore_jobs ${saved} saved` };
     }
     if (name === "research_company") {
@@ -348,7 +349,11 @@ function mockTurn({
     return { kind: "text", text: `Mock reply: local ${local?.trim() || "none"}` };
   }
   if (offered("rescore_jobs") && text.startsWith("Re-score")) {
-    return call("rescore_jobs", text.startsWith("Re-score all") ? { all: true } : {});
+    const limit = text.match(/limit: "?(\d+|all)"?/)?.[1];
+    return call("rescore_jobs", {
+      ...(text.startsWith("Re-score all") && { all: true }),
+      ...(limit && { limit: limit === "all" ? "all" : Number(limit) }),
+    });
   }
   if (text.startsWith("Slow:")) {
     const words = Array.from({ length: 30 }, (_, i) => `w${i + 1}`).join(" ");

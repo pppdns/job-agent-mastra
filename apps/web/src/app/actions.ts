@@ -24,7 +24,9 @@ import {
   DISCOVERY_SOURCES,
   type DiscoverySource,
   JOB_STATUSES,
+  RESCORE_BATCH_SIZES,
   RESEARCH_TOPICS,
+  type RescoreLimit,
   researchRequestText,
   type SearchSettings,
   screenPosting,
@@ -119,9 +121,14 @@ export async function editProfileAction(
 // "use server" files may only export async functions.
 /** The fixed messages the re-score buttons send; the copilot answers them with rescore_jobs. */
 const RESCORE_MESSAGES = {
-  stale: "Re-score my jobs that were assessed with an older profile.",
-  all: "Re-score all my active jobs (rescore_jobs with all).",
+  stale: (limit: string) =>
+    `Re-score my jobs that were assessed with an older profile (rescore_jobs with limit: ${limit}).`,
+  all: (limit: string) =>
+    `Re-score all my active jobs (rescore_jobs with all: true, limit: ${limit}).`,
 } as const;
+
+const isRescoreLimit = (limit: unknown): limit is RescoreLimit =>
+  limit === "all" || (RESCORE_BATCH_SIZES as readonly unknown[]).includes(limit);
 
 /**
  * "Re-score" on /jobs (stale jobs, or all active ones): starts the run in a new chat, then
@@ -129,11 +136,13 @@ const RESCORE_MESSAGES = {
  * stream doesn't stop it.
  */
 export async function startRescoreAction(
-  scope: keyof typeof RESCORE_MESSAGES = "stale",
+  scope: keyof typeof RESCORE_MESSAGES,
+  limit: RescoreLimit,
 ): Promise<{ error?: string }> {
-  // Server actions are callable with any payload: reject unknown scopes instead of guessing.
+  // Server actions are callable with any payload: reject unknown values instead of guessing.
   if (!Object.hasOwn(RESCORE_MESSAGES, scope)) return { error: "unknown re-score scope" };
-  return startChat(RESCORE_MESSAGES[scope]);
+  if (!isRescoreLimit(limit)) return { error: "unknown re-score batch size" };
+  return startChat(RESCORE_MESSAGES[scope](limit === "all" ? '"all"' : String(limit)));
 }
 
 const researchTopicsSchema = z.array(z.enum(RESEARCH_TOPICS)).min(1).max(3);

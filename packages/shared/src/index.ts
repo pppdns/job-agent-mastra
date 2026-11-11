@@ -7,8 +7,14 @@ export const COPILOT_AGENT_ID = "copilot";
 /** Header carrying the web → agent shared secret. */
 export const AGENT_SECRET_HEADER = "x-copilot-secret";
 
-/** Most jobs one re-score batch covers (a known maximum cost per click). */
-export const MAX_RESCORE_JOBS = 25;
+/** Batch sizes the re-score buttons offer besides "all" (one model call per job). */
+export const RESCORE_BATCH_SIZES = [25, 100, 1000] as const;
+
+/** Jobs one re-score batch covers when no limit is given. */
+export const DEFAULT_RESCORE_LIMIT = 25;
+
+/** How many jobs a re-score batch covers: a count, or "all" (no cap). */
+export type RescoreLimit = number | "all";
 
 export * from "./assessment";
 export * from "./job-status";

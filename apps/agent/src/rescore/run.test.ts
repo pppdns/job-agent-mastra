@@ -116,6 +116,22 @@ describe("runRescore", () => {
     expect((await getJobDetail(db, dismissed))?.draft?.version).toBe(1);
   });
 
+  it("covers at most limit jobs and reports the rest as skipped; all has no cap", async () => {
+    const stale = await savedJob("Platform Engineer");
+    await approveProfileFact("Remote only");
+    await savedJob("Data Engineer");
+    await savedJob("SRE");
+
+    const one = await runRescore({ all: true, limit: 1 }, deps());
+    expect(one.skipped).toBe(2);
+    expect(one.results.map((r) => r.jobId)).toEqual([stale]);
+
+    events = [];
+    const every = await runRescore({ all: true, limit: "all" }, deps());
+    expect(events[0]).toMatchObject({ kind: "start", total: 3, skipped: 0 });
+    expect(every.results).toHaveLength(3);
+  });
+
   it("reports a job without a stored listing as failed and keeps going", async () => {
     const { job } = await upsertJob(db, { company: "Contoso", title: "SRE" });
     await saveDraft(db, {
