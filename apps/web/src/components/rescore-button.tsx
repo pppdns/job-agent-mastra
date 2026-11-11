@@ -57,7 +57,8 @@ function BatchSize({
           key={o}
           type="button"
           size="xs"
-          variant={o === limit ? "secondary" : "ghost"}
+          variant={o === limit ? "outline" : "ghost"}
+          className={o === limit ? undefined : "text-muted-foreground"}
           aria-pressed={o === limit}
           onClick={() => onChange(o)}
         >
