@@ -10,7 +10,11 @@ import {
   searchJobIds,
   staleTriageCount,
 } from "@copilot/db";
-import { DISCOVERY_SOURCE_LABELS, type DiscoverySource } from "@copilot/shared";
+import {
+  DISCOVERY_SOURCE_LABELS,
+  type DiscoverySource,
+  locationBlockReason,
+} from "@copilot/shared";
 import { cn } from "cn";
 import { RadarIcon, SearchIcon } from "lucide-react";
 import Link from "next/link";
@@ -261,8 +265,9 @@ async function ScreenedOut({ params }: { params: JobListParams }) {
           <span className="text-sm font-normal text-muted-foreground">{below.total}</span>
         </h2>
         <p className="text-sm text-muted-foreground">
-          Discovered jobs the quick triage scored under your threshold, or whose postings no longer
-          pass the screen after a settings change (both set in the{" "}
+          Discovered jobs the quick triage scored under your threshold, whose listing only hires in
+          places that exclude where you live, or whose postings no longer pass the screen after a
+          settings change (both set in the{" "}
           <Link href="/settings/search" className="underline">
             search settings
           </Link>
@@ -288,11 +293,13 @@ async function ScreenedOut({ params }: { params: JobListParams }) {
                   <span className="text-muted-foreground">
                     {[job.company, job.location].filter(Boolean).join(" · ")}
                   </span>
-                  {(job.screenReasons ?? job.triageReason) && (
+                  {(job.screenReasons ?? job.locationBlock ?? job.triageReason) && (
                     <span className="block text-xs text-muted-foreground">
                       {job.screenReasons
                         ? `Screened out: ${job.screenReasons.join("; ")}`
-                        : job.triageReason}
+                        : job.locationBlock
+                          ? `Excluded: ${locationBlockReason(job.locationBlock)}`
+                          : job.triageReason}
                     </span>
                   )}
                 </span>

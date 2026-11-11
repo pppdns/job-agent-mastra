@@ -192,7 +192,12 @@ function mockTurn({
     const score = /intern/i.test(title) ? 35 : /founding/i.test(title) ? 88 : 70;
     return {
       kind: "text",
-      text: JSON.stringify({ score, reason: `Mock triage of ${title}.`, hardConflict: null }),
+      text: JSON.stringify({
+        score,
+        reason: `Mock triage of ${title}.`,
+        hardConflict: null,
+        locationBlock: null,
+      }),
     };
   }
 

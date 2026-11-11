@@ -3,6 +3,7 @@ import {
   companyKey,
   DISCOVERY_SOURCE_LABELS,
   type DiscoverySource,
+  type LocationBlock,
   type PostingInput,
   parseSearchSettings,
   postingSnapshot,
@@ -522,13 +523,14 @@ export function rescreenPostings(
 
 /**
  * Jobs worth showing: chat jobs and jobs the user acted on or kept always; a discovered job
- * still `new` only while one of its postings passes the screen and its triage score (once it
- * has one) reaches the threshold.
+ * still `new` only while one of its postings passes the screen, its triage score (once it has
+ * one) reaches the threshold, and its listing doesn't exclude where the person lives.
  */
 export const visibleJobs = (triageThreshold: number) => sql`(
   ${jobs.origin} = 'chat' OR ${jobs.keptAt} IS NOT NULL OR ${jobs.status} != 'new' OR (
     EXISTS (SELECT 1 FROM app_postings p WHERE p.job_id = "app_jobs"."id" AND p.screen_reasons IS NULL)
     AND (${jobs.triageScore} IS NULL OR ${jobs.triageScore} >= ${triageThreshold})
+    AND ${jobs.locationBlock} IS NULL
   )
 )`;
 
@@ -610,7 +612,14 @@ export async function countAwaitingTriage(db: Db): Promise<number> {
 export function saveTriage(
   db: Db,
   jobId: string,
-  triage: { score: number; reason: string; profileVersion: number },
+  triage: {
+    score: number;
+    reason: string;
+    profileVersion: number;
+    /** A verified location block (see `settleScore`); null clears an earlier triage's (an
+     * assessment's block stays: the fuller look wins). */
+    locationBlock?: LocationBlock | null;
+  },
 ): Promise<void> {
   return serializeWrites(db, async () => {
     await db
@@ -620,6 +629,9 @@ export function saveTriage(
         triageReason: triage.reason,
         triageProfileVersion: triage.profileVersion,
         triagedAt: new Date(),
+        locationBlock: triage.locationBlock
+          ? { ...triage.locationBlock, from: "triage" }
+          : sql`(case when json_extract(${jobs.locationBlock}, '$.from') = 'assessment' then ${jobs.locationBlock} end)`,
       })
       .where(eq(jobs.id, jobId));
   });

@@ -94,10 +94,50 @@ describe("triage", () => {
   });
 
   it("caps the score when there is a hard conflict", () => {
-    expect(settleScore({ score: 85, reason: "x", hardConflict: "on-site in Munich" }).score).toBe(
-      39,
+    expect(
+      settleScore({ score: 85, reason: "x", hardConflict: "on-site in Munich" }, "").score,
+    ).toBe(39);
+    expect(settleScore({ score: 85, reason: "x", hardConflict: null }, "").score).toBe(85);
+  });
+
+  it("caps the score for a location block only when its quote is in the posting", () => {
+    const posting =
+      "# AI Engineer\n\nRemote: yes (United States)\n\nUS-only, must reside in the US.";
+    const block = { places: ["United States"], quote: "US-only, must reside in the US" };
+    const kept = settleScore(
+      { score: 85, reason: "x", hardConflict: null, locationBlock: block },
+      posting,
     );
-    expect(settleScore({ score: 85, reason: "x", hardConflict: null }).score).toBe(85);
+    expect(kept).toMatchObject({ score: 39, locationBlock: block });
+    const header = { places: ["United States"], quote: "Remote: yes (United States)" };
+    expect(
+      settleScore({ score: 85, reason: "x", hardConflict: null, locationBlock: header }, posting)
+        .score,
+    ).toBe(39);
+    const invented = { places: ["United Kingdom"], quote: "UK residents only" };
+    expect(
+      settleScore({ score: 85, reason: "x", hardConflict: null, locationBlock: invented }, posting),
+    ).toMatchObject({ score: 85, locationBlock: null });
+  });
+
+  it("hides a triaged job with a location block until it is kept", async () => {
+    await discovered(["a", "Founding Engineer"]);
+    await triageJobs({
+      db,
+      budget: new DiscoveryBudget({ maxUsd: 1, maxTriage: 10 }),
+      triage: async () => ({
+        score: 90,
+        reason: "ok",
+        hardConflict: null,
+        locationBlock: { places: ["United States"], quote: "Founding Engineer" },
+      }),
+    });
+    const all = await listJobs(db, undefined, { includeHidden: true });
+    expect(all[0]).toMatchObject({
+      triageScore: 39,
+      locationBlock: { from: "triage", places: ["United States"] },
+    });
+    expect(await listJobs(db)).toEqual([]);
   });
 
   it("triages waiting jobs, counts failures, leaves the rest for the next run at the cap", async () => {

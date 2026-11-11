@@ -213,7 +213,8 @@ export async function setJobsStatus(db: Db, jobIds: string[], status: JobStatus)
 
 /**
  * Discovered jobs the list hides, still untouched and not kept: scored under the triage
- * threshold, or with every posting now failing the screen (after a settings change). Best score
+ * threshold, excluded by their listing's location (`locationBlock`), or with every posting now
+ * failing the screen (after a settings change). Best score
  * first; `screenReasons` says why the screen fails them. The "Screened out" tab, where the user
  * can keep one anyway.
  */
@@ -233,7 +234,7 @@ export async function belowThresholdJobs(
     eq(jobs.status, "new"),
     isNull(jobs.archivedAt),
     isNull(jobs.keptAt),
-    sql`(not ${passing} or ${jobs.triageScore} < ${settings.triageThreshold})`,
+    sql`(not ${passing} or ${jobs.triageScore} < ${settings.triageThreshold} or ${jobs.locationBlock} is not null)`,
   );
   const [rows, [totals]] = await Promise.all([
     db
@@ -331,7 +332,13 @@ export function resetStaleTriage(db: Db): Promise<number> {
     const version = await currentProfileVersion(db);
     const rows = await db
       .update(jobs)
-      .set({ triageScore: null, triageReason: null, triageProfileVersion: null, triagedAt: null })
+      .set({
+        triageScore: null,
+        triageReason: null,
+        triageProfileVersion: null,
+        triagedAt: null,
+        locationBlock: sql`(case when json_extract(${jobs.locationBlock}, '$.from') = 'assessment' then ${jobs.locationBlock} end)`,
+      })
       .where(staleTriage(version))
       .returning({ id: jobs.id });
     return rows.length;

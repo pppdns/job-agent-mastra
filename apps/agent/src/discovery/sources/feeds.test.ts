@@ -68,13 +68,12 @@ describe("regionList", () => {
       salaryPeriod: null,
       postedAt: null,
     };
-    expect(screenPosting(DEFAULT_SEARCH_SETTINGS, posting).pass).toBe(true);
-    expect(
-      screenPosting(DEFAULT_SEARCH_SETTINGS, { ...posting, regions: ["California"] }).pass,
-    ).toBe(true);
-    expect(
-      screenPosting(DEFAULT_SEARCH_SETTINGS, { ...posting, regions: ["Latin America"] }).reasons,
-    ).toEqual(["remote only from Latin America"]);
+    const allowsUs = { ...DEFAULT_SEARCH_SETTINGS, remoteRegions: ["Europe", "United States"] };
+    expect(screenPosting(allowsUs, posting).pass).toBe(true);
+    expect(screenPosting(allowsUs, { ...posting, regions: ["California"] }).pass).toBe(true);
+    expect(screenPosting(allowsUs, { ...posting, regions: ["Latin America"] }).reasons).toEqual([
+      "remote only from Latin America",
+    ]);
   });
 });
 

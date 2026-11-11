@@ -7,7 +7,9 @@ import {
   type JobStatus,
   moneyAmounts,
   type PostedBasis,
+  quoteInSources,
   SOURCED_EVIDENCE_CLASSES,
+  type StoredLocationBlock,
   salaryFiguresMissing,
 } from "@copilot/shared";
 import { and, desc, eq, inArray, max, sql } from "drizzle-orm";
@@ -70,6 +72,25 @@ async function saveDraftUnlocked(db: Db, input: DraftInput): Promise<JobDraft> {
     if (missing.length > 0) {
       throw new AssessmentError(
         `salary figures ${missing.join(", ")} are not in this job's sources; copy the pay as the listing states it, or omit salary when none is stated`,
+      );
+    }
+  }
+  // A location block hides the job, so it must quote the listing and be a hard pass.
+  const block = assessment.locationBlock ?? null;
+  if (block) {
+    if (
+      !quoteInSources(
+        block.quote,
+        jobSources.map((s) => s.content),
+      )
+    ) {
+      throw new AssessmentError(
+        `locationBlock quote "${block.quote.slice(0, 60)}" is not in this job's sources; copy the listing's words exactly, or set locationBlock to null`,
+      );
+    }
+    if (assessment.recommendation.verdict !== "pass" || assessment.hardConflicts.length === 0) {
+      throw new AssessmentError(
+        "a locationBlock needs verdict pass and the restriction as a hard conflict; or set locationBlock to null if the restriction isn't explicit",
       );
     }
   }
@@ -137,7 +158,14 @@ async function saveDraftUnlocked(db: Db, input: DraftInput): Promise<JobDraft> {
         threadId: input.threadId ?? null,
       })
       .returning();
-    await tx.update(jobs).set({ updatedAt: new Date() }).where(eq(jobs.id, job.id));
+    // The latest assessment decides the location block (it replaces triage's).
+    await tx
+      .update(jobs)
+      .set({
+        updatedAt: new Date(),
+        locationBlock: block ? { ...block, from: "assessment" } : null,
+      })
+      .where(eq(jobs.id, job.id));
     await reindexJob(tx, job.id);
     if (!draft) throw new Error("draft insert returned no row");
     return draft;
@@ -177,6 +205,8 @@ export type JobOverview = {
   companyKey: string | null;
   triageScore: number | null;
   triageReason: string | null;
+  /** The listing excludes where the person lives (hides a discovered job; see `visibleJobs`). */
+  locationBlock: StoredLocationBlock | null;
   /** When the user first opened a discovered job (null = a new, unseen match). */
   seenAt: Date | null;
 };
@@ -235,6 +265,7 @@ export const overviewColumns = {
   origin: jobs.origin,
   triageScore: jobs.triageScore,
   triageReason: jobs.triageReason,
+  locationBlock: jobs.locationBlock,
   seenAt: jobs.seenAt,
   draftVersion: sql<
     number | null
