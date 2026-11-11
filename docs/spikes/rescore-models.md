@@ -48,11 +48,11 @@ Hard-conflict accuracy was 83% for all but Haiku: most models file "fluent Germa
 - **GPT-6 Luna (default reasoning) matched or beat Sonnet** on both judges and all deterministic checks, at about 3% of the cost: roughly $1–2 per 1,000 real jobs instead of about $38. It is a little slower per job (23 s vs 18 s).
 - **Lower reasoning is not free quality:** Luna "low" missed the Lisbon office-day conflict's verdict in 3 of 3 runs.
 - **Haiku** is the best Anthropic-only option (reasoning high: about 7–10% of Sonnet's cost), but noticeably less consistent on verdicts than Sonnet or Luna.
-- Caveats: synthetic listings only (short, clean, English); judges disagree on absolute levels (Sol is much stricter on over-inference), so only the ranking is trusted. Not yet checked on real listings and the real profile.
+- Caveats: synthetic listings only (short, clean, English); judges disagree on absolute levels (Sol is much stricter on over-inference), so only the ranking is trusted. The real-job comparison below reversed the conclusion.
 
 ## Real jobs (production copy, 2026-11-11)
 
-150 production jobs (every job with a status, 71 with triage ≥ 60, the rest random), each assessed twice per model; a blind pairwise judge compared run #1 of each, in both orders (a win must hold in both). Spend: about $31.
+150 production jobs (every job with a status, 71 with triage ≥ 60, the rest random), each assessed twice per model; a blind pairwise judge compared run #1 of each, in both orders (a win must hold in both). Spend: about $31.25.
 
 | | Sonnet 5.5 | GPT-6 Luna | GPT-6 Luna, reasoning high (75 jobs) |
 | --- | --- | --- | --- |
@@ -66,7 +66,11 @@ Hard-conflict accuracy was 83% for all but Haiku: most models file "fluent Germa
 - **The judges contradict each other along model-family lines.** Opus rewards completeness (Sonnet compares pay with the target, lists soft trade-offs and extra requirements; Luna often leaves trade-offs empty). Sol rewards precision (Sonnet over-infers: "stated small team" without a team size, pay claims without figures). Neither judge settles the question.
 - The synthetic cases missed this: their rubric checked a few decisive points, which both models hit.
 - Luna's fit levels run one step milder than Sonnet's at default reasoning; high reasoning removes that skew.
-- Decision input still open: a blind side-by-side review by the user (Sonnet vs Luna high on 10 real jobs).
+- **Blind review by the user** (10 real jobs: 4 they had acted on, 6 where the verdicts differed; Sonnet vs Luna high, labels shuffled): Sonnet 6, Luna high 1, ties 3. Most wins were slight. The user's picks match the Opus judge, not Sol.
+
+## Decision
+
+Re-scoring stays on Sonnet 5.5 (the `COPILOT_MODEL` default). Luna is about 20× cheaper and its output is valid and mostly the same verdict, but on real jobs it is noticeably less thorough, and the user preferred Sonnet. `RESCORE_MODEL=openai/gpt-6-luna` with `RESCORE_REASONING=high` remains available if cost matters more than depth. Cheaper levers that keep Sonnet are under "Not tried".
 
 ## Not tried
 
