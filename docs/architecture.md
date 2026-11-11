@@ -123,7 +123,7 @@ Key behaviours, all from the prompt in [copilot.ts](../apps/agent/src/mastra/age
 - **No approval for assessments.** Every `save_job_draft` is the job's new current version; earlier versions stay as history.
 - **Never claims success early.** Profile changes are "proposed" until the user approves them.
 
-Models come from the AI Gateway: `main` (Sonnet) for the copilot, researcher and rescorer, `fast` (Haiku) for compaction and chat titles. `LLM_MODE=mock` swaps in a deterministic fake for tests and offline dev ([models.ts](../apps/agent/src/mastra/models.ts)).
+Models come from the AI Gateway: `main` (Sonnet) for the copilot and researcher, `fast` (Haiku) for compaction, chat titles and triage; the rescorer (batch re-score and discovery's full assessments) uses `RESCORE_MODEL`, default `main`. `LLM_MODE=mock` swaps in a deterministic fake for tests and offline dev ([models.ts](../apps/agent/src/mastra/models.ts)).
 
 ## Tools
 

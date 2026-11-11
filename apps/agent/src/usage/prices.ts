@@ -1,10 +1,12 @@
 // Static price table. Providers don't return cost, so every figure derived from this is an
-// ESTIMATE and labelled as such in the UI. LLM list prices: Anthropic, as of 2026-10-06.
+// ESTIMATE and labelled as such in the UI. LLM list prices: Anthropic as of 2026-10-06, OpenAI
+// (AI Gateway catalog) as of 2026-11-11. Add a model here before using it (RESCORE_MODEL).
 
 /** USD per million tokens. Cache reads bill at 10% of input, 5-minute cache writes at 125%. */
 export const LLM_PRICES_PER_MTOK: Record<string, { input: number; output: number }> = {
   "anthropic/claude-sonnet-5.5": { input: 2, output: 10 },
   "anthropic/claude-haiku-5.5": { input: 0.1, output: 0.5 },
+  "openai/gpt-6-luna": { input: 0.1, output: 0.5 },
 };
 const UNKNOWN_MODEL = { input: 2, output: 10 };
 const CACHE_READ_FACTOR = 0.1;
