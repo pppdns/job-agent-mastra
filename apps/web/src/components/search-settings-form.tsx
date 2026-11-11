@@ -198,7 +198,10 @@ export function SearchSettingsForm({ settings }: { settings: SearchSettings }) {
               defaultValue={settings.maxAssessmentsPerRun}
             />
           </Field>
-          <Field label="Triage at most per run" hint="The rest waits for the next run.">
+          <Field
+            label="Triage at most per run"
+            hint="About $0.002 a job. The rest waits for the next run."
+          >
             <Input
               name="maxTriagePerRun"
               type="number"
@@ -207,7 +210,10 @@ export function SearchSettingsForm({ settings }: { settings: SearchSettings }) {
               defaultValue={settings.maxTriagePerRun}
             />
           </Field>
-          <Field label="Max model spend per run (USD)" hint="Triage plus assessments.">
+          <Field
+            label="Max model spend per run (USD)"
+            hint="Triage plus assessments; triage leaves the assessments' share."
+          >
             <Input
               name="maxLlmUsdPerRun"
               type="number"

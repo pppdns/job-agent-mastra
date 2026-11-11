@@ -73,10 +73,13 @@ export const searchSettingsSchema = z.object({
   triageThreshold: z.number().int().min(0).max(100).default(60),
   /** Full assessments per run for the best new matches. */
   maxAssessmentsPerRun: z.number().int().min(0).max(50).default(15),
-  /** Most jobs triaged per run; the rest wait for the next run (newest first). */
-  maxTriagePerRun: z.number().int().min(0).max(2_000).default(400),
+  /**
+   * Most jobs triaged per run, a runaway guard: triage is cheap (~$0.002 a job), so by default
+   * every waiting job is triaged. The rest wait for the next run (newest first).
+   */
+  maxTriagePerRun: z.number().int().min(0).max(2_000).default(2_000),
   /** Hard cap on what one run may spend on models: triage plus assessments (USD). */
-  maxLlmUsdPerRun: z.number().min(0).max(50).default(2),
+  maxLlmUsdPerRun: z.number().min(0).max(50).default(5),
   sources: z
     .object({
       himalayas: z

@@ -18,7 +18,7 @@ import type { TracingContext } from "@mastra/core/observability";
 import { env } from "../env";
 import { RunRecorder } from "../usage/recorder";
 import { assessTopMatches } from "./assess";
-import { DiscoveryBudget } from "./budget";
+import { assessmentShare, DiscoveryBudget } from "./budget";
 import { createProgress } from "./progress";
 import { ALERT_REPEAT_MS, runProblems, sendDigest } from "./report";
 import { httpJson } from "./sources/http";
@@ -49,6 +49,7 @@ async function stateOf(db: Db, runId: string) {
     budget: new DiscoveryBudget({
       maxUsd: settings.maxLlmUsdPerRun,
       maxTriage: settings.maxTriagePerRun,
+      keepForAssessUsd: assessmentShare(settings.maxLlmUsdPerRun, settings.maxAssessmentsPerRun),
     }),
   };
   runState.set(runId, state);
