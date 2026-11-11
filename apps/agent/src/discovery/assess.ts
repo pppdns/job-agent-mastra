@@ -20,6 +20,8 @@ export type AssessOutcome = { assessed: number; failed: number; errors: string[]
 
 export type AssessTopDeps = {
   db: Db;
+  /** Most jobs to assess; unset = the `maxAssessmentsPerRun` setting. */
+  limit?: number;
   /** Only jobs triaged since then (this run) are candidates; unset = every open match. */
   since?: Date;
   budget: DiscoveryBudget;
@@ -41,7 +43,7 @@ export async function assessTopMatches(deps: AssessTopDeps): Promise<AssessOutco
   const queue = await jobsToAssess(db, {
     since: deps.since,
     threshold: settings.triageThreshold,
-    limit: settings.maxAssessmentsPerRun,
+    limit: deps.limit ?? settings.maxAssessmentsPerRun,
   });
   const total = queue.length;
   deps.onProgress?.(0, total);

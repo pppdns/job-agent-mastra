@@ -3,9 +3,10 @@
 import { useState, useTransition } from "react";
 import {
   assessJobAction,
+  type DiscoveryActionState,
   keepJobAction,
   keepPostingAction,
-  resetStaleTriageAction,
+  retriageNowAction,
 } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 
@@ -25,22 +26,44 @@ export function KeepButton({ kind, id }: { kind: "job" | "posting"; id: string }
   );
 }
 
-/** Banner action: discovered jobs triaged against an older profile get triaged again. */
+/**
+ * Banner action: discovered jobs triaged against an older profile are triaged again now, in a
+ * triage-only discovery run. Rendered always: hidden while nothing is stale, but its result line
+ * stays after the count drops to zero.
+ */
 export function RetriageButton({ count }: { count: number }) {
   const [pending, start] = useTransition();
+  const [result, setResult] = useState<DiscoveryActionState>(null);
+  if (count === 0 && !result) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border p-2 text-sm">
-      <span className="text-muted-foreground">
-        {count} discovered job{count === 1 ? " was" : "s were"} triaged against an older profile.
-      </span>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={pending}
-        onClick={() => start(async () => void (await resetStaleTriageAction()))}
-      >
-        {pending ? "Clearing…" : "Re-triage on the next run"}
-      </Button>
+      {count > 0 && (
+        <>
+          <span className="text-muted-foreground">
+            {count} discovered job{count === 1 ? " was" : "s were"} triaged against an older
+            profile.
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={pending}
+            onClick={() => start(async () => setResult(await retriageNowAction()))}
+          >
+            {pending ? "Starting…" : "Re-triage now"}
+          </Button>
+          <span className="w-full text-xs text-muted-foreground">
+            Fast model, about $0.002 a job. Progress is on the Discovery page.
+          </span>
+        </>
+      )}
+      {result && (
+        <p
+          role="status"
+          className={result.ok ? "w-full text-muted-foreground" : "w-full text-destructive"}
+        >
+          {result.message}
+        </p>
+      )}
     </div>
   );
 }

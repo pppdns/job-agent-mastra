@@ -319,7 +319,8 @@ export function keepJob(db: Db, jobId: string): Promise<void> {
 
 /**
  * Discovered jobs triaged against an older profile, still untouched. `resetStaleTriage` clears
- * their scores so the next run triages them again (they show as "triage pending" meanwhile).
+ * their scores so a triage run ("Re-triage now" starts one) scores them again (they show as
+ * "triage pending" meanwhile).
  */
 export async function staleTriageCount(db: Db): Promise<number> {
   const version = await currentProfileVersion(db);

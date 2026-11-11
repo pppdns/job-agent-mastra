@@ -8,6 +8,7 @@ import {
   listDiscoveryRuns,
   startRun,
 } from "@copilot/db";
+import { ASSESS_BATCH_SIZES } from "@copilot/shared";
 import { registerApiRoute } from "@mastra/core/server";
 import { z } from "zod";
 import { closeUsage, discoveryThreadId } from "../../discovery/funnel";
@@ -29,6 +30,12 @@ const bodySchema = z.object({
     .int()
     .refine((d) => (BACKFILL_DAYS as readonly number[]).includes(d))
     .nullish(),
+  /** assess only: how many matches to assess (default: the `maxAssessmentsPerRun` setting). */
+  assessLimit: z
+    .number()
+    .int()
+    .refine((n) => (ASSESS_BATCH_SIZES as readonly number[]).includes(n))
+    .nullish(),
 });
 
 /**
@@ -42,19 +49,25 @@ export const discoveryRunRoute = registerApiRoute("/discovery/run", {
   handler: async (c) => {
     const parsed = bodySchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) {
-      return c.json({ error: "mode must be fetch, triage or assess; lookbackDays 7 or 30" }, 400);
+      return c.json(
+        {
+          error: `mode must be fetch, triage or assess; lookbackDays 7 or 30; assessLimit ${ASSESS_BATCH_SIZES.join(", ")}`,
+        },
+        400,
+      );
     }
     const { mode } = parsed.data;
     const lookbackDays = mode === "fetch" ? (parsed.data.lookbackDays ?? null) : null;
+    const assessLimit = mode === "assess" ? (parsed.data.assessLimit ?? null) : null;
     const db = await getAppDb();
     const [latest] = await listDiscoveryRuns(db, 1);
     if (latest?.status === "running") return c.json({ error: "A discovery run is running" }, 409);
     const workflow = c.get("mastra").getWorkflow("discoverJobsWorkflow");
     const run = await workflow.createRun();
     const { runId } = await run.startAsync({
-      inputData: { trigger: MODE_TRIGGER[mode], lookbackDays },
+      inputData: { trigger: MODE_TRIGGER[mode], lookbackDays, assessLimit },
       tracingOptions: {
-        rootSpanName: `discover-jobs (${MODE_LABEL[mode]}${lookbackDays ? `, ${lookbackDays}-day backfill` : ""})`,
+        rootSpanName: `discover-jobs (${MODE_LABEL[mode]}${lookbackDays ? `, ${lookbackDays}-day backfill` : ""}${assessLimit ? `, up to ${assessLimit}` : ""})`,
       },
     });
     return c.json({ workflowRunId: runId, workflowId: DISCOVER_JOBS_WORKFLOW_ID }, 202);

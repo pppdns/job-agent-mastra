@@ -18,7 +18,7 @@ import type { TracingContext } from "@mastra/core/observability";
 import { env } from "../env";
 import { RunRecorder } from "../usage/recorder";
 import { assessTopMatches } from "./assess";
-import { assessmentShare, DiscoveryBudget } from "./budget";
+import { ASSESS_RESERVE_USD, assessmentShare, DiscoveryBudget } from "./budget";
 import { createProgress } from "./progress";
 import { ALERT_REPEAT_MS, runProblems, sendDigest } from "./report";
 import { httpJson } from "./sources/http";
@@ -31,15 +31,25 @@ import { triageJobs } from "./triage";
 
 export const discoveryThreadId = (runId: string) => `${DISCOVERY_THREAD_PREFIX}${runId}`;
 
-type StepContext = { tracingContext?: TracingContext; signal?: AbortSignal };
+type StepContext = {
+  tracingContext?: TracingContext;
+  signal?: AbortSignal;
+  /** Assess-only runs: the batch size picked on /discovery (overrides `maxAssessmentsPerRun`). */
+  assessLimit?: number;
+};
 
 /** One recorder and budget per run, shared by its steps (they run in this process, in order). */
 const runState = new Map<string, { recorder: RunRecorder; budget: DiscoveryBudget }>();
 
-async function stateOf(db: Db, runId: string) {
+/**
+ * `assessLimit` is a batch the user picked; the run's spend cap then grows to cover its
+ * reservations, so the batch isn't cut short by the cap meant for scheduled runs.
+ */
+async function stateOf(db: Db, runId: string, assessLimit?: number) {
   const existing = runState.get(runId);
   if (existing) return existing;
   const settings = await getSearchSettings(db);
+  const maxUsd = Math.max(settings.maxLlmUsdPerRun, (assessLimit ?? 0) * ASSESS_RESERVE_USD);
   // The usage run row; it may exist already when a step is retried.
   await startRun(db, { id: runId, threadId: discoveryThreadId(runId) }).catch(() => undefined);
   const recorder = new RunRecorder(db, discoveryThreadId(runId));
@@ -47,7 +57,7 @@ async function stateOf(db: Db, runId: string) {
   const state = {
     recorder,
     budget: new DiscoveryBudget({
-      maxUsd: settings.maxLlmUsdPerRun,
+      maxUsd,
       maxTriage: settings.maxTriagePerRun,
       keepForAssessUsd: assessmentShare(settings.maxLlmUsdPerRun, settings.maxAssessmentsPerRun),
     }),
@@ -132,8 +142,13 @@ async function triage(db: Db, runId: string, context: StepContext) {
   return funnel;
 }
 
-async function assess(db: Db, runId: string, funnel: FunnelResult, context: StepContext) {
-  const { recorder, budget } = await stateOf(db, runId);
+async function assess(
+  db: Db,
+  runId: string,
+  funnel: FunnelResult,
+  { assessLimit, ...context }: StepContext,
+) {
+  const { recorder, budget } = await stateOf(db, runId, assessLimit);
   const run = await getDiscoveryRun(db, runId);
   const progress = createProgress(db, runId);
   progress.step("assess");
@@ -141,6 +156,7 @@ async function assess(db: Db, runId: string, funnel: FunnelResult, context: Step
     db,
     // An assess-only run picks from every open match; the others assess their own new matches.
     since: run?.trigger === "assess" ? undefined : (run?.startedAt ?? new Date()),
+    limit: assessLimit,
     budget,
     threadId: discoveryThreadId(runId),
     recorder,

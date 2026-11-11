@@ -1,7 +1,8 @@
 "use client";
 
+import { ASSESS_BATCH_SIZES } from "@copilot/shared";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
 import {
   type DiscoveryActionState,
   startDiscoveryAction,
@@ -11,20 +12,20 @@ import { Button } from "@/components/ui/button";
 
 /**
  * "Run now", the occasional backfill, and runs that skip fetching: triage the next batch of
- * waiting jobs, or fully assess more matches. "Stop run" while one is going.
- * `maxBackfillUsd` is what a backfill may spend.
+ * waiting jobs, or fully assess more matches (a batch size picked here). "Stop run" while one
+ * is going. `maxBackfillUsd` is what a backfill may spend.
  */
 export function DiscoveryControls({
   running,
   maxBackfillUsd,
   awaitingTriage,
-  maxAssessments,
 }: {
   running: boolean;
   maxBackfillUsd: number | null;
   awaitingTriage: number;
-  maxAssessments: number;
 }) {
+  // The smallest batch by default: a known, low cost per click.
+  const [assessLimit, setAssessLimit] = useState<number>(ASSESS_BATCH_SIZES[0]);
   // One action for every button, so the feedback line always shows the latest result.
   const [shown, action, pending] = useActionState<DiscoveryActionState, FormData>(
     (prev, formData) =>
@@ -54,16 +55,33 @@ export function DiscoveryControls({
         >
           Triage next batch · {awaitingTriage.toLocaleString("en-US")} waiting
         </Button>
-        <Button
-          type="submit"
-          name="run"
-          value="assess"
-          variant="outline"
-          disabled={busy || maxAssessments === 0}
-        >
-          Assess more matches · up to {maxAssessments}
-        </Button>
+        <span className="flex flex-wrap items-center gap-1">
+          <input type="hidden" name="assessLimit" value={assessLimit} />
+          <Button type="submit" name="run" value="assess" variant="outline" disabled={busy}>
+            Assess more matches · up to {assessLimit}
+          </Button>
+          <fieldset className="flex items-center gap-1">
+            <legend className="sr-only">Assessment batch size</legend>
+            {ASSESS_BATCH_SIZES.map((n) => (
+              <Button
+                key={n}
+                type="button"
+                size="xs"
+                variant={n === assessLimit ? "outline" : "ghost"}
+                className={n === assessLimit ? undefined : "text-muted-foreground"}
+                aria-pressed={n === assessLimit}
+                onClick={() => setAssessLimit(n)}
+              >
+                {n}
+              </Button>
+            ))}
+          </fieldset>
+        </span>
       </form>
+      <p className="text-xs text-muted-foreground">
+        Assessing uses the main model, about $0.04 a job, best matches first. A bigger batch raises
+        that run&apos;s spend cap to fit.
+      </p>
       {running && (
         <form action={action}>
           <Button

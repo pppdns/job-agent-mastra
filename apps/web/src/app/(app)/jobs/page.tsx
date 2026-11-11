@@ -127,7 +127,7 @@ async function JobList({ searchParams }: Pick<PageProps<"/jobs">, "searchParams"
   return (
     <div className="flex flex-col gap-4">
       {!params.q && assessed.stale > 0 && <RescoreButton count={assessed.stale} />}
-      {!params.q && staleTriage > 0 && <RetriageButton count={staleTriage} />}
+      {!params.q && <RetriageButton count={staleTriage} />}
       <div className="flex flex-wrap items-center gap-2">
         <SearchForm params={params} />
         {params.tab !== "screened" && <SortToggle params={params} />}

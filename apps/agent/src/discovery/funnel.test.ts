@@ -27,7 +27,14 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { assessTopMatches } from "./assess";
 import { ASSESS_RESERVE_USD, assessmentShare, DiscoveryBudget, TRIAGE_RESERVE_USD } from "./budget";
 import { MAX_ERRORS, noteError } from "./errors";
-import { assessStep, closeUsage, discoveryThreadId, reportStep, triageStep } from "./funnel";
+import {
+  assessStep,
+  closeUsage,
+  discoveryThreadId,
+  EMPTY_FUNNEL,
+  reportStep,
+  triageStep,
+} from "./funnel";
 import { alreadyAlerted, buildDigest, runProblems, sendDigest } from "./report";
 import type { HttpJson } from "./sources/http";
 import { criteriaSummary, settleScore, triageJobs, triagePrompt } from "./triage";
@@ -195,8 +202,8 @@ describe("triage", () => {
 describe("assessTopMatches", () => {
   it("assesses the best matches first, up to the per-run count and the budget", async () => {
     const runStart = new Date(Date.now() - 1_000);
-    await discovered(["a", "A"], ["b", "B"], ["c", "C"]);
-    const scores: Record<string, number> = { A: 70, B: 95, C: 30 };
+    await discovered(["a", "A"], ["b", "B"], ["c", "C"], ["d", "D"]);
+    const scores: Record<string, number> = { A: 70, B: 95, C: 30, D: 80 };
     await triageJobs({
       db,
       budget: new DiscoveryBudget({ maxUsd: 1, maxTriage: 10 }),
@@ -218,6 +225,19 @@ describe("assessTopMatches", () => {
     });
     expect(outcome).toEqual({ assessed: 1, failed: 0, errors: [] });
     expect(assessed).toEqual(["B"]);
+
+    // A batch size picked on /discovery overrides the per-run setting.
+    assessed.length = 0;
+    await assessTopMatches({
+      db,
+      since: runStart,
+      limit: 2,
+      budget: new DiscoveryBudget({ maxUsd: ASSESS_RESERVE_USD * 5, maxTriage: 0 }),
+      threadId: "t",
+      assess: async (id) => assessed.push(titles[id] ?? id),
+    });
+    // The mock saves no draft, so B is still a candidate.
+    expect(assessed).toEqual(["B", "D"]);
 
     await saveSearchSettings(db, settings({ maxAssessmentsPerRun: 5 }));
     const broke = new DiscoveryBudget({ maxUsd: ASSESS_RESERVE_USD / 2, maxTriage: 0 });
@@ -466,6 +486,19 @@ describe("funnel steps (mock model)", () => {
     expect(usage.runs[0]?.status).toBe("completed");
     expect(usage.totals.llmCalls).toBeGreaterThanOrEqual(3);
     expect(Object.keys(await latestRunStatuses(db))).toEqual([]);
+  });
+
+  it("raises the spend cap to cover a picked assessment batch", async () => {
+    const runId = await discovered(["a", "Founding Engineer"], ["b", "Platform Engineer"]);
+    await triageJobs({
+      db,
+      budget: new DiscoveryBudget({ maxUsd: 1, maxTriage: 10 }),
+      triage: async () => ({ score: 90, reason: "r", hardConflict: null }),
+    });
+    // The cap alone leaves no room for one assessment; the picked batch of 15 lifts it.
+    await saveSearchSettings(db, settings({ maxLlmUsdPerRun: ASSESS_RESERVE_USD / 2 }));
+    const funnel = await assessStep(db, runId, EMPTY_FUNNEL, { assessLimit: 15 });
+    expect(funnel).toMatchObject({ assessed: 2, assessFailed: 0 });
   });
 });
 
