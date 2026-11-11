@@ -143,7 +143,7 @@ export const MODEL_CASES: ModelCase[] = [
     fitLevels: ["poor", "weak"],
     hardConflict: true,
     must: [
-      "Identifies that the job requires living in and being authorised to work in the US, which rules out someone living in Germany.",
+      "Identifies the US-only hiring restriction (US residence or work authorisation) as ruling out someone who lives in Germany.",
     ],
     mustNot: [
       "Says the job meets the remote requirement without mentioning the US-only restriction.",

@@ -128,7 +128,7 @@ async function pool<T>(items: T[], size: number, run: (item: T) => Promise<void>
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
-function report(results: UnitResult[], configs: Config[], spent: number) {
+function report(results: UnitResult[], configs: Config[], caseCount: number, spent: number) {
   const rows = configs.map((config) => {
     const mine = results.filter((r) => r.config === config.label && r.status !== "skipped");
     const saved = mine.filter((r) => r.status === "saved");
@@ -164,7 +164,7 @@ function report(results: UnitResult[], configs: Config[], spent: number) {
   const lines = [
     "# Rescorer model comparison",
     "",
-    `${new Date().toISOString()} · judge ${env.EVAL_JUDGE_MODEL} · ${REPEAT} repeat(s) · ${MODEL_CASES.length} cases · spent $${spent.toFixed(2)} (models + judge, gateway-reported)`,
+    `${new Date().toISOString()} · judge ${env.EVAL_JUDGE_MODEL} · ${REPEAT} repeat(s) · ${caseCount} cases · spent $${spent.toFixed(2)} (models + judge, gateway-reported)`,
     "",
     "Valid = saved a draft (schema + saveDraft rules, one retry). Verdict / fit / conflict = deterministic checks against the expected outcome (failed runs count as misses). Judge = share of rubric criteria passed. Perfect = every check and criterion passed.",
     "",
@@ -340,7 +340,7 @@ describe.skipIf(!MODELS)("rescorer model comparison (live, opt-in)", () => {
 
     const dataDir = join(findWorkspaceRoot(), "data");
     writeFileSync(join(dataDir, "rescore-models-results.json"), JSON.stringify(results, null, 2));
-    const markdown = report(results, configs, spent);
+    const markdown = report(results, configs, cases.length, spent);
     writeFileSync(join(dataDir, "rescore-models-report.md"), markdown);
     console.log(markdown);
     expect(results.filter((r) => r.status === "skipped").length, "budget ran out").toBe(0);
