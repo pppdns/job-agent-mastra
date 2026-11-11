@@ -101,5 +101,7 @@ test("approved profile reaches new chats; local notes and assessments behave", a
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(profile).toContainText("Remote within the EU only");
   await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0);
+  // History starts collapsed.
+  await page.getByRole("button", { name: /^History/ }).click();
   await expect(page.getByLabel("History")).toContainText("Added on the profile page");
 });
