@@ -40,6 +40,8 @@ export type ModelCase = {
   fitLevels: FitLevel[];
   /** Whether hardConflicts must be non-empty; null = either is acceptable. */
   hardConflict: boolean | null;
+  /** Whether the assessment must set a location block (default: must not). */
+  locationBlock?: boolean;
   must: string[];
   mustNot: string[];
 };
@@ -142,6 +144,7 @@ export const MODEL_CASES: ModelCase[] = [
     verdicts: ["pass"],
     fitLevels: ["poor", "weak"],
     hardConflict: true,
+    locationBlock: true,
     must: [
       "Identifies the US-only hiring restriction (US residence or work authorisation) as ruling out someone who lives in Germany.",
     ],

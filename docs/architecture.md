@@ -337,7 +337,7 @@ flowchart LR
 
 - **Sources:** free official feeds are read directly. Boards without one use pay-per-event Apify actors, which include their proxies.
 - **Cost control:** runs are started by our code, with per-run caps and a 30-day budget check. Spend is recorded per source and run.
-- **Hidden jobs:** discovered jobs hidden by the screen (or, later, the triage threshold) are filtered by `visibleJobs` in `listJobs`. Chat tools and re-score therefore only see jobs worth showing.
+- **Hidden jobs:** discovered jobs hidden by the screen, the triage threshold, or a location block (the listing explicitly excludes where the person lives: a quote app code finds in the listing, from triage or the latest assessment) are filtered by `visibleJobs` in `listJobs`; they show under "Screened out" with "Keep anyway". Chat tools and re-score therefore only see jobs worth showing.
 
 ## Durable runs: refresh, reconnect, stop
 
