@@ -371,6 +371,17 @@ describe("actor sources", () => {
     });
   });
 
+  it("reports a source whose searches all came back empty, but not a quiet single search", async () => {
+    const empty: ApifyRunner = async () => ({ items: [], costUsd: 0.005 });
+    const dice = await createActorSource(diceBoard, empty).fetch(context({ maxUsd: 1 }));
+    const searches = DEFAULT_SEARCH_SETTINGS.queries.length;
+    expect(dice.failures).toEqual([`every search came back empty (${searches} searches)`]);
+    expect(dice.partial).toBe(`every search came back empty (${searches} searches)`);
+    const yc = await createActorSource(ycombinatorBoard, empty).fetch(context());
+    expect(yc.failures).toEqual([]);
+    expect(yc.partial).toBeUndefined();
+  });
+
   afterEach(() => vi.restoreAllMocks());
 
   it("fits each search into the source's time and stops starting searches when it runs out", async () => {
