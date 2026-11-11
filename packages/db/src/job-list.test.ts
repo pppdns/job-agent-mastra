@@ -6,11 +6,14 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { listJobs, saveDraft } from "./assessments";
 import {
+  digestMatches,
   jobsAwaitingTriage,
+  jobsToAssess,
   keepPosting,
   recordPosting,
   saveTriage,
   startDiscoveryRun,
+  unseenMatchCount,
 } from "./discovery";
 import { createDb, type Db, migrateDb } from "./index";
 import {
@@ -276,7 +279,7 @@ describe("location blocks", () => {
     const id = await discovered("a", 80, { description: US_ONLY });
     await expect(
       assess(id, { locationBlock: { places: ["United Kingdom"], quote: "UK residents only" } }),
-    ).rejects.toThrow(/not in this job's sources/);
+    ).rejects.toThrow(/not in this job's listing/);
     await expect(
       assess(id, { recommendation: { verdict: "investigate_further", rationale: "?" } }),
     ).rejects.toThrow(/verdict pass/);
@@ -327,5 +330,54 @@ describe("location blocks", () => {
     });
     await resetStaleTriage(db);
     expect(await blocks()).toEqual({ [fromTriage]: null, [fromDraft]: "assessment" });
+  });
+
+  it("ignores research pages when checking the quote", async () => {
+    const id = await discovered("a", 80);
+    await addSource(db, {
+      jobId: id,
+      kind: "web",
+      provider: "tavily",
+      url: "https://example.com/about",
+      content: US_ONLY,
+    });
+    await expect(assess(id)).rejects.toThrow(/not in this job's listing/);
+  });
+
+  it("leaves blocked jobs out of matches to assess, email and count", async () => {
+    const since = new Date(Date.now() - 60_000);
+    const id = await discovered("a", 80, { description: US_ONLY });
+    await saveTriage(db, id, { score: 80, reason: "r", profileVersion: 0, locationBlock: block });
+    const args = { since, threshold: 0, limit: 10 };
+    expect(await jobsToAssess(db, args)).toEqual([]);
+    expect(await digestMatches(db, args)).toEqual([]);
+    expect(await unseenMatchCount(db)).toBe(0);
+    await keepJob(db, id);
+    expect((await digestMatches(db, args)).map((m) => m.id)).toEqual([id]);
+  });
+
+  it("never lets triage change an assessed job's block", async () => {
+    const cleared = await discovered("a", 80, { description: US_ONLY });
+    await assess(cleared, {
+      locationBlock: null,
+      recommendation: { verdict: "consider", rationale: "ok" },
+    });
+    await saveTriage(db, cleared, {
+      score: 39,
+      reason: "r",
+      profileVersion: 0,
+      locationBlock: block,
+    });
+    const blocked = await discovered("b", 80, { description: US_ONLY });
+    await assess(blocked);
+    await saveTriage(db, blocked, {
+      score: 39,
+      reason: "r",
+      profileVersion: 0,
+      locationBlock: block,
+    });
+    const rows = await db.select({ id: jobs.id, b: jobs.locationBlock }).from(jobs);
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r.b?.from ?? null]));
+    expect(byId).toEqual({ [cleared]: null, [blocked]: "assessment" });
   });
 });

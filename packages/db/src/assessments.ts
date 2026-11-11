@@ -54,7 +54,7 @@ async function saveDraftUnlocked(db: Db, input: DraftInput): Promise<JobDraft> {
   if (!job) throw new AssessmentError(`unknown job id ${input.jobId}`);
 
   const jobSources = await db
-    .select({ id: sources.id, content: sources.content })
+    .select({ id: sources.id, content: sources.content, kind: sources.kind, url: sources.url })
     .from(sources)
     .where(eq(sources.jobId, job.id));
   const known = new Set(jobSources.map((s) => s.id));
@@ -81,11 +81,11 @@ async function saveDraftUnlocked(db: Db, input: DraftInput): Promise<JobDraft> {
     if (
       !quoteInSources(
         block.quote,
-        jobSources.map((s) => s.content),
+        jobSources.filter((s) => isListingSource(s, job.canonicalUrl)).map((s) => s.content),
       )
     ) {
       throw new AssessmentError(
-        `locationBlock quote "${block.quote.slice(0, 60)}" is not in this job's sources; copy the listing's words exactly, or set locationBlock to null`,
+        `locationBlock quote "${block.quote.slice(0, 60)}" is not in this job's listing; copy the listing's words exactly, or set locationBlock to null`,
       );
     }
     if (assessment.recommendation.verdict !== "pass" || assessment.hardConflicts.length === 0) {
