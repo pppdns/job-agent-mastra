@@ -243,178 +243,185 @@ function report(
   return lines.join("\n");
 }
 
-describe.skipIf(!MODELS)("rescorer model comparison (live, opt-in)", () => {
-  it("compares rescorer configs on the trap cases", { timeout: 3 * 60 * 60_000 }, async () => {
-    if (!resolveDatabaseUrl().endsWith("/data/eval.db")) {
-      throw new Error("evals must run on data/eval.db (use pnpm eval)");
-    }
-    const configs = (MODELS === "default" ? DEFAULT_MODEL_CONFIGS : (MODELS ?? "").split(","))
-      .filter((s) => s.trim())
-      .map(parseConfig);
-    const cases = MODEL_CASES.filter(
-      (c) => !CASE_FILTER || c.name.toLowerCase().includes(CASE_FILTER),
-    );
-    expect(cases.length, "no case matches EVAL_CASES").toBeGreaterThan(0);
-
-    const db = await getAppDb();
-    await resetAppTables(db);
-    const { approval } = await proposeProfileChange(db, {
-      threadId: "eval-seed",
-      proposal: {
-        changes: EVAL_PROFILE.map((f) => ({ op: "add", ...f })),
-        reason: "Eval seed profile",
-      },
-    });
-    await decideApproval(db, {
-      approvalId: approval.id,
-      threadId: "eval-seed",
-      decision: "approve",
-      payloadHash: approval.payloadHash,
-    });
-    const profile = await currentProfile(db);
-    const profileText = formatProfile(profile);
-    const listings = new Map(
-      cases.map((c) => [
-        c.file,
-        readFileSync(join(findWorkspaceRoot(), "fixtures/listings", c.file), "utf8"),
-      ]),
-    );
-
-    // One job per unit, so concurrent drafts never share a job.
-    const units: Unit[] = [];
-    for (let repeat = 1; repeat <= REPEAT; repeat++) {
-      for (const testCase of cases) {
-        for (const config of configs) units.push({ config, testCase, repeat });
+// Not with EVAL_REAL: this suite resets the eval DB, which then holds the real-data copy.
+describe.skipIf(!MODELS || process.env.EVAL_REAL === "1")(
+  "rescorer model comparison (live, opt-in)",
+  () => {
+    it("compares rescorer configs on the trap cases", { timeout: 3 * 60 * 60_000 }, async () => {
+      if (!resolveDatabaseUrl().endsWith("/data/eval.db")) {
+        throw new Error("evals must run on data/eval.db (use pnpm eval)");
       }
-    }
-    const agents = new Map(
-      configs.map((c) => [
-        c.label,
-        createRescorerAgent(() => gatewayModel(c.modelId, c.reasoning)),
-      ]),
-    );
-
-    const budget = createBudget(BUDGET);
-    const results: UnitResult[] = [];
-    const dataDir = join(findWorkspaceRoot(), "data");
-    // The profile the assessments were written against, for re-judging later (other evals
-    // reseed the eval DB with other profiles).
-    writeFileSync(join(dataDir, PROFILE_SNAPSHOT), profileText);
-    // Written after every unit, so a crash or timeout keeps what was paid for.
-    const save = () => {
-      writeFileSync(join(dataDir, "rescore-models-results.json"), JSON.stringify(results, null, 2));
-      writeFileSync(
-        join(dataDir, "rescore-models-report.md"),
-        report(results, configs, cases.length, budget.spent),
+      const configs = (MODELS === "default" ? DEFAULT_MODEL_CONFIGS : (MODELS ?? "").split(","))
+        .filter((s) => s.trim())
+        .map(parseConfig);
+      const cases = MODEL_CASES.filter(
+        (c) => !CASE_FILTER || c.name.toLowerCase().includes(CASE_FILTER),
       );
-    };
-    await pool(units, CONCURRENCY, async ({ config, testCase, repeat }) => {
-      const base = { config: config.label, case: testCase.name, repeat };
-      if (budget.exhausted) {
-        results.push({
-          ...base,
-          status: "skipped",
-          costUsd: 0,
-          judgeCostUsd: 0,
-          ms: 0,
-          checks: {},
-        });
-        return;
+      expect(cases.length, "no case matches EVAL_CASES").toBeGreaterThan(0);
+
+      const db = await getAppDb();
+      await resetAppTables(db);
+      const { approval } = await proposeProfileChange(db, {
+        threadId: "eval-seed",
+        proposal: {
+          changes: EVAL_PROFILE.map((f) => ({ op: "add", ...f })),
+          reason: "Eval seed profile",
+        },
+      });
+      await decideApproval(db, {
+        approvalId: approval.id,
+        threadId: "eval-seed",
+        decision: "approve",
+        payloadHash: approval.payloadHash,
+      });
+      const profile = await currentProfile(db);
+      const profileText = formatProfile(profile);
+      const listings = new Map(
+        cases.map((c) => [
+          c.file,
+          readFileSync(join(findWorkspaceRoot(), "fixtures/listings", c.file), "utf8"),
+        ]),
+      );
+
+      // One job per unit, so concurrent drafts never share a job.
+      const units: Unit[] = [];
+      for (let repeat = 1; repeat <= REPEAT; repeat++) {
+        for (const testCase of cases) {
+          for (const config of configs) units.push({ config, testCase, repeat });
+        }
       }
-      const { job } = await upsertJob(db, {
-        title: testCase.title,
-        company: testCase.company,
-        location: testCase.location,
-        canonicalUrl: `https://eval.invalid/${encodeURIComponent(`${config.label}/${testCase.file}/${repeat}`)}`,
-      });
-      await addSource(db, {
-        jobId: job.id,
-        kind: "pasted",
-        provider: "user",
-        content: listings.get(testCase.file) ?? "",
-      });
-      let costUsd = 0;
-      const started = Date.now();
-      try {
-        await assessJob(job.id, profile, {
-          db,
-          signal: budget.signal(),
-          rescorer: {
-            agent:
-              agents.get(config.label) ?? createRescorerAgent(() => gatewayModel(config.modelId)),
-            modelId: config.modelId,
-          },
-          onModelCall: ({ providerMetadata }) => {
-            const cost = gatewayCost(providerMetadata);
-            costUsd += cost;
-            budget.add(cost);
-          },
+      const agents = new Map(
+        configs.map((c) => [
+          c.label,
+          createRescorerAgent(() => gatewayModel(c.modelId, c.reasoning)),
+        ]),
+      );
+
+      const budget = createBudget(BUDGET);
+      const results: UnitResult[] = [];
+      const dataDir = join(findWorkspaceRoot(), "data");
+      // The profile the assessments were written against, for re-judging later (other evals
+      // reseed the eval DB with other profiles).
+      writeFileSync(join(dataDir, PROFILE_SNAPSHOT), profileText);
+      // Written after every unit, so a crash or timeout keeps what was paid for.
+      const save = () => {
+        writeFileSync(
+          join(dataDir, "rescore-models-results.json"),
+          JSON.stringify(results, null, 2),
+        );
+        writeFileSync(
+          join(dataDir, "rescore-models-report.md"),
+          report(results, configs, cases.length, budget.spent),
+        );
+      };
+      await pool(units, CONCURRENCY, async ({ config, testCase, repeat }) => {
+        const base = { config: config.label, case: testCase.name, repeat };
+        if (budget.exhausted) {
+          results.push({
+            ...base,
+            status: "skipped",
+            costUsd: 0,
+            judgeCostUsd: 0,
+            ms: 0,
+            checks: {},
+          });
+          return;
+        }
+        const { job } = await upsertJob(db, {
+          title: testCase.title,
+          company: testCase.company,
+          location: testCase.location,
+          canonicalUrl: `https://eval.invalid/${encodeURIComponent(`${config.label}/${testCase.file}/${repeat}`)}`,
         });
-      } catch (error) {
+        await addSource(db, {
+          jobId: job.id,
+          kind: "pasted",
+          provider: "user",
+          content: listings.get(testCase.file) ?? "",
+        });
+        let costUsd = 0;
+        const started = Date.now();
+        try {
+          await assessJob(job.id, profile, {
+            db,
+            signal: budget.signal(),
+            rescorer: {
+              agent:
+                agents.get(config.label) ?? createRescorerAgent(() => gatewayModel(config.modelId)),
+              modelId: config.modelId,
+            },
+            onModelCall: ({ providerMetadata }) => {
+              const cost = gatewayCost(providerMetadata);
+              costUsd += cost;
+              budget.add(cost);
+            },
+          });
+        } catch (error) {
+          results.push({
+            ...base,
+            status: "failed",
+            reason: (error as Error).message.slice(0, 300),
+            costUsd,
+            judgeCostUsd: 0,
+            ms: Date.now() - started,
+            checks: {},
+          });
+          console.log(
+            `[$${budget.spent.toFixed(2)}] ${base.config} · ${base.case} #${repeat}: FAILED ${(error as Error).message.slice(0, 200)}`,
+          );
+          save();
+          return;
+        }
+        const ms = Date.now() - started;
+        const assessment = (await getJobDetail(db, job.id))?.draft?.assessment;
+        if (!assessment) throw new Error(`no draft saved for ${base.config} ${base.case}`);
+        const checks: Record<string, boolean> = {
+          verdict: testCase.verdicts.includes(assessment.recommendation.verdict),
+          fitLevel: !!assessment.fitLevel && testCase.fitLevels.includes(assessment.fitLevel),
+        };
+        if (testCase.hardConflict !== null) {
+          checks.hardConflict = assessment.hardConflicts.length > 0 === testCase.hardConflict;
+        }
+        let judged: Awaited<ReturnType<typeof judge>> | undefined;
+        try {
+          if (budget.exhausted) throw new Error("eval budget exhausted");
+          judged = await judge(
+            env.EVAL_JUDGE_MODEL,
+            testCase,
+            profileText,
+            listings.get(testCase.file) ?? "",
+            assessment,
+            budget.signal(),
+          );
+          budget.add(judged.costUsd);
+        } catch (error) {
+          console.error(`judge failed for ${base.config} ${base.case}`, error);
+        }
         results.push({
           ...base,
-          status: "failed",
-          reason: (error as Error).message.slice(0, 300),
+          status: "saved",
           costUsd,
-          judgeCostUsd: 0,
-          ms: Date.now() - started,
-          checks: {},
+          judgeCostUsd: judged?.costUsd ?? 0,
+          ms,
+          verdict: assessment.recommendation.verdict,
+          fitLevel: assessment.fitLevel,
+          hardConflicts: assessment.hardConflicts.length,
+          checks,
+          judge: judged?.verdicts,
+          assessment,
         });
         console.log(
-          `[$${budget.spent.toFixed(2)}] ${base.config} · ${base.case} #${repeat}: FAILED ${(error as Error).message.slice(0, 200)}`,
+          `[$${budget.spent.toFixed(2)}] ${base.config} · ${base.case} #${repeat}: ${assessment.recommendation.verdict}/${assessment.fitLevel} ${Object.values(checks).every(Boolean) ? "✓" : "✗"} judge ${judged ? `${judged.verdicts.filter((v) => v.passed).length}/${judged.verdicts.length}` : "–"}`,
         );
         save();
-        return;
-      }
-      const ms = Date.now() - started;
-      const assessment = (await getJobDetail(db, job.id))?.draft?.assessment;
-      if (!assessment) throw new Error(`no draft saved for ${base.config} ${base.case}`);
-      const checks: Record<string, boolean> = {
-        verdict: testCase.verdicts.includes(assessment.recommendation.verdict),
-        fitLevel: !!assessment.fitLevel && testCase.fitLevels.includes(assessment.fitLevel),
-      };
-      if (testCase.hardConflict !== null) {
-        checks.hardConflict = assessment.hardConflicts.length > 0 === testCase.hardConflict;
-      }
-      let judged: Awaited<ReturnType<typeof judge>> | undefined;
-      try {
-        if (budget.exhausted) throw new Error("eval budget exhausted");
-        judged = await judge(
-          env.EVAL_JUDGE_MODEL,
-          testCase,
-          profileText,
-          listings.get(testCase.file) ?? "",
-          assessment,
-          budget.signal(),
-        );
-        budget.add(judged.costUsd);
-      } catch (error) {
-        console.error(`judge failed for ${base.config} ${base.case}`, error);
-      }
-      results.push({
-        ...base,
-        status: "saved",
-        costUsd,
-        judgeCostUsd: judged?.costUsd ?? 0,
-        ms,
-        verdict: assessment.recommendation.verdict,
-        fitLevel: assessment.fitLevel,
-        hardConflicts: assessment.hardConflicts.length,
-        checks,
-        judge: judged?.verdicts,
-        assessment,
       });
-      console.log(
-        `[$${budget.spent.toFixed(2)}] ${base.config} · ${base.case} #${repeat}: ${assessment.recommendation.verdict}/${assessment.fitLevel} ${Object.values(checks).every(Boolean) ? "✓" : "✗"} judge ${judged ? `${judged.verdicts.filter((v) => v.passed).length}/${judged.verdicts.length}` : "–"}`,
-      );
-      save();
-    });
 
-    save();
-    console.log(report(results, configs, cases.length, budget.spent));
-    expect(results.filter((r) => r.status === "skipped").length, "budget ran out").toBe(0);
-  });
-});
+      save();
+      console.log(report(results, configs, cases.length, budget.spent));
+      expect(results.filter((r) => r.status === "skipped").length, "budget ran out").toBe(0);
+    });
+  },
+);
 
 describe.skipIf(!REJUDGE)("rescorer model comparison: re-judge (live, opt-in)", () => {
   it("re-grades saved results with another judge", { timeout: 3 * 60 * 60_000 }, async () => {
@@ -498,7 +505,15 @@ describe.skipIf(!REAL || !MODELS)("rescorer agreement on real jobs (live, opt-in
     const db = await getAppDb();
     const profile = await currentProfile(db);
     const withListing: { id: string; title: string | null; company: string | null }[] = [];
-    for (const j of await listJobs(db)) {
+    const allJobs = await listJobs(db);
+    // A stale eval.db-wal next to the copy replays the old eval data over it: refuse that.
+    const urls = await db.query.jobs.findMany({ columns: { canonicalUrl: true } });
+    if (urls.some((j) => j.canonicalUrl?.startsWith("https://eval.invalid/"))) {
+      throw new Error(
+        "data/eval.db holds eval jobs: delete eval.db, -wal and -shm, then copy again",
+      );
+    }
+    for (const j of allJobs) {
       if (j.archivedAt === null && (await latestListingSource(db, j.id))) withListing.push(j);
     }
     const rows: RealRow[] = [];
