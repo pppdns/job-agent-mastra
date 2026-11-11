@@ -481,6 +481,9 @@ describe.skipIf(!REJUDGE)("rescorer model comparison: re-judge (live, opt-in)", 
 const REAL = process.env.EVAL_REAL === "1";
 const REAL_SAMPLE = Number(process.env.EVAL_REAL_SAMPLE ?? 150);
 const PAIR_JUDGE = process.env.EVAL_PAIR_JUDGE?.trim() || "anthropic/claude-opus-5.5";
+const REAL_REUSE = process.env.EVAL_REAL_REUSE === "1";
+/** Suffix for the output files, so a reuse run doesn't overwrite the base results. */
+const REAL_TAG = process.env.EVAL_REAL_TAG?.trim().replace(/[^a-z0-9.-]+/gi, "-");
 
 const FIT_RANK = ["strong", "good", "mixed", "weak", "poor"];
 
@@ -604,7 +607,18 @@ describe.skipIf(!REAL || !MODELS)("rescorer comparison on real jobs (live, opt-i
       random,
     );
     const highCount = Math.round((REAL_SAMPLE - acted.length) / 2);
-    const candidates = [...acted, ...high.slice(0, highCount), ...other];
+    const dataDir = join(findWorkspaceRoot(), "data");
+    // EVAL_REAL_REUSE=1: same jobs (first EVAL_REAL_SAMPLE of the last run) and its assessments;
+    // only missing ones run (e.g. a new candidate config), then the pairwise judge.
+    const saved = REAL_REUSE
+      ? (JSON.parse(readFileSync(join(dataDir, "rescore-models-real.json"), "utf8")) as {
+          sample: { id: string }[];
+          rows: RealRow[];
+        })
+      : undefined;
+    const candidates = saved
+      ? saved.sample.flatMap((s) => allJobs.filter((j) => j.id === s.id))
+      : [...acted, ...high.slice(0, highCount), ...other];
     const sample: typeof allJobs = [];
     const jobTexts = new Map<string, string>();
     for (const job of candidates) {
@@ -628,12 +642,15 @@ describe.skipIf(!REAL || !MODELS)("rescorer comparison on real jobs (live, opt-i
     }
 
     const budget = createBudget(BUDGET);
-    const dataDir = join(findWorkspaceRoot(), "data");
-    const rows: RealRow[] = [];
+    const inSample = new Set(sample.map((j) => j.id));
+    const rows: RealRow[] = (saved?.rows ?? []).filter(
+      (r) => inSample.has(r.jobId) && (r.config === ref || r.config === cand) && !r.error,
+    );
     const pairs: PairResult[] = [];
+    const suffix = REAL_TAG ? `.${REAL_TAG}` : "";
     const persist = () =>
       writeFileSync(
-        join(dataDir, "rescore-models-real.json"),
+        join(dataDir, `rescore-models-real${suffix}.json`),
         JSON.stringify({ ref, cand, profileText, sample, rows, pairs }, null, 2),
       );
     const agents = new Map(
@@ -649,6 +666,10 @@ describe.skipIf(!REAL || !MODELS)("rescorer comparison on real jobs (live, opt-i
     );
     await pool(units, CONCURRENCY, async ({ config, job, repeat }) => {
       if (budget.exhausted) return;
+      const done = rows.some(
+        (r) => r.config === config.label && r.jobId === job.id && r.repeat === repeat,
+      );
+      if (done) return;
       let costUsd = 0;
       try {
         const result = await assessJob(job.id, profile, {
@@ -820,6 +841,6 @@ describe.skipIf(!REAL || !MODELS)("rescorer comparison on real jobs (live, opt-i
         ),
       ),
     ];
-    writeFileSync(join(dataDir, "rescore-models-real.md"), lines.join("\n"));
+    writeFileSync(join(dataDir, `rescore-models-real${suffix}.md`), lines.join("\n"));
   });
 });
