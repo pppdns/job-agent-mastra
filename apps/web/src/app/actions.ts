@@ -213,6 +213,13 @@ export async function startDiscoveryAction(
     ASSESS_BATCH_SIZES.find((n) => n === Number(formData.get("assessLimit"))) ??
     ASSESS_BATCH_SIZES[0];
   const body = kind === "assess" ? { mode: "assess", assessLimit } : DISCOVERY_RUNS[kind].body;
+  const started =
+    kind === "assess" ? `Assessing up to ${assessLimit} matches.` : DISCOVERY_RUNS[kind].started;
+  return startDiscoveryRun(body, started);
+}
+
+/** POSTs to the agent's `/discovery/run`; `started` is the message on success. */
+async function startDiscoveryRun(body: object, started: string): Promise<DiscoveryActionState> {
   const response = await agentFetch("/discovery/run", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -222,8 +229,6 @@ export async function startDiscoveryAction(
   if (!response) return { ok: false, message: "The agent server is not reachable." };
   if (response.status === 409) return { ok: false, message: "A discovery run is already running." };
   if (!response.ok) return { ok: false, message: `Could not start the run (${response.status}).` };
-  const started =
-    kind === "assess" ? `Assessing up to ${assessLimit} matches.` : DISCOVERY_RUNS[kind].started;
   return { ok: true, message: started };
 }
 
@@ -431,11 +436,30 @@ export async function keepPostingAction(postingId: string): Promise<void> {
   refresh();
 }
 
-/** Clears triage made against an older profile; the next discovery run triages those again. */
-export async function resetStaleTriageAction(): Promise<number> {
-  const cleared = await resetStaleTriage(await appDb());
-  refresh();
-  return cleared;
+/**
+ * "Re-triage now" on /jobs: clears triage made against an older profile, then starts a
+ * triage-only discovery run (no fetching) for them. A run covers `maxTriagePerRun` jobs; any
+ * left over, or all of them while another run is going, wait for "Triage next batch" or the
+ * next scheduled run.
+ */
+export async function retriageNowAction(): Promise<DiscoveryActionState> {
+  const db = await appDb();
+  const cleared = await resetStaleTriage(db);
+  const { maxTriagePerRun } = await getSearchSettings(db);
+  const n = (v: number) => v.toLocaleString("en-US");
+  const rest =
+    cleared > maxTriagePerRun
+      ? ` The other ${n(cleared - maxTriagePerRun)} wait for "Triage next batch" on Discovery.`
+      : "";
+  const result = await startDiscoveryRun(
+    { mode: "triage" },
+    `Re-triaging ${n(Math.min(cleared, maxTriagePerRun))} jobs now; results show up as they land.${rest}`,
+  );
+  if (result?.ok) return result;
+  return {
+    ok: false,
+    message: `Cleared ${n(cleared)} old triage scores, but the run didn't start: ${result?.message} They'll be triaged on the next run.`,
+  };
 }
 
 export type AssessJobState = { ok: boolean; message: string } | null;
