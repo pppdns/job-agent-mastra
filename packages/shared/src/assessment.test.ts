@@ -4,6 +4,7 @@ import {
   assessmentSummary,
   DEFAULT_RESEARCH_TOPICS,
   moneyAmounts,
+  normalizeModelAssessment,
   researchRequestText,
   salaryFiguresMissing,
   suggestedResearchTopics,
@@ -100,5 +101,19 @@ describe("moneyAmounts", () => {
       1234.56, 1500, 1_200_000, 75,
     ]);
     expect(moneyAmounts("Competitive")).toEqual([]);
+  });
+});
+
+describe("normalizeModelAssessment", () => {
+  it("drops an empty salary and cuts an over-long headline at a word", () => {
+    const long = `${"Senior backend role at a growing startup ".repeat(5)}end`;
+    const result = normalizeModelAssessment({ ...minimal, headline: long, salary: " " } as never);
+    expect(result.salary).toBeUndefined();
+    expect(result.headline?.length).toBeLessThanOrEqual(140);
+    expect(result.headline?.endsWith("…")).toBe(true);
+    expect(result.headline).not.toMatch(/\s…$/);
+    expect(normalizeModelAssessment({ ...minimal, headline: "Short" } as never).headline).toBe(
+      "Short",
+    );
   });
 });

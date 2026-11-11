@@ -8,7 +8,12 @@ import {
   listJobs,
   saveDraft,
 } from "@copilot/db";
-import { type Assessment, assessmentSchema, MAX_RESCORE_JOBS } from "@copilot/shared";
+import {
+  type Assessment,
+  MAX_RESCORE_JOBS,
+  modelAssessmentSchema,
+  normalizeModelAssessment,
+} from "@copilot/shared";
 import type { TracingContext } from "@mastra/core/observability";
 import { env } from "../env";
 import { parseStoredListing } from "../ingest/listing";
@@ -165,14 +170,14 @@ export async function assessJob(jobId: string, profile: Profile, deps: AssessDep
   const generate = async (text: string) => {
     const started = Date.now();
     const generated = await rescorerAgent.generate(text, {
-      structuredOutput: { schema: assessmentSchema },
+      structuredOutput: { schema: modelAssessmentSchema },
       abortSignal: deps.signal,
       tracingContext: deps.tracingContext,
       onStepFinish: ({ usage }) => {
         deps.recorder?.llm("rescorer", env.COPILOT_MODEL, usage ?? {}, Date.now() - started);
       },
     });
-    return generated.object as Assessment;
+    return normalizeModelAssessment(generated.object);
   };
   const save = (assessment: Assessment) =>
     saveDraft(deps.db, {
