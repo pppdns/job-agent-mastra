@@ -7,6 +7,8 @@ import {
   decideApproval,
   findWorkspaceRoot,
   getJobDetail,
+  latestListingSource,
+  listJobs,
   proposeProfileChange,
   resetAppTables,
   resolveDatabaseUrl,
@@ -417,5 +419,155 @@ describe.skipIf(!REJUDGE)("rescorer model comparison: re-judge (live, opt-in)", 
     const markdown = report(rejudged, configs, caseNames.size, spent, judgeModel);
     writeFileSync(join(dataDir, `rescore-models-report.${slug}.md`), markdown);
     console.log(markdown);
+  });
+});
+
+// Agreement on real jobs: run on a copy of the dev database placed at data/eval.db (never the
+// dev file itself). Each config assesses every job with a stored listing EVAL_REPEAT times; the
+// report compares verdicts and fit levels with the first config, and the first config with itself
+// (its own noise). The report stays in data/ (gitignored): it contains the real profile and jobs.
+const REAL = process.env.EVAL_REAL === "1";
+
+const FIT_RANK = ["strong", "good", "mixed", "weak", "poor"];
+
+type RealRow = {
+  config: string;
+  jobId: string;
+  repeat: number;
+  verdict?: string;
+  fit?: string;
+  conflicts?: number;
+  headline?: string;
+  error?: string;
+  costUsd: number;
+};
+
+describe.skipIf(!REAL || !MODELS)("rescorer agreement on real jobs (live, opt-in)", () => {
+  it("compares configs with the first one", { timeout: 3 * 60 * 60_000 }, async () => {
+    if (!resolveDatabaseUrl().endsWith("/data/eval.db")) {
+      throw new Error("copy the dev database to data/eval.db first (use pnpm eval)");
+    }
+    const configs = (MODELS ?? "")
+      .split(",")
+      .filter((s) => s.trim())
+      .map(parseConfig);
+    const db = await getAppDb();
+    const profile = await currentProfile(db);
+    const withListing: { id: string; title: string | null; company: string | null }[] = [];
+    for (const j of await listJobs(db)) {
+      if (j.archivedAt === null && (await latestListingSource(db, j.id))) withListing.push(j);
+    }
+    const rows: RealRow[] = [];
+    let spent = 0;
+    const units = configs.flatMap((config) =>
+      withListing.flatMap((job) =>
+        Array.from({ length: REPEAT }, (_, i) => ({ config, job, repeat: i + 1 })),
+      ),
+    );
+    const agents = new Map(
+      configs.map((c) => [
+        c.label,
+        createRescorerAgent(() => gatewayModel(c.modelId, c.reasoning)),
+      ]),
+    );
+    await pool(units, CONCURRENCY, async ({ config, job, repeat }) => {
+      if (spent >= BUDGET) return;
+      let costUsd = 0;
+      try {
+        const result = await assessJob(job.id, profile, {
+          db,
+          signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+          rescorer: {
+            agent:
+              agents.get(config.label) ?? createRescorerAgent(() => gatewayModel(config.modelId)),
+            modelId: config.modelId,
+          },
+          onModelCall: ({ providerMetadata }) => {
+            const cost = gatewayCost(providerMetadata);
+            costUsd += cost;
+            spent += cost;
+          },
+        });
+        const draft = (await getJobDetail(db, job.id))?.draft;
+        const assessment = draft?.id === result.draftId ? draft.assessment : undefined;
+        rows.push({
+          config: config.label,
+          jobId: job.id,
+          repeat,
+          verdict: result.after.verdict,
+          fit: result.after.fitLevel,
+          conflicts: assessment?.hardConflicts.length,
+          headline: result.after.headline,
+          costUsd,
+        });
+      } catch (error) {
+        rows.push({
+          config: config.label,
+          jobId: job.id,
+          repeat,
+          error: (error as Error).message.slice(0, 200),
+          costUsd,
+        });
+      }
+    });
+
+    const pick = (config: string, jobId: string, repeat: number) =>
+      rows.find((r) => r.config === config && r.jobId === jobId && r.repeat === repeat && !r.error);
+    const compare = (a: string, ra: number, b: string, rb: number) => {
+      let n = 0;
+      let verdict = 0;
+      let fit = 0;
+      let fitNear = 0;
+      for (const job of withListing) {
+        const x = pick(a, job.id, ra);
+        const y = pick(b, job.id, rb);
+        if (!x || !y) continue;
+        n++;
+        if (x.verdict === y.verdict) verdict++;
+        if (x.fit === y.fit) fit++;
+        if (x.fit && y.fit && Math.abs(FIT_RANK.indexOf(x.fit) - FIT_RANK.indexOf(y.fit)) <= 1) {
+          fitNear++;
+        }
+      }
+      const share = (k: number) => pct(k / (n || 1));
+      return `${n} jobs · verdict ${share(verdict)} · fit ${share(fit)} · fit within one step ${share(fitNear)}`;
+    };
+    const ref = configs[0]?.label ?? "";
+    const lines = [
+      "# Rescorer agreement on real jobs",
+      "",
+      `${new Date().toISOString()} · ${withListing.length} jobs · ${REPEAT} repeat(s) · spent $${spent.toFixed(2)}`,
+      "",
+      ...configs.map((c) => {
+        const mine = rows.filter((r) => r.config === c.label);
+        return `- ${c.label}: ${mine.filter((r) => r.error).length} failed, $${mean(mine.map((r) => r.costUsd)).toFixed(4)}/job`;
+      }),
+      "",
+      ...(REPEAT > 1 ? [`- ${ref} #1 vs #2 (noise): ${compare(ref, 1, ref, 2)}`] : []),
+      ...configs
+        .slice(1)
+        .flatMap((c) =>
+          Array.from(
+            { length: REPEAT },
+            (_, i) => `- ${c.label} #${i + 1} vs ${ref} #1: ${compare(c.label, i + 1, ref, 1)}`,
+          ),
+        ),
+      "",
+      "## Per job",
+      "",
+      ...withListing.map((job) =>
+        [
+          `### ${job.title} · ${job.company}`,
+          ...rows
+            .filter((r) => r.jobId === job.id)
+            .sort((a, b) => a.config.localeCompare(b.config) || a.repeat - b.repeat)
+            .map(
+              (r) =>
+                `- ${r.config} #${r.repeat}: ${r.error ? `FAILED ${r.error}` : `${r.verdict}/${r.fit}, ${r.conflicts} hard conflicts: ${r.headline}`}`,
+            ),
+        ].join("\n"),
+      ),
+    ];
+    writeFileSync(join(findWorkspaceRoot(), "data", "rescore-models-real.md"), lines.join("\n"));
   });
 });

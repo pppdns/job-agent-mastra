@@ -101,8 +101,11 @@ const points = (max: number) => z.array(assessmentPointSchema).max(max).default(
  * `fitBasis` separates understanding the role from assessing personal fit.
  * `headline` and `fitLevel` are optional so drafts saved before they existed still parse.
  */
+/** Headline length limit; the rescorer shortens longer ones in code. */
+export const HEADLINE_MAX = 140;
+
 export const assessmentSchema = z.object({
-  headline: text(140)
+  headline: text(HEADLINE_MAX)
     .optional()
     .describe(
       "Always set: one line with the gist, e.g. 'Senior IC backend role; 4 office days conflicts with remote'",

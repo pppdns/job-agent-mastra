@@ -8,9 +8,10 @@ import {
   listJobs,
   saveDraft,
 } from "@copilot/db";
-import { type Assessment, assessmentSchema, MAX_RESCORE_JOBS } from "@copilot/shared";
+import { type Assessment, assessmentSchema, HEADLINE_MAX, MAX_RESCORE_JOBS } from "@copilot/shared";
 import type { Agent } from "@mastra/core/agent";
 import type { TracingContext } from "@mastra/core/observability";
+import { z } from "zod";
 import { parseStoredListing } from "../ingest/listing";
 import { rescorerAgent } from "../mastra/agents/rescorer";
 import { rescoreModelId } from "../mastra/models";
@@ -18,6 +19,20 @@ import { formatProfile } from "../mastra/profile-context";
 import type { RunRecorder } from "../usage/recorder";
 
 export { MAX_RESCORE_JOBS };
+
+// Models often overshoot the headline limit by a few characters, and the schema rejection used to
+// fail the whole job (a paid retry, then nothing). Accept a longer one and shorten it in code.
+const outputSchema = assessmentSchema.extend({
+  headline: z.string().trim().min(1).max(600).optional(),
+});
+
+/** Cuts a headline to HEADLINE_MAX at a word boundary, with an ellipsis. */
+export function clipHeadline(headline: string | undefined): string | undefined {
+  if (!headline || headline.length <= HEADLINE_MAX) return headline;
+  const cut = headline.slice(0, HEADLINE_MAX - 1);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > HEADLINE_MAX / 2 ? cut.slice(0, space) : cut).replace(/[\s,;:.–-]+$/, "")}…`;
+}
 
 const CONCURRENCY = 3;
 
@@ -175,7 +190,7 @@ export async function assessJob(jobId: string, profile: Profile, deps: AssessDep
   const generate = async (text: string) => {
     const started = Date.now();
     const generated = await agent.generate(text, {
-      structuredOutput: { schema: assessmentSchema },
+      structuredOutput: { schema: outputSchema },
       // OpenAI's strict JSON mode rejects schemas with optional fields (quote, salary, …).
       providerOptions: { openai: { strictJsonSchema: false } },
       abortSignal: deps.signal,
@@ -185,7 +200,8 @@ export async function assessJob(jobId: string, profile: Profile, deps: AssessDep
         deps.onModelCall?.({ usage, providerMetadata });
       },
     });
-    return generated.object as Assessment;
+    const object = generated.object as Assessment;
+    return { ...object, headline: clipHeadline(object.headline) };
   };
   const save = (assessment: Assessment) =>
     saveDraft(deps.db, {
