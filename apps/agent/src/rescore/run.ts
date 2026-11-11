@@ -10,9 +10,10 @@ import {
 } from "@copilot/db";
 import {
   type Assessment,
-  MAX_RESCORE_JOBS,
+  DEFAULT_RESCORE_LIMIT,
   modelAssessmentSchema,
   normalizeModelAssessment,
+  type RescoreLimit,
 } from "@copilot/shared";
 import type { Agent } from "@mastra/core/agent";
 import type { TracingContext } from "@mastra/core/observability";
@@ -21,8 +22,6 @@ import { rescorerAgent } from "../mastra/agents/rescorer";
 import { rescoreModelId } from "../mastra/models";
 import { formatProfile } from "../mastra/profile-context";
 import type { RunRecorder } from "../usage/recorder";
-
-export { MAX_RESCORE_JOBS };
 
 const CONCURRENCY = 3;
 
@@ -66,9 +65,13 @@ export type RescoreDeps = {
  * (so context and cost stay per job), each saved as a new draft. Without `jobIds`, every job
  * whose latest draft predates the profile, except archived ones; with `all`, every assessed
  * active job, stale first, then least recently updated, so repeated batches move on through
- * the list. Drafts already saved are kept if the run stops.
+ * the list. At most `limit` jobs (default 25, "all" for no cap); the rest are reported as
+ * skipped. Drafts already saved are kept if the run stops.
  */
-export async function runRescore(input: { jobIds?: string[]; all?: boolean }, deps: RescoreDeps) {
+export async function runRescore(
+  input: { jobIds?: string[]; all?: boolean; limit?: RescoreLimit },
+  deps: RescoreDeps,
+) {
   const runId = randomUUID();
   const profile = await currentProfile(deps.db);
   const jobs = (await listJobs(deps.db, input.jobIds)).filter(
@@ -83,7 +86,8 @@ export async function runRescore(input: { jobIds?: string[]; all?: boolean }, de
         a.updatedAt.getTime() - b.updatedAt.getTime(),
     );
   }
-  const batch = jobs.slice(0, MAX_RESCORE_JOBS);
+  const limit = input.limit ?? DEFAULT_RESCORE_LIMIT;
+  const batch = limit === "all" ? jobs : jobs.slice(0, limit);
   const emit = (event: RescoreEvent) => deps.emit({ runId, ...event });
   await emit({
     kind: "start",

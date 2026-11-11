@@ -115,7 +115,7 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - [x] `/profile`: current facts, edits and additions become proposals approved on the page, history with diffs.
 - [x] Drafts record the profile version (set by app code); jobs list/detail and `get_job` flag assessments made under an older profile.
 - [x] Re-assess after a profile change: `get_job` with `includeListing: true` returns the stored listing, so the agent re-scores without the user sharing it again.
-- [x] Batch re-score: "Re-score" on `/jobs` → `rescore_jobs` in a new chat (one structured call per stale job, max 25) → "Approve all" for exactly the drafts shown ([apps/agent/src/rescore/AGENTS.md](../apps/agent/src/rescore/AGENTS.md)).
+- [x] Batch re-score: "Re-score" on `/jobs` → `rescore_jobs` in a new chat (one structured call per stale job, batch of 25, 100, 1000 or all) → "Approve all" for exactly the drafts shown ([apps/agent/src/rescore/AGENTS.md](../apps/agent/src/rescore/AGENTS.md)).
 - [x] `find_saved_jobs` (FTS5, quoted prefix terms, AND then OR) + `get_job`.
 - [x] Verified: db tests (diffs, supersede, stale base, idempotency, wrong chat, reject, draft profile version, search), working-memory isolation test, e2e for remember → approve → new chat sees it while local notes stay local, profile page approvals, stale flag; live runs ([verification.md](verification.md)).
 
