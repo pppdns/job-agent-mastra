@@ -44,7 +44,12 @@ describe("inputs", () => {
       maxItems: 200,
       dedupe: { enabled: false },
     });
-    expect(jobgetherBoard.searches(context())).toHaveLength(1);
+    const jobgether = jobgetherBoard.searches(context());
+    expect(jobgether).toHaveLength(DEFAULT_SEARCH_SETTINGS.queries.length);
+    expect(jobgether[0]).toMatchObject({
+      label: '"Applied AI Engineer"',
+      input: { queries: ["Applied AI Engineer"], maxItems: 50 },
+    });
     expect(diceBoard.searches(context())).toHaveLength(DEFAULT_SEARCH_SETTINGS.queries.length);
     expect(diceBoard.searches(context())[0]?.input).toMatchObject({
       keyword: "Applied AI Engineer",
