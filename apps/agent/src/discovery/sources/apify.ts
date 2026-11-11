@@ -49,8 +49,9 @@ export type ApifyRunner = (
 /**
  * What the run cost: the larger of Apify's own `usageTotalUsd` and the charged event counts
  * times the run's event prices (falling back to our price table; without counts, items plus one
- * start). `usageTotalUsd` lags right after a run finishes (seen: $0.001, then $0.401 20 s later),
- * while the event counts are final, so the larger one is never an undercount.
+ * start). Both lag right after a run finishes: `usageTotalUsd` and the result count can still
+ * show only the start fee (seen on Fly: $0.001 recorded, $0.401 final for 200 items). So results
+ * are counted as at least the items we read: every item in the dataset is billed.
  */
 export function runCost(
   run: Pick<Run, "usageTotalUsd" | "chargedEventCounts" | "pricingInfo">,
@@ -58,7 +59,8 @@ export function runCost(
   items: number,
 ) {
   const runPrices = run.pricingInfo?.pricingPerEvent?.actorChargeEvents ?? {};
-  const counts = run.chargedEventCounts ?? { [RESULT_EVENT]: items, [START_EVENT]: 1 };
+  const reported = run.chargedEventCounts ?? { [START_EVENT]: 1 };
+  const counts = { ...reported, [RESULT_EVENT]: Math.max(reported[RESULT_EVENT] ?? 0, items) };
   const events = Object.entries(counts).reduce(
     (sum, [event, n]) => sum + (runPrices[event]?.eventPriceUsd ?? prices[event] ?? 0) * n,
     0,

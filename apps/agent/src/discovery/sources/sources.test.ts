@@ -290,9 +290,20 @@ describe("Apify runner", () => {
     expect(runCost({ usageTotalUsd: 0.5, chargedEventCounts: counts }, LINKEDIN_PRICES, 200)).toBe(
       0.5,
     );
-    // Read right after the run: usage still shows only the start fee, the counts are final.
+    // Read right after the run: usage still shows only the start fee.
     expect(
       runCost({ usageTotalUsd: 0.001, chargedEventCounts: counts }, { ...LINKEDIN_PRICES }, 200),
+    ).toBeCloseTo(200 * 0.00036 + 0.0009);
+    // The result count can lag too (Career Sites on Fly): every item read is billed.
+    expect(
+      runCost(
+        {
+          usageTotalUsd: 0.001,
+          chargedEventCounts: { "apify-default-dataset-item": 0, "apify-actor-start": 1 },
+        },
+        LINKEDIN_PRICES,
+        200,
+      ),
     ).toBeCloseTo(200 * 0.00036 + 0.0009);
     expect(
       runCost(
