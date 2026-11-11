@@ -117,7 +117,7 @@ flowchart TD
 
 Key behaviours, all from the prompt in [copilot.ts](../apps/agent/src/mastra/agents/copilot.ts) and [assessment-rules.ts](../apps/agent/src/mastra/agents/assessment-rules.ts):
 
-- **Role vs fit.** Without a profile, an assessment is `role_only`; with one, it is `with_profile` and personal fit points must be `inference` citing current profile facts by handle.
+- **Role vs fit.** Without a profile, an assessment is `role_only`; with one, it is `with_profile` and personal fit points cite current profile facts by handle and are always stored as `inference` (`saveDraft` relabels them).
 - **Evidence classes.** Every point is `official`, `independent`, `anonymous`, `inference` or `unknown_conflicting`. Sourced classes must cite sources of the same job (checked in `@copilot/db`, not by the model).
 - **Research on request.** Each assessment names 1–3 `researchTopics`; the chat card and the job page show them as "Research next" buttons that send a request naming the job id (`researchRequestText`). The copilot never researches by default.
 - **No approval for assessments.** Every `save_job_draft` is the job's new current version; earlier versions stay as history.

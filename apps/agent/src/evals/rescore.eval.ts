@@ -18,7 +18,7 @@ import { type RescoreEvent, runRescore } from "../rescore/run";
 import { profileSuite } from "./cases";
 
 // Live batch rescorer (structured output, no retry): every stale job must get a valid
-// with_profile draft, because saveDraft rejects fit points that aren't inference.
+// with_profile draft that cites profile facts (saveDraft rejects drafts that cite none).
 const LISTINGS = [
   { file: "ats-complete.md", title: "Senior Platform Engineer", company: "Northwind Robotics" },
   {

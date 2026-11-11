@@ -35,6 +35,8 @@ import {
 // EVAL_MODELS: "default" or a comma list of `model[:reasoning]`; EVAL_REPEAT (default 2);
 // EVAL_CASES: case-name substring; EVAL_BUDGET_USD (default 10) stops new calls once spent.
 const MODELS = process.env.EVAL_MODELS?.trim();
+// Re-grade the saved results with another judge (no new assessments), e.g. to check judge bias.
+const REJUDGE = process.env.EVAL_REJUDGE?.trim();
 const REPEAT = Number(process.env.EVAL_REPEAT ?? 2);
 const BUDGET = Number(process.env.EVAL_BUDGET_USD ?? 10);
 const CASE_FILTER = process.env.EVAL_CASES?.trim().toLowerCase();
@@ -89,6 +91,7 @@ const judgeSchema = z.object({
 });
 
 async function judge(
+  judgeModel: string,
   testCase: ModelCase,
   profileText: string,
   listing: string,
@@ -99,7 +102,7 @@ async function judge(
     ...testCase.mustNot.map((c) => `MUST NOT: ${c}`),
   ];
   const result = await generateText({
-    model: gateway(env.EVAL_JUDGE_MODEL),
+    model: gateway(judgeModel),
     abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
     output: Output.object({ schema: judgeSchema }),
     system:
@@ -131,7 +134,13 @@ async function pool<T>(items: T[], size: number, run: (item: T) => Promise<void>
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
-function report(results: UnitResult[], configs: Config[], caseCount: number, spent: number) {
+function report(
+  results: UnitResult[],
+  configs: Config[],
+  caseCount: number,
+  spent: number,
+  judgeModel = env.EVAL_JUDGE_MODEL,
+) {
   const rows = configs.map((config) => {
     const mine = results.filter((r) => r.config === config.label && r.status !== "skipped");
     const saved = mine.filter((r) => r.status === "saved");
@@ -167,7 +176,7 @@ function report(results: UnitResult[], configs: Config[], caseCount: number, spe
   const lines = [
     "# Rescorer model comparison",
     "",
-    `${new Date().toISOString()} · judge ${env.EVAL_JUDGE_MODEL} · ${REPEAT} repeat(s) · ${caseCount} cases · spent $${spent.toFixed(2)} (models + judge, gateway-reported)`,
+    `${new Date().toISOString()} · judge ${judgeModel} · ${Math.max(0, ...results.map((r) => r.repeat))} repeat(s) · ${caseCount} cases · spent $${spent.toFixed(2)} (models + judge, gateway-reported)`,
     "",
     "Valid = saved a draft (schema + saveDraft rules, one retry). Verdict / fit / conflict = deterministic checks against the expected outcome (failed runs count as misses). Judge = share of rubric criteria passed. Perfect = every check and criterion passed.",
     "",
@@ -332,7 +341,13 @@ describe.skipIf(!MODELS)("rescorer model comparison (live, opt-in)", () => {
       }
       let judged: Awaited<ReturnType<typeof judge>> | undefined;
       try {
-        judged = await judge(testCase, profileText, listings.get(testCase.file) ?? "", assessment);
+        judged = await judge(
+          env.EVAL_JUDGE_MODEL,
+          testCase,
+          profileText,
+          listings.get(testCase.file) ?? "",
+          assessment,
+        );
         spent += judged.costUsd;
       } catch (error) {
         console.error(`judge failed for ${base.config} ${base.case}`, error);
@@ -359,5 +374,48 @@ describe.skipIf(!MODELS)("rescorer model comparison (live, opt-in)", () => {
     save();
     console.log(report(results, configs, cases.length, spent));
     expect(results.filter((r) => r.status === "skipped").length, "budget ran out").toBe(0);
+  });
+});
+
+describe.skipIf(!REJUDGE)("rescorer model comparison: re-judge (live, opt-in)", () => {
+  it("re-grades saved results with another judge", { timeout: 3 * 60 * 60_000 }, async () => {
+    const judgeModel = REJUDGE ?? "";
+    const dataDir = join(findWorkspaceRoot(), "data");
+    const results = JSON.parse(
+      readFileSync(join(dataDir, "rescore-models-results.json"), "utf8"),
+    ) as UnitResult[];
+    const db = await getAppDb();
+    const profileText = formatProfile(await currentProfile(db));
+    const configs = [...new Set(results.map((r) => r.config))].map(parseConfig);
+    const caseNames = new Set(results.map((r) => r.case));
+    let spent = 0;
+    const rejudged: UnitResult[] = [];
+    await pool(results, CONCURRENCY, async (r) => {
+      const testCase = MODEL_CASES.find((c) => c.name === r.case);
+      if (r.status !== "saved" || !r.assessment || !testCase || spent >= BUDGET) {
+        rejudged.push({ ...r, judge: r.status === "saved" ? undefined : r.judge });
+        return;
+      }
+      const listing = readFileSync(
+        join(findWorkspaceRoot(), "fixtures/listings", testCase.file),
+        "utf8",
+      );
+      try {
+        const judged = await judge(judgeModel, testCase, profileText, listing, r.assessment);
+        spent += judged.costUsd;
+        rejudged.push({ ...r, judge: judged.verdicts, judgeCostUsd: judged.costUsd });
+      } catch (error) {
+        console.error(`judge failed for ${r.config} ${r.case}`, error);
+        rejudged.push({ ...r, judge: undefined });
+      }
+    });
+    const slug = judgeModel.replace(/[^a-z0-9.]+/gi, "-");
+    writeFileSync(
+      join(dataDir, `rescore-models-results.${slug}.json`),
+      JSON.stringify(rejudged, null, 2),
+    );
+    const markdown = report(rejudged, configs, caseNames.size, spent, judgeModel);
+    writeFileSync(join(dataDir, `rescore-models-report.${slug}.md`), markdown);
+    console.log(markdown);
   });
 });

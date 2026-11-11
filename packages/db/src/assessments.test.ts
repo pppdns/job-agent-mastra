@@ -111,13 +111,12 @@ describe("saveDraft", () => {
     await expect(saveDraft(db, { jobId, assessment: withProfile([]) })).rejects.toThrow(
       /at least one point that cites the profile/,
     );
-    // A comparison with the profile labelled as listing fact.
-    await expect(
-      saveDraft(db, {
-        jobId,
-        assessment: withProfile([{ ...fitPoint(factId), evidence: "official" }]),
-      }),
-    ).rejects.toThrow(/compares the job with the profile, so its evidence is inference/);
+    // A comparison with the profile labelled as listing fact is stored as inference.
+    const relabelled = await saveDraft(db, {
+      jobId,
+      assessment: withProfile([{ ...fitPoint(factId), evidence: "official" }]),
+    });
+    expect(relabelled.assessment.strengths[0]?.evidence).toBe("inference");
     await expect(
       saveDraft(db, { jobId, assessment: withProfile([fitPoint("not-a-fact")]) }),
     ).rejects.toThrow(/not in the approved profile/);
@@ -146,7 +145,7 @@ describe("saveDraft", () => {
     // Listing sources and quotes stay allowed on a fit point.
     await expect(
       saveDraft(db, { jobId, assessment: withProfile([fitPoint(factId)]) }),
-    ).resolves.toMatchObject({ version: 3 });
+    ).resolves.toMatchObject({ version: 4 });
   });
 
   it("requires a source for listing/official evidence but not for inference", async () => {

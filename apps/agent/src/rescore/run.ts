@@ -176,6 +176,8 @@ export async function assessJob(jobId: string, profile: Profile, deps: AssessDep
     const started = Date.now();
     const generated = await agent.generate(text, {
       structuredOutput: { schema: assessmentSchema },
+      // OpenAI's strict JSON mode rejects schemas with optional fields (quote, salary, …).
+      providerOptions: { openai: { strictJsonSchema: false } },
       abortSignal: deps.signal,
       tracingContext: deps.tracingContext,
       onStepFinish: ({ usage, providerMetadata }) => {
