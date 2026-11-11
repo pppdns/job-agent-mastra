@@ -25,7 +25,7 @@ import {
 } from "@copilot/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { assessTopMatches } from "./assess";
-import { ASSESS_RESERVE_USD, DiscoveryBudget, TRIAGE_RESERVE_USD } from "./budget";
+import { ASSESS_RESERVE_USD, assessmentShare, DiscoveryBudget, TRIAGE_RESERVE_USD } from "./budget";
 import { MAX_ERRORS, noteError } from "./errors";
 import { assessStep, closeUsage, discoveryThreadId, reportStep, triageStep } from "./funnel";
 import { alreadyAlerted, buildDigest, runProblems, sendDigest } from "./report";
@@ -134,6 +134,21 @@ describe("triage", () => {
     budget.settleTriage("anthropic/claude-haiku-5.5", { inputTokens: 1000, outputTokens: 50 });
     budget.settleTriage("anthropic/claude-haiku-5.5", { inputTokens: 1000, outputTokens: 50 });
     expect(budget.reserveTriage()).toBe(true);
+  });
+
+  it("leaves the assessments' share of the spend cap alone", () => {
+    expect(assessmentShare(5, 15)).toBeCloseTo(15 * ASSESS_RESERVE_USD);
+    expect(assessmentShare(1, 15)).toBe(0.5);
+    const budget = new DiscoveryBudget({
+      maxUsd: TRIAGE_RESERVE_USD * 2 + ASSESS_RESERVE_USD,
+      maxTriage: 100,
+      keepForAssessUsd: ASSESS_RESERVE_USD,
+    });
+    expect(budget.reserveTriage()).toBe(true);
+    expect(budget.reserveTriage()).toBe(true);
+    expect(budget.reserveTriage()).toBe(false);
+    expect(budget.stoppedBy).toContain("kept for assessments");
+    expect(budget.reserveAssessment()).toBe(true);
   });
 });
 
@@ -397,8 +412,9 @@ describe("funnel steps (mock model)", () => {
     const funnel = await assessStep(db, runId, triaged);
     expect(funnel).toMatchObject({ assessed: 1, assessFailed: 0 });
     const report = await reportStep(db, runId, funnel);
-    // No RESEND_API_KEY in tests: skipped, with the matches counted.
-    expect(report.digest).toMatchObject({ status: "skipped", matches: 2 });
+    // No RESEND_API_KEY in tests: skipped, with the matches counted. Only the 88 reaches the
+    // digest threshold (75); the 70 is a match on the list but isn't emailed.
+    expect(report.digest).toMatchObject({ status: "skipped", matches: 1 });
     await closeUsage(db, runId, false);
 
     const jobs = await listJobs(db);

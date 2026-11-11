@@ -60,6 +60,7 @@ Errors from both servers and the browser go to the Sentry project `job-copilot` 
 | Logs | `fly logs` |
 | Status / restart | `fly status`, `fly machine restart` |
 | Studio (traces, logs, metrics) | `fly proxy 4111`, then http://localhost:4111 (never public; the agent listens on Fly's private network, `AGENT_HOST="::"`). Login steps: [README](../README.md#mastra-studio-on-fly) |
+| Disk | `fly ssh console -C "df -h /data"`. Traces, logs and metrics are kept 7 days (pruned every 6 h, then `CHECKPOINT`), so `copilot.duckdb` stops growing but doesn't shrink |
 | Shell | `fly ssh console` |
 | Backups | daily volume snapshots, 5 kept: `fly volumes snapshots list <vol-id>` |
 | Restore | `fly volumes create copilot_data --snapshot-id <id> --region fra`, then move the machine to it |

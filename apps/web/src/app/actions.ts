@@ -21,9 +21,12 @@ import {
   setJobsStatus,
 } from "@copilot/db";
 import {
+  DISCOVERY_SOURCES,
+  type DiscoverySource,
   JOB_STATUSES,
   RESEARCH_TOPICS,
   researchRequestText,
+  type SearchSettings,
   screenPosting,
   searchSettingsSchema,
 } from "@copilot/shared";
@@ -228,6 +231,25 @@ const numberOr = (value: FormDataEntryValue | null, fallback: number) => {
   return value === null || value === "" || Number.isNaN(n) ? fallback : n;
 };
 
+/** Adds each source's "hours between runs" field (`<id>MinHoursBetweenRuns`) to its settings. */
+const withSchedule = (
+  formData: FormData,
+  current: SearchSettings,
+  sources: Partial<Record<DiscoverySource, Record<string, unknown>>>,
+) =>
+  Object.fromEntries(
+    DISCOVERY_SOURCES.map((id) => [
+      id,
+      {
+        ...sources[id],
+        minHoursBetweenRuns: numberOr(
+          formData.get(`${id}MinHoursBetweenRuns`),
+          current.sources[id].minHoursBetweenRuns,
+        ),
+      },
+    ]),
+  );
+
 /** Days of postings a settings change re-screens (older ones aren't shown anyway). */
 const RESCREEN_DAYS = 60;
 
@@ -256,6 +278,7 @@ export async function saveSearchSettingsAction(
     maxAgeDays: numberOr(formData.get("maxAgeDays"), current.maxAgeDays),
     minSalary: amount && currency ? { amount: Number(amount), currency } : null,
     triageThreshold: numberOr(formData.get("triageThreshold"), current.triageThreshold),
+    digestThreshold: numberOr(formData.get("digestThreshold"), current.digestThreshold),
     maxAssessmentsPerRun: numberOr(
       formData.get("maxAssessmentsPerRun"),
       current.maxAssessmentsPerRun,
@@ -266,7 +289,7 @@ export async function saveSearchSettingsAction(
       formData.get("apifyMonthlyBudgetUsd"),
       current.apifyMonthlyBudgetUsd,
     ),
-    sources: {
+    sources: withSchedule(formData, current, {
       himalayas: {
         enabled: formData.get("himalayasEnabled") === "on",
         maxPages: numberOr(formData.get("himalayasMaxPages"), current.sources.himalayas.maxPages),
@@ -312,10 +335,6 @@ export async function saveSearchSettingsAction(
           formData.get("careersitesMaxUsdPerRun"),
           current.sources.careersites.maxUsdPerRun,
         ),
-        minHoursBetweenRuns: numberOr(
-          formData.get("careersitesMinHoursBetweenRuns"),
-          current.sources.careersites.minHoursBetweenRuns,
-        ),
       },
       linkedin: {
         enabled: formData.get("linkedinEnabled") === "on",
@@ -329,7 +348,7 @@ export async function saveSearchSettingsAction(
           current.sources.linkedin.maxUsdPerRun,
         ),
       },
-    },
+    }),
   });
   if (!parsed.success) {
     const issue = parsed.error.issues[0];

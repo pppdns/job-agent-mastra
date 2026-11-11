@@ -15,7 +15,7 @@ import {
   upsertJob,
 } from "@copilot/db";
 import { beforeEach, describe, expect, it } from "vitest";
-import { clipHeadline, type RescoreEvent, runRescore } from "./run";
+import { type RescoreEvent, runRescore } from "./run";
 
 // Mock model (LLM_MODE=mock): answers structured output with a with_profile assessment.
 let db: Db;
@@ -141,20 +141,5 @@ describe("runRescore", () => {
     controller.abort();
     const result = await runRescore({}, deps({ signal: controller.signal }));
     expect(result).toMatchObject({ status: "cancelled", results: [] });
-  });
-});
-
-describe("clipHeadline", () => {
-  it("keeps short headlines and cuts long ones at a word boundary", () => {
-    expect(clipHeadline(undefined)).toBeUndefined();
-    expect(clipHeadline("Remote platform role; pay meets the floor")).toBe(
-      "Remote platform role; pay meets the floor",
-    );
-    const long = `Senior platform role, ${"fully remote within the EU ".repeat(6)}and pay meets the floor`;
-    const clipped = clipHeadline(long) ?? "";
-    expect(clipped.length).toBeLessThanOrEqual(140);
-    expect(clipped.endsWith("…")).toBe(true);
-    expect(long.startsWith(clipped.slice(0, -1))).toBe(true);
-    expect(clipped.at(-2)).not.toBe(" ");
   });
 });

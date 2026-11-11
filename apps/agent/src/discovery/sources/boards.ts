@@ -69,21 +69,40 @@ const pricesOf = (perResult: number, start = 0) => ({
 
 // --- YC Work at a Startup and Jobgether (same vendor, same input and row schema) -------------
 
-/** One run for all search phrases; repeats are kept by us, not the actor's server-side dedupe. */
-const nomadSearches = ({ settings, since }: FetchContext, limitPerSearch: number) => [
+const nomadInput = ({ since }: FetchContext, queries: string[], maxItems: number) => ({
+  schemaVersion: "nomad-agent-simple-inventory-search-v2",
+  queries,
+  // Days, not hours: the boards date postings without a time of day.
+  postedWithin: `${daysSince(since)}d`,
+  // The actor returns at most 200 per run.
+  maxItems: Math.min(200, maxItems),
+  // Only remote roles: on-site ones (mostly the Bay Area) are screened out anyway.
+  locationTypes: ["remote"],
+  // Repeats are kept by us, not the actor's server-side dedupe.
+  dedupe: { enabled: false, key: "" },
+});
+
+/** YC: one run for all phrases (a few dozen matches a day, well under the 200 cap). */
+const allPhrasesSearch = (context: FetchContext, limitPerSearch: number) => [
   {
     label: "all phrases",
-    input: {
-      schemaVersion: "nomad-agent-simple-inventory-search-v2",
-      queries: settings.queries,
-      postedWithin: `${daysSince(since)}d`,
-      maxItems: Math.min(200, limitPerSearch * settings.queries.length),
-      // Only remote roles: on-site ones (mostly the Bay Area) are screened out anyway.
-      locationTypes: ["remote"],
-      dedupe: { enabled: false, key: "" },
-    },
+    input: nomadInput(
+      context,
+      context.settings.queries,
+      limitPerSearch * context.settings.queries.length,
+    ),
   },
 ];
+
+/**
+ * Jobgether: one run per phrase. All phrases in one run hit the 200 cap every time (on Fly, 200
+ * postings dated the same morning), so whatever came after the previous run was never read.
+ */
+const perPhraseSearches = (context: FetchContext, limitPerSearch: number) =>
+  context.settings.queries.map((query) => ({
+    label: `"${query}"`,
+    input: nomadInput(context, [query], limitPerSearch),
+  }));
 
 export function parseNomadRow(source: "ycombinator" | "jobgether") {
   return (raw: unknown): PostingInput | null => {
@@ -125,7 +144,7 @@ export const ycombinatorBoard: ActorBoard = {
   actorId: "nomad-agent/ycombinator-was-scraper",
   prices: pricesOf(0.0001),
   searches: (context) =>
-    nomadSearches(context, context.settings.sources.ycombinator.limitPerSearch),
+    allPhrasesSearch(context, context.settings.sources.ycombinator.limitPerSearch),
   parse: parseNomadRow("ycombinator"),
 };
 
@@ -133,7 +152,8 @@ export const jobgetherBoard: ActorBoard = {
   id: "jobgether",
   actorId: "nomad-agent/jobgether-scraper",
   prices: pricesOf(0.0001, 0.00005),
-  searches: (context) => nomadSearches(context, context.settings.sources.jobgether.limitPerSearch),
+  searches: (context) =>
+    perPhraseSearches(context, context.settings.sources.jobgether.limitPerSearch),
   parse: parseNomadRow("jobgether"),
 };
 

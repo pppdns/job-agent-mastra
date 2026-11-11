@@ -16,12 +16,21 @@ const slugs = (fallback: string[]) =>
     )
     .max(20)
     .default(fallback);
-const feed = z.object({ enabled: z.boolean().default(true) }).prefault({});
+/**
+ * Skip a source this soon after its last good run (hours; 0 = every run). With the schedule's two
+ * fires a day, 20 means once a day: for boards that refresh daily or return the same jobs.
+ */
+const minHours = (fallback: number) => z.number().int().min(0).max(168).default(fallback);
+const feed = (hours = 0) =>
+  z
+    .object({ enabled: z.boolean().default(true), minHoursBetweenRuns: minHours(hours) })
+    .prefault({});
 /** A board read through an Apify actor: on/off, results per search and a per-run spend cap. */
 const actorBoard = (enabled: boolean, limit: number, maxUsd: number) =>
   z
     .object({
       enabled: z.boolean().default(enabled),
+      minHoursBetweenRuns: minHours(0),
       /** Results per search (Apify bills per result). */
       limitPerSearch: z.number().int().min(1).max(200).default(limit),
       /** Hard cap on what one run may spend on this board (USD). */
@@ -69,19 +78,26 @@ export const searchSettingsSchema = z.object({
     .object({ amount: z.number().positive(), currency: z.string().trim().length(3) })
     .nullable()
     .default(null),
-  /** Triage score (0–100) a job needs to be shown. */
+  /** Triage score (0–100) a job needs to be shown (and to count as a match). */
   triageThreshold: z.number().int().min(0).max(100).default(60),
+  /** Triage score a job needs to be emailed in the digest (never below `triageThreshold`). */
+  digestThreshold: z.number().int().min(0).max(100).default(75),
   /** Full assessments per run for the best new matches. */
   maxAssessmentsPerRun: z.number().int().min(0).max(50).default(15),
-  /** Most jobs triaged per run; the rest wait for the next run (newest first). */
-  maxTriagePerRun: z.number().int().min(0).max(2_000).default(400),
+  /**
+   * Most jobs triaged per run, a runaway guard: triage is cheap (~$0.002 a job), so by default
+   * every waiting job is triaged. The rest wait for the next run (newest first).
+   */
+  maxTriagePerRun: z.number().int().min(0).max(2_000).default(2_000),
   /** Hard cap on what one run may spend on models: triage plus assessments (USD). */
-  maxLlmUsdPerRun: z.number().min(0).max(50).default(2),
+  maxLlmUsdPerRun: z.number().min(0).max(50).default(5),
   sources: z
     .object({
       himalayas: z
         .object({
           enabled: z.boolean().default(true),
+          /** Himalayas refreshes its data once a day. */
+          minHoursBetweenRuns: minHours(20),
           /** Result pages (20 jobs each) read per query and run. */
           maxPages: z.number().int().min(1).max(10).default(3),
         })
@@ -89,6 +105,7 @@ export const searchSettingsSchema = z.object({
       weworkremotely: z
         .object({
           enabled: z.boolean().default(true),
+          minHoursBetweenRuns: minHours(0),
           /** RSS categories read each run (`weworkremotely.com/categories/<slug>.rss`). */
           categories: slugs([
             "remote-full-stack-programming-jobs",
@@ -99,12 +116,13 @@ export const searchSettingsSchema = z.object({
         })
         .prefault({}),
       /** The latest ~100 jobs of every kind (no search); the screen and triage sort them. */
-      remoteok: feed,
-      /** A small, 24h-delayed set (no search). */
-      remotive: feed,
+      remoteok: feed(),
+      /** A small, 24h-delayed set (no search); its terms ask for at most ~4 requests a day. */
+      remotive: feed(20),
       nodesk: z
         .object({
           enabled: z.boolean().default(true),
+          minHoursBetweenRuns: minHours(0),
           /** RSS categories read each run (`nodesk.co/remote-jobs/<slug>/index.xml`). */
           categories: slugs(["engineering"]),
         })
@@ -112,6 +130,7 @@ export const searchSettingsSchema = z.object({
       linkedin: z
         .object({
           enabled: z.boolean().default(true),
+          minHoursBetweenRuns: minHours(0),
           /** LinkedIn locations searched for each query. */
           locations: phrases(10).default(["European Union", "United States", "Budapest"]),
           /** Results per query and location (Apify bills per result). */
@@ -122,16 +141,20 @@ export const searchSettingsSchema = z.object({
         .prefault({}),
       /** YC's Work at a Startup (about $0.10 per 1,000 results; one run for all phrases). */
       ycombinator: actorBoard(true, 50, 0.05),
-      /** Jobgether, remote-first (about $0.10 per 1,000; one run for all phrases). */
+      /** Jobgether, remote-first (about $0.10 per 1,000; one run per phrase, at most 200 each). */
       jobgether: actorBoard(true, 50, 0.05),
       /** Dice, US tech (about $1 per 1,000; mostly on-site US roles, which the screen drops). */
       dice: actorBoard(false, 25, 0.1),
       /** Built In (about $1.07 per 1,000, billed in pages of 25; one run for all phrases). */
       builtin: actorBoard(true, 25, 0.15),
-      /** Wellfound, startups (about $2.80 per 1,000; searched by role pages, ~30 per page). */
+      /**
+       * Wellfound, startups (about $2.80 per 1,000; searched by role pages, ~30 per page). The
+       * pages barely change between runs, so it runs once a day.
+       */
       wellfound: z
         .object({
           enabled: z.boolean().default(true),
+          minHoursBetweenRuns: minHours(20),
           /** Role slugs (`wellfound.com/role/r/<slug>`). */
           roles: slugs(["ai-engineer", "full-stack-engineer", "engineering-manager"]),
           maxUsdPerRun: z.number().min(0.01).max(20).default(0.15),
@@ -150,8 +173,7 @@ export const searchSettingsSchema = z.object({
           /** Jobs per run (the actor's minimum is 200; repeats are billed too). */
           limit: z.number().int().min(200).max(1_000).default(200),
           maxUsdPerRun: z.number().min(0.01).max(20).default(0.45),
-          /** Skip a run this soon after the last good one (hours; 0 = every run). */
-          minHoursBetweenRuns: z.number().int().min(0).max(168).default(20),
+          minHoursBetweenRuns: minHours(20),
         })
         .prefault({}),
     })

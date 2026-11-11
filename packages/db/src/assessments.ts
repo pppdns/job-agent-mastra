@@ -96,8 +96,8 @@ async function saveDraftUnlocked(db: Db, input: DraftInput): Promise<JobDraft> {
       "with_profile drafts need at least one point that cites the profile facts it compares against (profileFactIds)",
     );
   }
-  // A comparison with the profile is always inference, even when it cites the listing. Models
-  // often label it "official"; relabel instead of rejecting the whole draft (a paid retry).
+  // A comparison with the profile is the model's judgement, whatever label it chose: relabelled,
+  // not rejected (models mislabel these often, and a retry didn't always fix it).
   for (const point of fitPoints) point.evidence = "inference";
   for (const point of allPoints(assessment)) {
     const unknown = point.sourceIds.filter((id) => !known.has(id));

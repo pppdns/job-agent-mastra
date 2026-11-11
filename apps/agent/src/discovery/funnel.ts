@@ -18,7 +18,7 @@ import type { TracingContext } from "@mastra/core/observability";
 import { env } from "../env";
 import { RunRecorder } from "../usage/recorder";
 import { assessTopMatches } from "./assess";
-import { DiscoveryBudget } from "./budget";
+import { assessmentShare, DiscoveryBudget } from "./budget";
 import { createProgress } from "./progress";
 import { ALERT_REPEAT_MS, runProblems, sendDigest } from "./report";
 import { httpJson } from "./sources/http";
@@ -49,6 +49,7 @@ async function stateOf(db: Db, runId: string) {
     budget: new DiscoveryBudget({
       maxUsd: settings.maxLlmUsdPerRun,
       maxTriage: settings.maxTriagePerRun,
+      keepForAssessUsd: assessmentShare(settings.maxLlmUsdPerRun, settings.maxAssessmentsPerRun),
     }),
   };
   runState.set(runId, state);
@@ -172,7 +173,8 @@ async function report(db: Db, runId: string, funnel: FunnelResult) {
   const problems = run ? runProblems(run, funnel, sourceStates(recent, DISCOVERY_SOURCES)) : [];
   const matches = await digestMatches(db, {
     since: run?.startedAt ?? new Date(),
-    threshold: settings.triageThreshold,
+    // Only strong matches are emailed; never one the job list hides.
+    threshold: Math.max(settings.digestThreshold, settings.triageThreshold),
   });
   const digest = await sendDigest(
     httpJson,

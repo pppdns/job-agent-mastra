@@ -101,11 +101,8 @@ const points = (max: number) => z.array(assessmentPointSchema).max(max).default(
  * `fitBasis` separates understanding the role from assessing personal fit.
  * `headline` and `fitLevel` are optional so drafts saved before they existed still parse.
  */
-/** Headline length limit; the rescorer shortens longer ones in code. */
-export const HEADLINE_MAX = 140;
-
 export const assessmentSchema = z.object({
-  headline: text(HEADLINE_MAX)
+  headline: text(140)
     .optional()
     .describe(
       "Always set: one line with the gist, e.g. 'Senior IC backend role; 4 office days conflicts with remote'",
@@ -144,6 +141,41 @@ export const assessmentSchema = z.object({
   }),
 });
 export type Assessment = z.infer<typeof assessmentSchema>;
+
+const HEADLINE_MAX = 140;
+
+/**
+ * What the model is asked for when app code saves the result (re-score, discovery): the same
+ * shape, but a headline over its limit or an empty salary doesn't fail the whole call (a salary
+ * over its limit still does, so the structured-output retry corrects it). Those
+ * failed about 1 in 100 assessments even after a retry; `normalizeModelAssessment` fixes them.
+ */
+export const modelAssessmentSchema = assessmentSchema.extend({
+  headline: z
+    .string()
+    .optional()
+    .describe(assessmentSchema.shape.headline.description ?? ""),
+  // Same limit as the strict schema (Mastra's retry corrects an over-long salary); only an empty
+  // one is allowed here, since normalization drops it.
+  salary: z
+    .string()
+    .trim()
+    .max(120)
+    .optional()
+    .describe(assessmentSchema.shape.salary.description ?? ""),
+});
+
+/** Drops an empty salary, cuts an over-long headline at a word, then applies the strict schema. */
+export function normalizeModelAssessment(raw: z.input<typeof modelAssessmentSchema>): Assessment {
+  const salary = raw.salary?.trim() || undefined;
+  let headline = raw.headline?.trim() || undefined;
+  if (headline && headline.length > HEADLINE_MAX) {
+    const cut = headline.slice(0, HEADLINE_MAX - 1);
+    const space = cut.lastIndexOf(" ");
+    headline = `${(space > 80 ? cut.slice(0, space) : cut).replace(/[\s,;:–-]+$/, "")}…`;
+  }
+  return assessmentSchema.parse({ ...raw, headline, salary });
+}
 
 /** Shown as research suggestions when an assessment names none (drafts saved before the field). */
 export const DEFAULT_RESEARCH_TOPICS: readonly ResearchTopic[] = [

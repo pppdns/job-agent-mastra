@@ -111,7 +111,7 @@ describe("saveDraft", () => {
     await expect(saveDraft(db, { jobId, assessment: withProfile([]) })).rejects.toThrow(
       /at least one point that cites the profile/,
     );
-    // A comparison with the profile labelled as listing fact is stored as inference.
+    // A comparison with the profile labelled as listing fact is saved as inference.
     const relabelled = await saveDraft(db, {
       jobId,
       assessment: withProfile([{ ...fitPoint(factId), evidence: "official" }]),
