@@ -98,6 +98,23 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
             />
           </span>
         </div>
+        {links.length > 0 && (
+          <ul aria-label="Original listing" className="flex flex-wrap gap-2 pt-2">
+            {links.map((link, i) => (
+              <li key={link.url} className="min-w-0 max-w-full">
+                <Button asChild variant={i === 0 ? "default" : "outline"} className="max-w-full">
+                  <a href={link.url} target="_blank" rel="noopener noreferrer" title={link.url}>
+                    <ExternalLinkIcon />
+                    <span className="truncate">
+                      Open {link.label}
+                      <span className="font-normal opacity-80"> · {link.host}</span>
+                    </span>
+                  </a>
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
         <p className="flex flex-wrap gap-x-4 text-sm text-muted-foreground">
           {job.company && (
             <span className="inline-flex items-center gap-1.5">
@@ -143,27 +160,6 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
           )}
         </p>
         {job.origin === "discovery" && job.seenAt === null && <MarkSeen jobId={job.id} />}
-        {links.length > 0 && (
-          <ul aria-label="Original listing" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-            {links.map((link) => (
-              <li key={link.url} className="min-w-0">
-                <a
-                  href={link.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title={link.url}
-                  className="inline-flex max-w-full items-center gap-1.5 font-medium underline-offset-4 hover:underline"
-                >
-                  <ExternalLinkIcon className="size-4 shrink-0" />
-                  <span className="truncate">
-                    {link.label}
-                    <span className="font-normal text-muted-foreground"> · {link.host}</span>
-                  </span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
 
       {job.origin === "discovery" && (
