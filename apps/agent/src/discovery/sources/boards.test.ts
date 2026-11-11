@@ -44,7 +44,12 @@ describe("inputs", () => {
       maxItems: 200,
       dedupe: { enabled: false },
     });
-    expect(jobgetherBoard.searches(context())).toHaveLength(1);
+    const jobgether = jobgetherBoard.searches(context());
+    expect(jobgether).toHaveLength(DEFAULT_SEARCH_SETTINGS.queries.length);
+    expect(jobgether[0]).toMatchObject({
+      label: '"Applied AI Engineer"',
+      input: { queries: ["Applied AI Engineer"], maxItems: 50 },
+    });
     expect(diceBoard.searches(context())).toHaveLength(DEFAULT_SEARCH_SETTINGS.queries.length);
     expect(diceBoard.searches(context())[0]?.input).toMatchObject({
       keyword: "Applied AI Engineer",
@@ -364,6 +369,17 @@ describe("actor sources", () => {
       invalid: [{}],
       sample: [expect.objectContaining({ id: "1" }), expect.objectContaining({ id: "2" })],
     });
+  });
+
+  it("reports a source whose searches all came back empty, but not a quiet single search", async () => {
+    const empty: ApifyRunner = async () => ({ items: [], costUsd: 0.005 });
+    const dice = await createActorSource(diceBoard, empty).fetch(context({ maxUsd: 1 }));
+    const searches = DEFAULT_SEARCH_SETTINGS.queries.length;
+    expect(dice.failures).toEqual([`every search came back empty (${searches} searches)`]);
+    expect(dice.partial).toBe(`every search came back empty (${searches} searches)`);
+    const yc = await createActorSource(ycombinatorBoard, empty).fetch(context());
+    expect(yc.failures).toEqual([]);
+    expect(yc.partial).toBeUndefined();
   });
 
   afterEach(() => vi.restoreAllMocks());

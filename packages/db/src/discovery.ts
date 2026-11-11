@@ -192,7 +192,10 @@ export function sourceStates(runs: DiscoveryRun[], sources: readonly DiscoverySo
     const empty = lastTwo.length === 2 && lastTwo.every((r) => r.result.fetched === 0);
     return {
       source,
-      lastOkAt: lastOk ? (lastOk.run.endedAt ?? lastOk.run.startedAt) : null,
+      // The run's start, not its end: every source fetches after the run starts, while a run can
+      // end long after a source was read (a 45 min run, or an interrupted one marked ended at
+      // the next boot), which would leave a gap past the 1 h overlap.
+      lastOkAt: lastOk ? lastOk.run.startedAt : null,
       last,
       unhealthy: last?.status === "failed" || empty,
     };

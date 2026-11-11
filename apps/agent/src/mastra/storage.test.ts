@@ -6,11 +6,37 @@ import { createStorage, evalDatasetDomains } from "./storage";
 
 describe("createStorage", () => {
   it("keeps memory in libSQL and puts observability in DuckDB", async () => {
-    const storage = createStorage({ DATABASE_URL: ":memory:" });
+    const { storage } = createStorage({ DATABASE_URL: ":memory:" });
     await storage.init();
     const observability = await storage.getStore("observability");
     expect(observability?.constructor.name).toMatch(/DuckDB/);
     expect((await storage.getStore("memory"))?.constructor.name).toMatch(/LibSQL/);
+  });
+});
+
+describe("pruneObservability", () => {
+  it("deletes spans past the retention age and keeps recent ones", async () => {
+    const { storage, pruneObservability } = createStorage({ DATABASE_URL: ":memory:" });
+    await storage.init();
+    const observability = await storage.getStore("observability");
+    if (!observability) throw new Error("no observability store");
+    const span = (traceId: string, at: Date) => ({
+      traceId,
+      spanId: `${traceId}-root`,
+      parentSpanId: null,
+      name: "run",
+      spanType: "agent_run",
+      isEvent: false,
+      startedAt: at,
+      endedAt: at,
+    });
+    const old = new Date(Date.now() - 8 * 86_400_000);
+    await observability.batchCreateSpans({
+      records: [span("old", old), span("new", new Date())] as never,
+    });
+    const results = await pruneObservability();
+    expect(results.find((r) => r.table.includes("span"))?.deleted).toBeGreaterThan(0);
+    expect((await observability.getTrace({ traceId: "new" }))?.spans.length).toBe(1);
   });
 });
 

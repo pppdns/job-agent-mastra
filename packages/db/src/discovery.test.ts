@@ -283,8 +283,9 @@ describe("discovery runs", () => {
   });
 
   it("derives source cursors and health from recent runs", () => {
-    const run = (sources: SourceRunResult[], endedAt: Date): DiscoveryRun => ({
-      id: endedAt.toISOString(),
+    // The cursor is the run's start: a source fetches after it, however long the run takes.
+    const run = (sources: SourceRunResult[], startedAt: Date): DiscoveryRun => ({
+      id: startedAt.toISOString(),
       trigger: "schedule",
       status: "completed",
       lookbackDays: null,
@@ -294,8 +295,8 @@ describe("discovery runs", () => {
       progress: null,
       estimatedUsd: 0,
       workflowRunId: null,
-      startedAt: endedAt,
-      endedAt,
+      startedAt,
+      endedAt: new Date(startedAt.getTime() + 3_600_000),
     });
     const base = {
       invalid: 0,

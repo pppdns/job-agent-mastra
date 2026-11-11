@@ -1,6 +1,6 @@
 "use client";
 
-import type { SearchSettings } from "@copilot/shared";
+import { DISCOVERY_SOURCE_LABELS, DISCOVERY_SOURCES, type SearchSettings } from "@copilot/shared";
 import { useActionState } from "react";
 import { type DiscoveryActionState, saveSearchSettingsAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
@@ -187,6 +187,18 @@ export function SearchSettingsForm({ settings }: { settings: SearchSettings }) {
               min={0}
               max={100}
               defaultValue={settings.triageThreshold}
+            />
+          </Field>
+          <Field
+            label="Email matches scoring at least"
+            hint="The digest after each run; never below the threshold above."
+          >
+            <Input
+              name="digestThreshold"
+              type="number"
+              min={0}
+              max={100}
+              defaultValue={settings.digestThreshold}
             />
           </Field>
           <Field label="Full assessments per run" hint="About $0.04 each, best matches first.">
@@ -389,7 +401,7 @@ export function SearchSettingsForm({ settings }: { settings: SearchSettings }) {
               />
             </Field>
           </div>
-          <div className="grid items-end gap-3 sm:grid-cols-[1fr_8rem_8rem_8rem]">
+          <div className="grid items-end gap-3 sm:grid-cols-[1fr_8rem_8rem]">
             <div className="flex flex-col gap-0.5">
               <Check
                 name="careersitesEnabled"
@@ -421,15 +433,27 @@ export function SearchSettingsForm({ settings }: { settings: SearchSettings }) {
                 defaultValue={settings.sources.careersites.maxUsdPerRun}
               />
             </Field>
-            <Field label="Hours between runs">
-              <Input
-                name="careersitesMinHoursBetweenRuns"
-                type="number"
-                min={0}
-                max={168}
-                defaultValue={settings.sources.careersites.minHoursBetweenRuns}
-              />
-            </Field>
+          </div>
+        </div>
+        <div className="flex flex-col gap-3 rounded-lg border p-3">
+          <p className="text-sm font-medium">Hours between runs</p>
+          <p className="text-xs text-muted-foreground">
+            Discovery runs at 07:00 and 16:00. A source is skipped this soon after its last good
+            run: 20 means once a day (boards that refresh daily or return the same jobs), 0 means
+            every run. A backfill ignores it.
+          </p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {DISCOVERY_SOURCES.map((id) => (
+              <Field key={id} label={DISCOVERY_SOURCE_LABELS[id]}>
+                <Input
+                  name={`${id}MinHoursBetweenRuns`}
+                  type="number"
+                  min={0}
+                  max={168}
+                  defaultValue={settings.sources[id].minHoursBetweenRuns}
+                />
+              </Field>
+            ))}
           </div>
         </div>
         <Field

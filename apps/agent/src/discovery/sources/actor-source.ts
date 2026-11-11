@@ -49,6 +49,8 @@ const RUN_TIMEOUT_SECS = 300;
 const MIN_SEARCH_SECS = 120;
 /** The runner may wait this long past an actor's timeout (its own deadline plus one poll). */
 const RUNNER_SLACK_SECS = 120;
+/** A source with this many searches (one per phrase) is never empty on all of them by chance. */
+const MIN_SEARCHES_FOR_EMPTY = 3;
 
 export function createActorSource(board: ActorBoard, runActor: ApifyRunner | null): JobSource {
   return {
@@ -64,6 +66,7 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
       const failures: string[] = [];
       const notes: string[] = [];
       let succeeded = 0;
+      let returned = 0;
       const raws = rawSampler();
       const providerRuns: ProviderRun[] = [];
       /** Company + title → the kept variant's id, and whether it passes the screen. */
@@ -101,6 +104,7 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
           }
           if (result.partial) failures.push(result.partial);
           else succeeded += 1;
+          returned += result.items.length;
           for (const raw of result.items) {
             const posting = board.parse(raw);
             if (!posting) {
@@ -129,6 +133,12 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
           // Rate limited for longer than we retry: stop asking for this run.
           if (error instanceof CooldownError) break;
         }
+      }
+      // Several broad searches all coming back empty is the actor misbehaving, not a quiet day
+      // (seen: Dice returned nothing for all 7 phrases of a 30-day backfill). Reported as a
+      // failure, so the run is partial: it's emailed and the next run asks for the window again.
+      if (searches.length >= MIN_SEARCHES_FOR_EMPTY && succeeded === searches.length && !returned) {
+        failures.push(`every search came back empty (${searches.length} searches)`);
       }
       if (succeeded === 0 && byId.size === 0 && failures.length > 0) {
         throw new SourceError(`no search succeeded (${failures[0]})`);

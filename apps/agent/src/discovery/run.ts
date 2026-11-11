@@ -36,7 +36,7 @@ const DAY_MS = 86_400_000;
 const HOUR_MS = 3_600_000;
 /** Paid sources stop for the rest of the month once the budget is spent (rolling 30 days). */
 const BUDGET_WINDOW_MS = 30 * DAY_MS;
-/** Re-ask an hour before the last good run ended, so nothing posted in between is missed. */
+/** Re-ask from an hour before the last good run started, so nothing posted around it is missed. */
 const CURSOR_OVERLAP_MS = HOUR_MS;
 /**
  * Most time one source may take in a run. Sources run one after another, so a slow board
@@ -81,11 +81,9 @@ const maxUsdOf = (source: DiscoverySource, settings: SearchSettings, backfill: b
   return "maxUsdPerRun" in config ? config.maxUsdPerRun * (backfill ? BACKFILL_USD_FACTOR : 1) : 0;
 };
 
-/** A source that re-reads the same window every run (no "since") runs at most this often. */
-const minHoursOf = (source: DiscoverySource, settings: SearchSettings) => {
-  const config = settings.sources[source];
-  return "minHoursBetweenRuns" in config ? config.minHoursBetweenRuns : 0;
-};
+/** Hours a source waits after its last good run (daily boards, boards without a "since"). */
+const minHoursOf = (source: DiscoverySource, settings: SearchSettings) =>
+  settings.sources[source].minHoursBetweenRuns;
 
 export async function runDiscoverySources(
   db: Db,
