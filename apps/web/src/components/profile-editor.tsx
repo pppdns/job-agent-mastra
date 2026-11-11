@@ -1,10 +1,13 @@
 "use client";
 
 import { PROFILE_FACT_KINDS, PROFILE_FACT_LABELS, type ProfileFactKind } from "@copilot/shared";
+import { PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { type FormEvent, useState, useTransition } from "react";
 import { editProfileAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PROFILE_KIND_UI } from "@/lib/profile-kinds";
+import { cn } from "@/lib/utils";
 
 type Fact = { id: string; kind: ProfileFactKind; text: string };
 
@@ -34,7 +37,7 @@ function KindSelect({
       aria-label="Kind"
       value={value}
       onChange={(e) => onChange(e.target.value as ProfileFactKind)}
-      className="h-8 rounded-md border bg-transparent px-2 text-sm"
+      className="h-8 rounded-md border bg-background px-2 text-sm"
     >
       {PROFILE_FACT_KINDS.map((k) => (
         <option key={k} value={k}>
@@ -54,20 +57,42 @@ export function FactRow({ fact, version }: { fact: Fact; version: number }) {
 
   if (!editing) {
     return (
-      <li className="flex flex-wrap items-center gap-2 text-sm">
-        <span>{fact.text}</span>
-        <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
-          Edit
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={pending}
-          onClick={() => apply([{ op: "remove", factId: fact.id }], "Removed on the profile page")}
-        >
-          Remove
-        </Button>
-        {error && <span className="text-destructive">{error}</span>}
+      <li
+        className={cn(
+          "group flex items-start gap-3 rounded-md px-2 py-1 hover:bg-muted/50",
+          pending && "opacity-50",
+        )}
+      >
+        <span
+          aria-hidden
+          className={cn("mt-2 size-1.5 shrink-0 rounded-full", PROFILE_KIND_UI[fact.kind].dot)}
+        />
+        <span className="flex-1 text-sm leading-6">{fact.text}</span>
+        {/* Always visible on touch screens; on hover or focus from sm up. */}
+        <span className="flex shrink-0 gap-0.5 transition-opacity sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100">
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Edit"
+            className="text-muted-foreground"
+            onClick={() => setEditing(true)}
+          >
+            <PencilIcon />
+          </Button>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Remove"
+            className="text-muted-foreground hover:text-destructive"
+            disabled={pending}
+            onClick={() =>
+              apply([{ op: "remove", factId: fact.id }], "Removed on the profile page")
+            }
+          >
+            <Trash2Icon />
+          </Button>
+        </span>
+        {error && <span className="basis-full text-sm text-destructive">{error}</span>}
       </li>
     );
   }
@@ -79,14 +104,15 @@ export function FactRow({ fact, version }: { fact: Fact; version: number }) {
     );
   };
   return (
-    <li>
+    <li className="rounded-md bg-muted/50 p-2">
       <form onSubmit={submit} className="flex flex-wrap items-center gap-2">
         <KindSelect value={kind} onChange={setKind} />
         <Input
           aria-label="Fact"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          className="h-8 flex-1"
+          className="h-8 min-w-48 flex-1 bg-background"
+          autoFocus
         />
         <Button size="sm" type="submit" disabled={pending}>
           Save
@@ -110,16 +136,21 @@ export function AddFactForm({ version }: { version: number }) {
     apply([{ op: "add", kind, text }], "Added on the profile page", () => setText(""));
   };
   return (
-    <form onSubmit={submit} className="flex flex-wrap items-center gap-2" aria-label="Add a fact">
+    <form
+      onSubmit={submit}
+      className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed p-3"
+      aria-label="Add a fact"
+    >
       <KindSelect value={kind} onChange={setKind} />
       <Input
         aria-label="New fact"
-        placeholder="e.g. Remote within the EU only"
+        placeholder={PROFILE_KIND_UI[kind].placeholder}
         value={text}
         onChange={(e) => setText(e.target.value)}
-        className="h-8 flex-1"
+        className="h-8 min-w-48 flex-1"
       />
       <Button size="sm" type="submit" disabled={pending || !text.trim()}>
+        <PlusIcon data-icon="inline-start" />
         Add
       </Button>
       {error && <p className="basis-full text-sm text-destructive">{error}</p>}
