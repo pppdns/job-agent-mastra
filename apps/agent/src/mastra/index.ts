@@ -5,7 +5,7 @@ import { PinoLogger } from "@mastra/loggers";
 import { MastraStorageExporter, Observability, SensitiveDataFilter } from "@mastra/observability";
 import { env } from "../env";
 import { allScorers } from "../evals/scorers";
-import { onServerError } from "../sentry";
+import { onServerError, reportError } from "../sentry";
 import { copilotAgent } from "./agents/copilot";
 import { researcherAgent } from "./agents/researcher";
 import { chatResumeRoute, chatRoute, chatStopRoute } from "./routes/chat";
@@ -46,12 +46,13 @@ export const TRACE_SENSITIVE_FIELDS = [
 const traceRedaction = new SensitiveDataFilter({ sensitiveFields: TRACE_SENSITIVE_FIELDS });
 
 const logger = new PinoLogger({ name: "copilot-agent", level: "info" });
+const { storage, pruneObservability } = createStorage();
 
 export const mastra = new Mastra({
   agents: { copilotAgent, researcherAgent },
   workflows: { discoverJobsWorkflow },
   scorers: allScorers,
-  storage: createStorage(),
+  storage,
   logger,
   observability: new Observability({
     configs: {
@@ -97,4 +98,31 @@ if (!discoveryScheduleEnabled()) {
     .catch((error) =>
       logger.warn("could not check the discovery schedule", { error: String(error) }),
     );
+}
+
+// Traces, logs and metrics are kept for OBSERVABILITY_MAX_AGE: the DuckDB file otherwise grows
+// until the Fly volume is full (about 1 GB on the first day). Mastra never prunes on its own,
+// and its docs advise against pruning at startup, so a timer does it a little after boot.
+const PRUNE_FIRST_MS = 10 * 60_000;
+const PRUNE_EVERY_MS = 6 * 60 * 60_000;
+async function pruneTick() {
+  try {
+    const results = await pruneObservability();
+    const deleted = results.reduce((sum, r) => sum + r.deleted, 0);
+    if (deleted > 0 || results.some((r) => !r.done)) {
+      logger.info(
+        `observability retention: deleted ${deleted} rows` +
+          (results.some((r) => !r.done) ? " (more left for the next run)" : ""),
+      );
+    }
+  } catch (error) {
+    logger.warn("observability retention failed", { error: String(error) });
+    reportError(error, { task: "observability-retention" });
+  }
+}
+if (process.env.NODE_ENV !== "test") {
+  setTimeout(() => {
+    void pruneTick();
+    setInterval(() => void pruneTick(), PRUNE_EVERY_MS).unref();
+  }, PRUNE_FIRST_MS).unref();
 }
