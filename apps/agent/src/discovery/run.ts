@@ -81,11 +81,9 @@ const maxUsdOf = (source: DiscoverySource, settings: SearchSettings, backfill: b
   return "maxUsdPerRun" in config ? config.maxUsdPerRun * (backfill ? BACKFILL_USD_FACTOR : 1) : 0;
 };
 
-/** A source that re-reads the same window every run (no "since") runs at most this often. */
-const minHoursOf = (source: DiscoverySource, settings: SearchSettings) => {
-  const config = settings.sources[source];
-  return "minHoursBetweenRuns" in config ? config.minHoursBetweenRuns : 0;
-};
+/** Hours a source waits after its last good run (daily boards, boards without a "since"). */
+const minHoursOf = (source: DiscoverySource, settings: SearchSettings) =>
+  settings.sources[source].minHoursBetweenRuns;
 
 export async function runDiscoverySources(
   db: Db,

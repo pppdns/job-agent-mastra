@@ -412,8 +412,9 @@ describe("funnel steps (mock model)", () => {
     const funnel = await assessStep(db, runId, triaged);
     expect(funnel).toMatchObject({ assessed: 1, assessFailed: 0 });
     const report = await reportStep(db, runId, funnel);
-    // No RESEND_API_KEY in tests: skipped, with the matches counted.
-    expect(report.digest).toMatchObject({ status: "skipped", matches: 2 });
+    // No RESEND_API_KEY in tests: skipped, with the matches counted. Only the 88 reaches the
+    // digest threshold (75); the 70 is a match on the list but isn't emailed.
+    expect(report.digest).toMatchObject({ status: "skipped", matches: 1 });
     await closeUsage(db, runId, false);
 
     const jobs = await listJobs(db);

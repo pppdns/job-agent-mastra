@@ -173,7 +173,8 @@ async function report(db: Db, runId: string, funnel: FunnelResult) {
   const problems = run ? runProblems(run, funnel, sourceStates(recent, DISCOVERY_SOURCES)) : [];
   const matches = await digestMatches(db, {
     since: run?.startedAt ?? new Date(),
-    threshold: settings.triageThreshold,
+    // Only strong matches are emailed; never one the job list hides.
+    threshold: Math.max(settings.digestThreshold, settings.triageThreshold),
   });
   const digest = await sendDigest(
     httpJson,

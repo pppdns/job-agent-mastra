@@ -127,7 +127,10 @@ describe("runDiscoverySources", () => {
 
   it("skips sources that are off, unavailable, or over the monthly Apify budget", async () => {
     await saveSettings({
-      sources: { ...DEFAULT_SEARCH_SETTINGS.sources, himalayas: { enabled: false, maxPages: 1 } },
+      sources: {
+        ...DEFAULT_SEARCH_SETTINGS.sources,
+        himalayas: { ...DEFAULT_SEARCH_SETTINGS.sources.himalayas, enabled: false },
+      },
       apifyMonthlyBudgetUsd: 1,
     });
     const earlier = await startDiscoveryRun(db, { trigger: "schedule" });
@@ -170,22 +173,37 @@ describe("runDiscoverySources", () => {
   });
 
   it("continues from the last good run, or looks back the backfill window with raised caps", async () => {
-    const himalayas = stub("himalayas", async () => ({ postings: [] }));
+    // A source that runs every time (Himalayas waits 20 h between runs by default).
+    const feed = stub("weworkremotely", async () => ({ postings: [] }));
     const linkedin = stub("linkedin", async () => ({ postings: [] }));
-    await run({ himalayas, linkedin });
-    const firstSince = himalayas.contexts[0]?.since.getTime() ?? 0;
+    await run({ weworkremotely: feed, linkedin });
+    const firstSince = feed.contexts[0]?.since.getTime() ?? 0;
     expect(Date.now() - firstSince).toBeGreaterThan(13 * 86_400_000);
 
-    await run({ himalayas, linkedin });
-    const secondSince = himalayas.contexts[1]?.since.getTime() ?? 0;
+    await run({ weworkremotely: feed, linkedin });
+    const secondSince = feed.contexts[1]?.since.getTime() ?? 0;
     expect(Date.now() - secondSince).toBeLessThan(2 * 3_600_000);
     expect(linkedin.contexts[1]?.maxUsd).toBeCloseTo(0.5);
 
-    await run({ himalayas, linkedin }, 30);
-    const backfill = himalayas.contexts[2];
+    await run({ weworkremotely: feed, linkedin }, 30);
+    const backfill = feed.contexts[2];
     expect(backfill?.backfill).toBe(true);
     expect(Date.now() - (backfill?.since.getTime() ?? 0)).toBeGreaterThan(29 * 86_400_000);
     expect(linkedin.contexts[2]?.maxUsd).toBeCloseTo(2);
+  });
+
+  it("runs daily boards once a day by default", async () => {
+    const himalayas = stub("himalayas", async () => ({ postings: [] }));
+    const wellfound = stub("wellfound", async () => ({ postings: [] }), { paid: true });
+    const linkedin = stub("linkedin", async () => ({ postings: [] }), { paid: true });
+    await run({ himalayas, wellfound, linkedin });
+    const { results } = await run({ himalayas, wellfound, linkedin });
+    expect(Object.fromEntries(results.map((r) => [r.source, r.status]))).toEqual({
+      himalayas: "skipped",
+      wellfound: "skipped",
+      linkedin: "ok",
+    });
+    expect(linkedin.contexts).toHaveLength(2);
   });
 
   it("runs the career-sites feed at most once a day, except for a backfill", async () => {

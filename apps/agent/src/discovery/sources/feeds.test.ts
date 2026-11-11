@@ -114,7 +114,10 @@ describe("We Work Remotely", () => {
       ...DEFAULT_SEARCH_SETTINGS,
       sources: {
         ...DEFAULT_SEARCH_SETTINGS.sources,
-        weworkremotely: { enabled: true, categories: ["remote-a-jobs", "../admin"] },
+        weworkremotely: {
+          ...DEFAULT_SEARCH_SETTINGS.sources.weworkremotely,
+          categories: ["remote-a-jobs", "../admin"],
+        },
       },
     };
     const outcome = await source.fetch(context({ settings }));
