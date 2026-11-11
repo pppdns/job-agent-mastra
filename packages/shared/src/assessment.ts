@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { locationBlockSchema } from "./location-block";
 
 /**
  * How strong the support for a claim is (brief: "Research scope"). `official` covers the
@@ -124,6 +125,11 @@ export const assessmentSchema = z.object({
   weaknesses: points(10),
   hardConflicts: points(10).describe("Conflicts with the user's stated hard requirements"),
   softTradeoffs: points(10),
+  locationBlock: locationBlockSchema
+    .optional()
+    .describe(
+      "Set only when the listing explicitly excludes where the person lives (see the rules); else null",
+    ),
   unknowns: z
     .array(z.object({ question: text(300), whyItMatters: text(300) }))
     .max(10)

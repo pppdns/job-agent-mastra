@@ -3,6 +3,7 @@ import {
   companyKey,
   DISCOVERY_SOURCE_LABELS,
   type DiscoverySource,
+  type LocationBlock,
   type PostingInput,
   parseSearchSettings,
   postingSnapshot,
@@ -522,13 +523,14 @@ export function rescreenPostings(
 
 /**
  * Jobs worth showing: chat jobs and jobs the user acted on or kept always; a discovered job
- * still `new` only while one of its postings passes the screen and its triage score (once it
- * has one) reaches the threshold.
+ * still `new` only while one of its postings passes the screen, its triage score (once it has
+ * one) reaches the threshold, and its listing doesn't exclude where the person lives.
  */
 export const visibleJobs = (triageThreshold: number) => sql`(
   ${jobs.origin} = 'chat' OR ${jobs.keptAt} IS NOT NULL OR ${jobs.status} != 'new' OR (
     EXISTS (SELECT 1 FROM app_postings p WHERE p.job_id = "app_jobs"."id" AND p.screen_reasons IS NULL)
     AND (${jobs.triageScore} IS NULL OR ${jobs.triageScore} >= ${triageThreshold})
+    AND ${jobs.locationBlock} IS NULL
   )
 )`;
 
@@ -586,6 +588,9 @@ const openDiscovered = sql`${jobs.origin} = 'discovery' AND ${jobs.status} = 'ne
   AND ${jobs.archivedAt} IS NULL
   AND (${jobs.keptAt} IS NOT NULL OR EXISTS (SELECT 1 FROM app_postings p WHERE p.job_id = "app_jobs"."id" AND p.screen_reasons IS NULL))`;
 
+/** Not hidden by a location block (or kept anyway): matches to assess, email and count. */
+const notLocationBlocked = sql`(${jobs.keptAt} IS NOT NULL OR ${jobs.locationBlock} IS NULL)`;
+
 export type TriageCandidate = { id: string; title: string | null; company: string | null };
 
 /** Discovered jobs waiting for triage, newest first (left-overs from earlier runs included). */
@@ -610,7 +615,14 @@ export async function countAwaitingTriage(db: Db): Promise<number> {
 export function saveTriage(
   db: Db,
   jobId: string,
-  triage: { score: number; reason: string; profileVersion: number },
+  triage: {
+    score: number;
+    reason: string;
+    profileVersion: number;
+    /** A verified location block (see `settleScore`); null clears an earlier triage's. Once
+     * the job has an assessment, triage never changes it: the assessment's decision stands. */
+    locationBlock?: LocationBlock | null;
+  },
 ): Promise<void> {
   return serializeWrites(db, async () => {
     await db
@@ -620,6 +632,9 @@ export function saveTriage(
         triageReason: triage.reason,
         triageProfileVersion: triage.profileVersion,
         triagedAt: new Date(),
+        locationBlock: sql`(case when exists (select 1 from app_job_drafts d where d.job_id = "app_jobs"."id") then ${jobs.locationBlock} else ${
+          triage.locationBlock ? JSON.stringify({ ...triage.locationBlock, from: "triage" }) : null
+        } end)`,
       })
       .where(eq(jobs.id, jobId));
   });
@@ -641,6 +656,7 @@ export async function jobsToAssess(
     .where(
       and(
         openDiscovered,
+        notLocationBlocked,
         input.since ? gte(jobs.triagedAt, input.since) : isNotNull(jobs.triagedAt),
         gte(jobs.triageScore, input.threshold),
         notExists(db.select({ x: sql`1` }).from(jobDrafts).where(eq(jobDrafts.jobId, jobs.id))),
@@ -684,6 +700,7 @@ export async function digestMatches(
     .where(
       and(
         openDiscovered,
+        notLocationBlocked,
         isNotNull(jobs.triageScore),
         gte(jobs.triagedAt, input.since),
         gte(jobs.triageScore, input.threshold),
@@ -719,7 +736,12 @@ export async function unseenMatchCount(db: Db): Promise<number> {
     .select({ n: sql<number>`count(*)` })
     .from(jobs)
     .where(
-      and(openDiscovered, isNull(jobs.seenAt), gte(jobs.triageScore, settings.triageThreshold)),
+      and(
+        openDiscovered,
+        notLocationBlocked,
+        isNull(jobs.seenAt),
+        gte(jobs.triageScore, settings.triageThreshold),
+      ),
     );
   return row?.n ?? 0;
 }

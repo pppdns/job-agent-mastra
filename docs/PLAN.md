@@ -221,6 +221,7 @@ Scheduled ingestion from job boards, reported as an inbox plus an email digest. 
 - [x] Verified live on Fly: Budapest times, full triage-only runs (400 triaged, ~$0.85 each, all model spend).
 - [ ] Verified live on Fly: Stop during a triage-only run.
 - [x] `/discovery` shows model spend: per run split into Apify, triage and assessments (live while running), and the last 30 days next to the Apify budget.
+- [x] Hard location exclusion: triage and assessments report a quoted location block (US-only, UK-only, …), app code verifies the quote, caps the triage score and hides the job under "Screened out"; "United States" no longer an allowed remote region by default.
 - [x] Triage every waiting job by default (cap 2,000, $5 per run; saved old defaults migrated), with the assessments' share of the spend cap kept out of triage's reach.
 
 ### Deployment — Fly.io (2026-11-10)

@@ -12,6 +12,7 @@ export const MAX_RESCORE_JOBS = 25;
 
 export * from "./assessment";
 export * from "./job-status";
+export * from "./location-block";
 export * from "./posted-date";
 export * from "./posting";
 export * from "./profile";

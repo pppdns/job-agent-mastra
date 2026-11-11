@@ -1,4 +1,9 @@
-import { type Assessment, type AssessmentPoint, assessmentSummary } from "@copilot/shared";
+import {
+  type Assessment,
+  type AssessmentPoint,
+  assessmentSummary,
+  locationBlockReason,
+} from "@copilot/shared";
 import { cn } from "cn";
 import { ArrowRightIcon, CircleHelpIcon, MessageCircleQuestionIcon } from "lucide-react";
 import {
@@ -30,6 +35,11 @@ export function AssessmentView({
   return (
     <div className="flex flex-col gap-5 text-sm">
       {showSummary && <SummaryHeader summary={assessmentSummary(assessment)} />}
+      {assessment.locationBlock && (
+        <p className={cn("rounded-lg border p-3 font-medium", TONES.destructive)}>
+          Excluded: {locationBlockReason(assessment.locationBlock)}
+        </p>
+      )}
       <p className="leading-relaxed text-muted-foreground">{assessment.overview}</p>
 
       {assessment.hardConflicts.length > 0 && (

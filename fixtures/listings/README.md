@@ -19,3 +19,5 @@ Synthetic pages shaped like real provider output (Tavily markdown of LinkedIn gu
 | `german-required.md` | Remote Germany Java/Kotlin role requiring fluent German (C1); rescorer model eval |
 | `contradictory-remote.md` | Labelled "Remote (Germany)" but the team works from Munich Tuesday to Thursday; rescorer model eval |
 | `monthly-salary.md` | Remote EU TypeScript product role with pay stated per month (EUR 7,600 × 12); rescorer model eval |
+| `remote-us-hours.md` | Remote, US Eastern hours overlap, but hires in Europe too: no location block (triage eval) |
+| `remote-uk-only.md` | Remote within the UK only, UK residence required: a location block (triage eval) |

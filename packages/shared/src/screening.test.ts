@@ -125,9 +125,14 @@ describe("screenPosting", () => {
   it("checks remote region restrictions against allowed regions, expanding Europe", () => {
     const s = settings();
     expect(screenPosting(s, posting({ remote: true, regions: ["Germany"] }), now).pass).toBe(true);
-    expect(screenPosting(s, posting({ remote: true, regions: ["United States"] }), now).pass).toBe(
-      true,
-    );
+    expect(
+      screenPosting(s, posting({ remote: true, regions: ["United States"] }), now).reasons,
+    ).toEqual(["remote only from United States"]);
+    expect(
+      screenPosting(s, posting({ remote: true, regions: ["United States", "Europe"] }), now).pass,
+    ).toBe(true);
+    const withUs = settings({ remoteRegions: ["Europe", "United States"] });
+    expect(screenPosting(withUs, posting({ remote: true, regions: ["USA"] }), now).pass).toBe(true);
     expect(screenPosting(s, posting({ remote: true, regions: [] }), now).pass).toBe(true);
     expect(screenPosting(s, posting({ remote: true, regions: ["Worldwide"] }), now).pass).toBe(
       true,

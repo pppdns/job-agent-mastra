@@ -7,7 +7,14 @@ import {
   latestListingSource,
   saveTriage,
 } from "@copilot/db";
-import { type SearchSettings, shortReason, type Triage, triageSchema } from "@copilot/shared";
+import {
+  quoteInSources,
+  type SearchSettings,
+  shortReason,
+  type Triage,
+  type TriageInput,
+  triageSchema,
+} from "@copilot/shared";
 import type { TracingContext } from "@mastra/core/observability";
 import { env } from "../env";
 import { triagerAgent } from "../mastra/agents/triager";
@@ -61,11 +68,23 @@ export function triagePrompt(
   ].join("\n\n");
 }
 
-/** Applies the app's rule on top of the model's answer: a hard conflict caps the score. */
-export const settleScore = (triage: Triage): Triage => ({
-  ...triage,
-  score: triage.hardConflict ? Math.min(triage.score, HARD_CONFLICT_MAX_SCORE) : triage.score,
-});
+/**
+ * Applies the app's rules on top of the model's answer: a location block counts only when its
+ * quote is in the posting, and a hard conflict or location block caps the score.
+ */
+export function settleScore(triage: TriageInput, posting: string): Triage {
+  const block =
+    triage.locationBlock && quoteInSources(triage.locationBlock.quote, [posting])
+      ? triage.locationBlock
+      : null;
+  if (triage.locationBlock && !block) console.warn("triage: location block quote not in posting");
+  const capped = triage.hardConflict || block;
+  return {
+    ...triage,
+    locationBlock: block,
+    score: capped ? Math.min(triage.score, HARD_CONFLICT_MAX_SCORE) : triage.score,
+  };
+}
 
 export type TriageDeps = {
   db: Db;
@@ -74,7 +93,7 @@ export type TriageDeps = {
   tracingContext?: TracingContext;
   signal?: AbortSignal;
   /** The model call; injectable for tests. */
-  triage?: (prompt: string, deps: TriageDeps) => Promise<Triage>;
+  triage?: (prompt: string, deps: TriageDeps) => Promise<TriageInput>;
   /** Called after each job (`done` of `total` in this run's queue). */
   onProgress?: (done: number, total: number) => void;
 };
@@ -107,13 +126,14 @@ export async function triageJobs(deps: TriageDeps): Promise<TriageOutcome> {
         const source = await latestListingSource(db, job.id);
         if (!source) throw new Error("no stored posting");
         const prompt = triagePrompt(profile, settings, job, source.content);
-        const triage = settleScore(await call(prompt, deps));
+        const triage = settleScore(await call(prompt, deps), source.content);
         await saveTriage(db, job.id, {
           score: triage.score,
           reason: triage.hardConflict
             ? `${shortReason(triage.reason, 200)} (conflict: ${shortReason(triage.hardConflict, 150)})`
             : shortReason(triage.reason),
           profileVersion: profile.version,
+          locationBlock: triage.locationBlock,
         });
         triaged += 1;
         if (triage.score >= settings.triageThreshold) matched += 1;

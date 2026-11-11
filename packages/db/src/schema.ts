@@ -1,4 +1,10 @@
-import type { Assessment, EvidenceClass, ProfileFactKind, ResearchTopic } from "@copilot/shared";
+import type {
+  Assessment,
+  EvidenceClass,
+  ProfileFactKind,
+  ResearchTopic,
+  StoredLocationBlock,
+} from "@copilot/shared";
 import {
   DISCOVERY_SOURCES,
   JOB_STATUSES,
@@ -48,6 +54,11 @@ export const jobs = sqliteTable(
     triageReason: text("triage_reason"),
     triageProfileVersion: integer("triage_profile_version"),
     triagedAt: integer("triaged_at", { mode: "timestamp_ms" }),
+    /**
+     * The listing explicitly excludes where the person lives (quote verified against it), from
+     * triage or the latest assessment; hides a discovered job the user hasn't acted on or kept.
+     */
+    locationBlock: text("location_block", { mode: "json" }).$type<StoredLocationBlock>(),
     /** The user kept a job the screen or triage would hide. */
     keptAt: integer("kept_at", { mode: "timestamp_ms" }),
     /** When the user first opened a discovered job (null = unseen). */

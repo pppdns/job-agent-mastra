@@ -212,7 +212,7 @@ function report(
     "",
     `${new Date().toISOString()} · judge ${judgeModel} · ${Math.max(0, ...results.map((r) => r.repeat))} repeat(s) · ${caseCount} cases · spent $${spent.toFixed(2)} (models + judge, gateway-reported)`,
     "",
-    "Valid = saved a draft (schema + saveDraft rules, one retry). Verdict / fit / conflict = deterministic checks against the expected outcome (failed runs count as misses). Judge = share of rubric criteria passed. Perfect = every check and criterion passed.",
+    "Valid = saved a draft (schema + saveDraft rules, one retry). Verdict / fit / conflict = deterministic checks against the expected outcome (failed runs count as misses; a wrong location block counts against Perfect). Judge = share of rubric criteria passed. Perfect = every check and criterion passed.",
     "",
     "| Config | Runs | Valid | Verdict | Fit | Conflict | Judge | Perfect | $/job (fixtures) | vs Sonnet | s/job |",
     "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
@@ -382,6 +382,7 @@ describe.skipIf(!MODELS || process.env.EVAL_REAL === "1")(
         if (testCase.hardConflict !== null) {
           checks.hardConflict = assessment.hardConflicts.length > 0 === testCase.hardConflict;
         }
+        checks.locationBlock = !!assessment.locationBlock === (testCase.locationBlock ?? false);
         let judged: Awaited<ReturnType<typeof judge>> | undefined;
         try {
           if (budget.exhausted) throw new Error("eval budget exhausted");
