@@ -146,7 +146,8 @@ const HEADLINE_MAX = 140;
 
 /**
  * What the model is asked for when app code saves the result (re-score, discovery): the same
- * shape, but a headline over its limit or an empty salary doesn't fail the whole call. Those
+ * shape, but a headline over its limit or an empty salary doesn't fail the whole call (a salary
+ * over its limit still does, so the structured-output retry corrects it). Those
  * failed about 1 in 100 assessments even after a retry; `normalizeModelAssessment` fixes them.
  */
 export const modelAssessmentSchema = assessmentSchema.extend({
@@ -154,8 +155,12 @@ export const modelAssessmentSchema = assessmentSchema.extend({
     .string()
     .optional()
     .describe(assessmentSchema.shape.headline.description ?? ""),
+  // Same limit as the strict schema (Mastra's retry corrects an over-long salary); only an empty
+  // one is allowed here, since normalization drops it.
   salary: z
     .string()
+    .trim()
+    .max(120)
     .optional()
     .describe(assessmentSchema.shape.salary.description ?? ""),
 });
