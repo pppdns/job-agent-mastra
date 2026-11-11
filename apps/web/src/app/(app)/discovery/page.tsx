@@ -119,7 +119,6 @@ async function Discovery() {
           running={running}
           maxBackfillUsd={maxBackfillUsd}
           awaitingTriage={awaitingTriage}
-          maxAssessments={settings.maxAssessmentsPerRun}
         />
       </section>
 

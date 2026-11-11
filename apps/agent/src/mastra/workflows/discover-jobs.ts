@@ -55,6 +55,8 @@ const triggerSchema = z.object({
     .int()
     .refine((d) => (BACKFILL_DAYS as readonly number[]).includes(d))
     .nullish(),
+  /** Assess-only runs: how many matches to assess (unset: the `maxAssessmentsPerRun` setting). */
+  assessLimit: z.number().int().positive().nullish(),
 });
 
 const sourceResultSchema = z.object({
@@ -160,12 +162,14 @@ const assess = createStep({
   description: "Fully assesses the run's best new matches (main model, budgeted)",
   inputSchema: funnelled,
   outputSchema: funnelled,
-  execute: async ({ inputData, tracingContext, abortSignal }) => {
+  execute: async ({ inputData, getInitData, tracingContext, abortSignal }) => {
     if (!inputData.runId) return inputData;
     const db = await getAppDb();
+    const { assessLimit } = triggerSchema.parse(getInitData());
     const funnel = await assessStep(db, inputData.runId, inputData.funnel, {
       tracingContext,
       signal: abortSignal,
+      assessLimit: assessLimit ?? undefined,
     });
     return { ...inputData, funnel };
   },

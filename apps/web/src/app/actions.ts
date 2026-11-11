@@ -21,6 +21,7 @@ import {
   setJobsStatus,
 } from "@copilot/db";
 import {
+  ASSESS_BATCH_SIZES,
   DISCOVERY_SOURCES,
   type DiscoverySource,
   JOB_STATUSES,
@@ -196,7 +197,8 @@ const DISCOVERY_RUNS = {
 
 /**
  * The /discovery buttons: "Run now", a 7- or 30-day backfill, "Triage next batch" or "Assess
- * more matches". Each starts the discover-jobs workflow (one run at a time).
+ * more matches" (with the picked batch size, `assessLimit`). Each starts the discover-jobs
+ * workflow (one run at a time).
  */
 export async function startDiscoveryAction(
   _prev: DiscoveryActionState,
@@ -206,16 +208,23 @@ export async function startDiscoveryAction(
     .enum(["now", "backfill-7", "backfill-30", "triage", "assess"])
     .catch("now")
     .parse(formData.get("run") ?? "now");
+  // Server actions take any payload: only the offered batch sizes, else the smallest.
+  const assessLimit =
+    ASSESS_BATCH_SIZES.find((n) => n === Number(formData.get("assessLimit"))) ??
+    ASSESS_BATCH_SIZES[0];
+  const body = kind === "assess" ? { mode: "assess", assessLimit } : DISCOVERY_RUNS[kind].body;
   const response = await agentFetch("/discovery/run", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(DISCOVERY_RUNS[kind].body),
+    body: JSON.stringify(body),
   }).catch(() => null);
   refresh();
   if (!response) return { ok: false, message: "The agent server is not reachable." };
   if (response.status === 409) return { ok: false, message: "A discovery run is already running." };
   if (!response.ok) return { ok: false, message: `Could not start the run (${response.status}).` };
-  return { ok: true, message: DISCOVERY_RUNS[kind].started };
+  const started =
+    kind === "assess" ? `Assessing up to ${assessLimit} matches.` : DISCOVERY_RUNS[kind].started;
+  return { ok: true, message: started };
 }
 
 /** "Stop run": cancels the running discovery run; it ends as interrupted. */
