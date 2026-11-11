@@ -96,6 +96,8 @@ export type TriageDeps = {
   triage?: (prompt: string, deps: TriageDeps) => Promise<TriageInput>;
   /** Called after each job (`done` of `total` in this run's queue). */
   onProgress?: (done: number, total: number) => void;
+  /** How many waiting jobs to take (default: the `maxTriagePerRun` setting). */
+  limit?: number;
 };
 
 export type TriageOutcome = {
@@ -111,7 +113,7 @@ export async function triageJobs(deps: TriageDeps): Promise<TriageOutcome> {
   const { db, budget } = deps;
   const call = deps.triage ?? triageWithModel;
   const [profile, settings] = await Promise.all([currentProfile(db), getSearchSettings(db)]);
-  const queue = await jobsAwaitingTriage(db, settings.maxTriagePerRun);
+  const queue = await jobsAwaitingTriage(db, deps.limit ?? settings.maxTriagePerRun);
   const total = queue.length;
   deps.onProgress?.(0, total);
   let triaged = 0;

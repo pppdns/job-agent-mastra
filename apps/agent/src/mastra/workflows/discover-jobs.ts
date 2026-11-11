@@ -57,6 +57,8 @@ const triggerSchema = z.object({
     .nullish(),
   /** Assess-only runs: how many matches to assess (unset: the `maxAssessmentsPerRun` setting). */
   assessLimit: z.number().int().positive().nullish(),
+  /** Triage-only runs: how many waiting jobs to triage (unset: the `maxTriagePerRun` setting). */
+  triageLimit: z.number().int().positive().nullish(),
 });
 
 const sourceResultSchema = z.object({
@@ -152,7 +154,12 @@ const triage = createStep({
         funnel: { ...EMPTY_FUNNEL, triagePending: await countAwaitingTriage(db) },
       };
     }
-    const funnel = await triageStep(db, inputData.runId, { tracingContext, signal: abortSignal });
+    const { triageLimit } = triggerSchema.parse(getInitData());
+    const funnel = await triageStep(db, inputData.runId, {
+      tracingContext,
+      signal: abortSignal,
+      triageLimit: triageLimit ?? undefined,
+    });
     return { ...inputData, funnel };
   },
 });

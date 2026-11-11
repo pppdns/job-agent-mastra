@@ -18,7 +18,7 @@ import type { TracingContext } from "@mastra/core/observability";
 import { env } from "../env";
 import { RunRecorder } from "../usage/recorder";
 import { assessTopMatches } from "./assess";
-import { ASSESS_RESERVE_USD, assessmentShare, DiscoveryBudget } from "./budget";
+import { ASSESS_RESERVE_USD, assessmentShare, DiscoveryBudget, TRIAGE_RESERVE_USD } from "./budget";
 import { createProgress } from "./progress";
 import { ALERT_REPEAT_MS, runProblems, sendDigest } from "./report";
 import { httpJson } from "./sources/http";
@@ -36,20 +36,32 @@ type StepContext = {
   signal?: AbortSignal;
   /** Assess-only runs: the batch size picked on /discovery (overrides `maxAssessmentsPerRun`). */
   assessLimit?: number;
+  /** Triage-only runs: how many waiting jobs to triage (overrides `maxTriagePerRun`). */
+  triageLimit?: number;
 };
 
 /** One recorder and budget per run, shared by its steps (they run in this process, in order). */
 const runState = new Map<string, { recorder: RunRecorder; budget: DiscoveryBudget }>();
 
 /**
- * `assessLimit` is a batch the user picked; the run's spend cap then grows to cover its
- * reservations, so the batch isn't cut short by the cap meant for scheduled runs.
+ * `assessLimit` and `triageLimit` are batches the user picked; the run's spend cap then grows to
+ * cover their reservations (triage's plus the assessments' share), so the batch isn't cut short
+ * by the cap meant for scheduled runs.
  */
-async function stateOf(db: Db, runId: string, assessLimit?: number) {
+async function stateOf(
+  db: Db,
+  runId: string,
+  limits: { assessLimit?: number; triageLimit?: number } = {},
+) {
   const existing = runState.get(runId);
   if (existing) return existing;
   const settings = await getSearchSettings(db);
-  const maxUsd = Math.max(settings.maxLlmUsdPerRun, (assessLimit ?? 0) * ASSESS_RESERVE_USD);
+  const keepForAssessUsd = assessmentShare(settings.maxLlmUsdPerRun, settings.maxAssessmentsPerRun);
+  const maxUsd = Math.max(
+    settings.maxLlmUsdPerRun,
+    (limits.assessLimit ?? 0) * ASSESS_RESERVE_USD,
+    limits.triageLimit ? limits.triageLimit * TRIAGE_RESERVE_USD + keepForAssessUsd : 0,
+  );
   // The usage run row; it may exist already when a step is retried.
   await startRun(db, { id: runId, threadId: discoveryThreadId(runId) }).catch(() => undefined);
   const recorder = new RunRecorder(db, discoveryThreadId(runId));
@@ -58,8 +70,8 @@ async function stateOf(db: Db, runId: string, assessLimit?: number) {
     recorder,
     budget: new DiscoveryBudget({
       maxUsd,
-      maxTriage: settings.maxTriagePerRun,
-      keepForAssessUsd: assessmentShare(settings.maxLlmUsdPerRun, settings.maxAssessmentsPerRun),
+      maxTriage: limits.triageLimit ?? settings.maxTriagePerRun,
+      keepForAssessUsd,
     }),
   };
   runState.set(runId, state);
@@ -116,8 +128,8 @@ export function reportStep(db: Db, runId: string, funnel: FunnelResult) {
   return guarded(db, runId, funnel, "report", () => report(db, runId, funnel));
 }
 
-async function triage(db: Db, runId: string, context: StepContext) {
-  const { recorder, budget } = await stateOf(db, runId);
+async function triage(db: Db, runId: string, { triageLimit, ...context }: StepContext) {
+  const { recorder, budget } = await stateOf(db, runId, { triageLimit });
   const progress = createProgress(db, runId);
   progress.step("triage");
   const outcome = await triageJobs({
@@ -125,6 +137,7 @@ async function triage(db: Db, runId: string, context: StepContext) {
     budget,
     recorder,
     ...context,
+    limit: triageLimit,
     onProgress: (done, total) => progress.work(done, total),
   });
   await progress.flush();
@@ -148,7 +161,7 @@ async function assess(
   funnel: FunnelResult,
   { assessLimit, ...context }: StepContext,
 ) {
-  const { recorder, budget } = await stateOf(db, runId, assessLimit);
+  const { recorder, budget } = await stateOf(db, runId, { assessLimit });
   const run = await getDiscoveryRun(db, runId);
   const progress = createProgress(db, runId);
   progress.step("assess");

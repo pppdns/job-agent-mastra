@@ -500,6 +500,22 @@ describe("funnel steps (mock model)", () => {
     const funnel = await assessStep(db, runId, EMPTY_FUNNEL, { assessLimit: 15 });
     expect(funnel).toMatchObject({ assessed: 2, assessFailed: 0 });
   });
+
+  it("lifts the triage cap and spend cap to cover a re-triage batch", async () => {
+    const runId = await discovered(
+      ["a", "Founding Engineer"],
+      ["b", "Platform Engineer"],
+      ["c", "Data Engineer"],
+    );
+    // Both caps alone stop after one job; the re-triage batch of 3 lifts them.
+    await saveSearchSettings(
+      db,
+      settings({ maxTriagePerRun: 1, maxLlmUsdPerRun: 0.003, maxAssessmentsPerRun: 0 }),
+    );
+    const funnel = await triageStep(db, runId, { triageLimit: 3 });
+    expect(funnel).toMatchObject({ triaged: 3, triagePending: 0 });
+    expect(funnel.stoppedBy).toBeUndefined();
+  });
 });
 
 describe("noteError", () => {

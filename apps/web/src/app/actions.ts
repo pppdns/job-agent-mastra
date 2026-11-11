@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import {
   type ApprovalView,
   AssessmentError,
+  countAwaitingTriage,
   type DecisionError,
   decideApproval,
   editProfile,
@@ -27,6 +28,7 @@ import {
   JOB_STATUSES,
   RESCORE_BATCH_SIZES,
   RESEARCH_TOPICS,
+  RETRIAGE_MAX_JOBS,
   type RescoreLimit,
   researchRequestText,
   type SearchSettings,
@@ -438,22 +440,26 @@ export async function keepPostingAction(postingId: string): Promise<void> {
 
 /**
  * "Re-triage now" on /jobs: clears triage made against an older profile, then starts a
- * triage-only discovery run (no fetching) for them. A run covers `maxTriagePerRun` jobs; any
- * left over, or all of them while another run is going, wait for "Triage next batch" or the
- * next scheduled run.
+ * triage-only discovery run (no fetching) for every job waiting for triage, in one go: the
+ * run's triage cap and spend cap grow to fit (up to `RETRIAGE_MAX_JOBS`). While another run is
+ * going they wait for "Triage next batch" or the next scheduled run.
  */
 export async function retriageNowAction(): Promise<DiscoveryActionState> {
   const db = await appDb();
   const cleared = await resetStaleTriage(db);
-  const { maxTriagePerRun } = await getSearchSettings(db);
+  const waiting = await countAwaitingTriage(db);
   const n = (v: number) => v.toLocaleString("en-US");
+  if (waiting === 0) return { ok: true, message: "Nothing is waiting for triage." };
+  const triageLimit = Math.min(waiting, RETRIAGE_MAX_JOBS);
   const rest =
-    cleared > maxTriagePerRun
-      ? ` The other ${n(cleared - maxTriagePerRun)} wait for "Triage next batch" on Discovery.`
+    waiting > triageLimit
+      ? ` The other ${n(waiting - triageLimit)} wait for "Triage next batch" on Discovery.`
       : "";
+  const usd = triageLimit * 0.002;
+  const cost = usd < 1 ? "under $1" : `about $${Math.ceil(usd)}`;
   const result = await startDiscoveryRun(
-    { mode: "triage" },
-    `Re-triaging ${n(Math.min(cleared, maxTriagePerRun))} jobs now; results show up as they land.${rest}`,
+    { mode: "triage", triageLimit },
+    `Re-triaging ${n(triageLimit)} jobs now (${cost}); results show up as they land.${rest}`,
   );
   if (result?.ok) return result;
   return {
