@@ -50,6 +50,24 @@ Hard-conflict accuracy was 83% for all but Haiku: most models file "fluent Germa
 - **Haiku** is the best Anthropic-only option (reasoning high: about 7–10% of Sonnet's cost), but noticeably less consistent on verdicts than Sonnet or Luna.
 - Caveats: synthetic listings only (short, clean, English); judges disagree on absolute levels (Sol is much stricter on over-inference), so only the ranking is trusted. Not yet checked on real listings and the real profile.
 
+## Real jobs (production copy, 2026-11-11)
+
+150 production jobs (every job with a status, 71 with triage ≥ 60, the rest random), each assessed twice per model; a blind pairwise judge compared run #1 of each, in both orders (a win must hold in both). Spend: about $31.
+
+| | Sonnet 5.5 | GPT-6 Luna | GPT-6 Luna, reasoning high (75 jobs) |
+| --- | --- | --- | --- |
+| Same verdict as its own repeat | 91% | 87% | – |
+| Same verdict as Sonnet | – | 72% | 79% |
+| Fit vs Sonnet | – | milder in 44, harsher in 16 | milder in 18, harsher in 14 |
+| Opus judge: wins vs Sonnet (Sonnet wins, ties) | – | 13 (88, 49) | 11 (39, 25) |
+| GPT-6.1 Sol judge: wins vs Sonnet (Sonnet wins, ties) | – | 116 (13, 21) | not run |
+| Cost per job | $0.033 | $0.001 | $0.0017 |
+
+- **The judges contradict each other along model-family lines.** Opus rewards completeness (Sonnet compares pay with the target, lists soft trade-offs and extra requirements; Luna often leaves trade-offs empty). Sol rewards precision (Sonnet over-infers: "stated small team" without a team size, pay claims without figures). Neither judge settles the question.
+- The synthetic cases missed this: their rubric checked a few decisive points, which both models hit.
+- Luna's fit levels run one step milder than Sonnet's at default reasoning; high reasoning removes that skew.
+- Decision input still open: a blind side-by-side review by the user (Sonnet vs Luna high on 10 real jobs).
+
 ## Not tried
 
 - AI Gateway batch processing (`-batch` models): 50% off the same model, but asynchronous (up to 24 hours), so it would replace the live per-job progress in chat.
