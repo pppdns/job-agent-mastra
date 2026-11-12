@@ -19,7 +19,7 @@ Why not Vercel: the app needs a persistent disk (libSQL + DuckDB files), long st
 - [scripts/start-prod.sh](../scripts/start-prod.sh) is the container entrypoint. It runs the bundled agent from the repo root: `mastra build` writes its own `pnpm-workspace.yaml` into `.mastra/output`, and `findWorkspaceRoot()` would stop there and miss the migrations. It refuses to start without `APP_PASSWORD` (at least 12 characters), `AGENT_SHARED_SECRET` and `AI_GATEWAY_API_KEY`. It then starts the bundled agent and `next start`, and exits when either one dies, so Fly restarts the machine.
 - Migrations run on first database use in both processes. There's no release step, which would run on a machine without the volume.
 - `TZ = "Europe/Budapest"` in `fly.toml` `[env]`: times rendered on the server (pages, the agents' "today") use the user's zone. The discovery schedule has its own `DISCOVERY_TZ`.
-- `auto_stop_machines = "off"`: scheduled workflows need the process up. Size is `shared-cpu-1x` with 1 GB RAM plus 1 GB swap, about $6–8/month with the 3 GB volume.
+- `auto_stop_machines = "off"`: scheduled workflows need the process up. Size is `shared-cpu-2x` with 2 GB RAM plus 1 GB swap, about $12–15/month with the 3 GB volume. `shared-cpu-1x` / 1 GB was saturated (about 60 MB free, swap 75% used, CPU pressure near 100%, failing health checks) once the agent and the 1 GB `copilot.duckdb` ran together.
 - **Login** (`APP_PASSWORD` set): `/login` takes only a password. A hidden fixed username lets password managers save it. The session is a 30-day HttpOnly cookie signed with `AGENT_SHARED_SECRET` (`apps/web/src/server/session.ts`, checked in `src/proxy.ts`). Changing the password signs every session out. Ten failures from one client lock it out for 10 minutes. Locally `APP_PASSWORD` is unset and nothing changes.
 - The image build trims the lockfile's first YAML document, because Mastra 1.81's bundler can't parse pnpm 12's multi-document lockfile.
 
@@ -60,7 +60,7 @@ Errors from both servers and the browser go to the Sentry project `job-copilot` 
 | Logs | `fly logs` |
 | Status / restart | `fly status`, `fly machine restart` |
 | Studio (traces, logs, metrics) | `fly proxy 4111`, then http://localhost:4111 (never public; the agent listens on Fly's private network, `AGENT_HOST="::"`). Login steps: [README](../README.md#mastra-studio-on-fly) |
-| Disk | `fly ssh console -C "df -h /data"`. Traces, logs and metrics are kept 7 days (pruned every 6 h, then `CHECKPOINT`), so `copilot.duckdb` stops growing but doesn't shrink |
+| Disk | `fly ssh console -C "df -h /data"`. Traces, logs and metrics are kept 7 days (pruned every 6 h, then `CHECKPOINT`; each run logs "observability retention: deleted N rows", see `fly logs`), so `copilot.duckdb` stops growing but doesn't shrink |
 | Shell | `fly ssh console` |
 | Backups | daily volume snapshots, 5 kept: `fly volumes snapshots list <vol-id>` |
 | Restore | `fly volumes create copilot_data --snapshot-id <id> --region fra`, then move the machine to it |
