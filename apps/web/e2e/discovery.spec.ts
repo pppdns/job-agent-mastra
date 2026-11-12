@@ -49,6 +49,13 @@ test("run discovery, see screened jobs, loosen the screen", async ({ page }) => 
   await expect(badge).toHaveText("7");
   await row.getByRole("link").first().click();
   await expect(page.getByText("Triage 88")).toBeVisible();
+  // The listing link is a prominent button, even for a discovered job without a canonical URL.
+  await expect(
+    page
+      .getByRole("list", { name: "Original listing" })
+      .filter({ visible: true })
+      .getByRole("link"),
+  ).not.toHaveCount(0);
   await expect(badge).toHaveText("6");
   await page.goto("/jobs?q=Pebblework");
   await expect(page.getByText(/No active jobs match/)).toBeVisible();
