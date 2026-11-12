@@ -130,3 +130,7 @@ Single local user: both servers bind to 127.0.0.1 and the web app calls the agen
 ## Contributing (humans and agents)
 
 Conventions, workflow and per-package notes are in [AGENTS.md](AGENTS.md) and the `AGENTS.md` files next to the code. Verification results for live integrations: [docs/verification.md](docs/verification.md).
+
+## License
+
+[MIT](LICENSE)
