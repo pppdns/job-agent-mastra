@@ -34,4 +34,22 @@ describe("listingLinks", () => {
       listingLinks("javascript:alert(1)", [{ kind: "ats", url: "data:text/html,hi" }]),
     ).toEqual([]);
   });
+
+  it("falls back to discovery postings: apply page, then board listing", () => {
+    const links = listingLinks(
+      null,
+      [],
+      [
+        {
+          url: "https://himalayas.app/jobs/1",
+          applyUrl: "https://jobs.ashbyhq.com/orbit/123",
+          sourceLabel: "Himalayas",
+        },
+      ],
+    );
+    expect(links.map((l) => [l.label, l.host])).toEqual([
+      ["Apply page", "jobs.ashbyhq.com"],
+      ["Himalayas listing", "himalayas.app"],
+    ]);
+  });
 });
