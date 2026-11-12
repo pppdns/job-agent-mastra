@@ -81,7 +81,15 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
   if (!detail) notFound();
   const postings = await jobPostings(db, jobId);
   const { job, sources, draft, history, profileVersion, profileStale, claims, posted } = detail;
-  const links = listingLinks(job.canonicalUrl, sources);
+  const links = listingLinks(
+    job.canonicalUrl,
+    sources,
+    postings.map((p) => ({
+      url: p.url,
+      applyUrl: p.applyUrl,
+      sourceLabel: DISCOVERY_SOURCE_LABELS[p.source],
+    })),
+  );
 
   return (
     <div className="flex flex-col gap-6">
