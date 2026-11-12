@@ -1,7 +1,7 @@
 # Fly.io app: one always-on machine, one volume. See docs/deploy.md.
 app = "job-copilot-c456e8"
 primary_region = "fra"
-# Next build + DuckDB headroom on a 1 GB machine.
+# Swap as a safety net on top of 2 GB RAM (1 GB was swapping heavily with the 1 GB DuckDB file).
 swap_size_mb = 1024
 # Time for both servers to stop after SIGTERM before Fly kills them.
 kill_timeout = "30s"
@@ -48,5 +48,5 @@ kill_timeout = "30s"
     grace_period = "60s"
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "1gb"
+  size = "shared-cpu-2x"
+  memory = "2gb"

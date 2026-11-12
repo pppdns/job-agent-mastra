@@ -109,12 +109,11 @@ async function pruneTick() {
   try {
     const results = await pruneObservability();
     const deleted = results.reduce((sum, r) => sum + r.deleted, 0);
-    if (deleted > 0 || results.some((r) => !r.done)) {
-      logger.info(
-        `observability retention: deleted ${deleted} rows` +
-          (results.some((r) => !r.done) ? " (more left for the next run)" : ""),
-      );
-    }
+    // Logged on every run, even with 0 deleted, so `fly logs` shows the job is alive.
+    logger.info(
+      `observability retention: deleted ${deleted} rows` +
+        (results.some((r) => !r.done) ? " (more left for the next run)" : ""),
+    );
   } catch (error) {
     logger.warn("observability retention failed", { error: String(error) });
     reportError(error, { task: "observability-retention" });
