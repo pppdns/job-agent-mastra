@@ -1,6 +1,5 @@
 import { type PostingInput, postingInputSchema, type SalaryPeriod } from "@copilot/shared";
 import { htmlToText, httpUrl, num, plainMarkdown, regionList, str } from "../text";
-import type { FetchContext } from "../types";
 import { type ActorBoard, daysSince, windowFor } from "./actor-source";
 import { RESULT_EVENT, START_EVENT } from "./apify";
 import { parseLinkedInSalary } from "./linkedin";
