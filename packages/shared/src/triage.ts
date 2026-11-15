@@ -14,8 +14,8 @@ export const triageSchema = z.object({
   score: z.number().int().min(0).max(100),
   /** One line, citing the deciding facts (role, place, pay, requirements). */
   reason: z.string().min(1).max(MAX_MODEL_REASON_CHARS),
-  /** A hard requirement of the profile the job clearly breaks, if any. */
-  hardConflict: z.string().max(200).nullable(),
+  /** A hard requirement of the profile the job clearly breaks, if any (shortened when stored). */
+  hardConflict: z.string().max(MAX_MODEL_REASON_CHARS).nullable(),
   /** The posting explicitly excludes where the person lives (verified against the posting). */
   locationBlock: locationBlockSchema.default(null),
 });
