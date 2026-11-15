@@ -320,5 +320,24 @@ describe("Apify runner", () => {
       ),
     ).toBeCloseTo(50 * 0.001 + 0.0009);
     expect(runCost({}, LINKEDIN_PRICES, 10)).toBeCloseTo(10 * 0.00036 + 0.0009);
+    // An actor's own event names (Jobgether), read before its counts caught up.
+    expect(
+      runCost(
+        {
+          usageTotalUsd: 0,
+          chargedEventCounts: { start: 0, item: 0 },
+          pricingInfo: {
+            pricingPerEvent: {
+              actorChargeEvents: {
+                start: { eventPriceUsd: 0.005, isOneTimeEvent: true },
+                item: { eventPriceUsd: 0.0001, isPrimaryEvent: true },
+              },
+            },
+          },
+        },
+        {},
+        20,
+      ),
+    ).toBeCloseTo(0.005 + 20 * 0.0001);
   });
 });

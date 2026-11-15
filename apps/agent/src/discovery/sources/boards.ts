@@ -67,94 +67,174 @@ const pricesOf = (perResult: number, start = 0) => ({
   [START_EVENT]: start,
 });
 
-// --- YC Work at a Startup and Jobgether (same vendor, same input and row schema) -------------
+// --- YC Work at a Startup ----------------------------------------------------------------------
 
-const nomadInput = ({ since }: FetchContext, queries: string[], maxItems: number) => ({
-  schemaVersion: "nomad-agent-simple-inventory-search-v2",
-  queries,
-  // Days, not hours: the boards date postings without a time of day.
-  postedWithin: `${daysSince(since)}d`,
-  // The actor returns at most 200 per run.
-  maxItems: Math.min(200, maxItems),
-  // Only remote roles: on-site ones (mostly the Bay Area) are screened out anyway.
-  locationTypes: ["remote"],
-  // Repeats are kept by us, not the actor's server-side dedupe.
-  dedupe: { enabled: false, key: "" },
-});
+/** The public YC jobs page of remote software roles (the board's whole remote engineering set). */
+export const YC_REMOTE_JOBS_URL = "https://www.ycombinator.com/jobs/role/software-engineer/remote";
 
-/** YC: one run for all phrases (a few dozen matches a day, well under the 200 cap). */
-const allPhrasesSearch = (context: FetchContext, limitPerSearch: number) => [
-  {
-    label: "all phrases",
-    input: nomadInput(
-      context,
-      context.settings.queries,
-      limitPerSearch * context.settings.queries.length,
-    ),
-  },
-];
-
-/**
- * Jobgether: one run per phrase. All phrases in one run hit the 200 cap every time (on Fly, 200
- * postings dated the same morning), so whatever came after the previous run was never read.
- */
-const perPhraseSearches = (context: FetchContext, limitPerSearch: number) =>
-  context.settings.queries.map((query) => ({
-    label: `"${query}"`,
-    input: nomadInput(context, [query], limitPerSearch),
-  }));
-
-export function parseNomadRow(source: "ycombinator" | "jobgether") {
-  return (raw: unknown): PostingInput | null => {
-    const row = obj(raw);
-    const id = str(row.id, 100);
-    const url = httpUrl(row.url);
-    if (!id || !url) return null;
-    const remote = workplace(str(row.workType, 40));
-    const pay = yearlyPay(str(row.salary, 200));
-    const locations = strings(row.locations, 300);
-    const html = typeof row.descriptionHtml === "string" ? row.descriptionHtml : "";
-    return posting({
-      source,
-      externalId: id,
-      url,
-      applyUrl: null,
-      title: str(row.title) ?? "",
-      company: str(row.company, 200) ?? "",
-      location: locations.join(" / ").slice(0, 300) || (remote ? "Remote" : null),
-      remote,
-      regions: remote ? broadOrList(strings(row.applicantLocations).map(placeName)) : [],
-      salaryMin: pay?.min ?? null,
-      salaryMax: pay?.max ?? null,
-      salaryCurrency: pay?.currency ?? null,
-      salaryPeriod: pay ? "year" : undefined,
-      salaryText: str(row.salary, 200),
-      seniority: null,
-      employmentType: strings(row.employmentTypes).join(", ") || null,
-      postedAt: date(row.postedAt),
-      description: html
-        ? htmlToText(html)
-        : plainMarkdown(typeof row.description === "string" ? row.description : ""),
-    });
-  };
-}
-
-export const ycombinatorBoard: ActorBoard = {
-  id: "ycombinator",
-  actorId: "nomad-agent/ycombinator-was-scraper",
-  prices: pricesOf(0.0001),
-  searches: (context) =>
-    allPhrasesSearch(context, context.settings.sources.ycombinator.limitPerSearch),
-  parse: parseNomadRow("ycombinator"),
+const AGO_MS: Record<string, number> = {
+  minute: 60_000,
+  hour: 3_600_000,
+  day: 86_400_000,
+  week: 7 * 86_400_000,
+  month: 30 * 86_400_000,
+  year: 365 * 86_400_000,
 };
 
+/**
+ * "6 days" / "about 1 month" / "an hour" before `base`, else null. YC shows how long ago a job
+ * was last active this way; its `datePosted` is the job's creation date, often months old for a
+ * role that is still hiring.
+ */
+export function agoDate(text: string | null, base: Date | null): Date | null {
+  if (!text || !base) return null;
+  if (/less than a minute|just now/i.test(text)) return base;
+  const match = text.match(/\b(\d+|an?)\s+(minute|hour|day|week|month|year)s?\b/i);
+  if (!match?.[1] || !match[2]) return null;
+  const count = /^\d+$/.test(match[1]) ? Number(match[1]) : 1;
+  return new Date(base.getTime() - count * (AGO_MS[match[2].toLowerCase()] ?? 0));
+}
+
+/**
+ * Applicant regions from a YC location ("SF, CA, US / Remote (US; CA)" → United States, Canada):
+ * the places in the "Remote (…)" part, each by its last part ("New York, NY, US" → US). A bare
+ * "Remote" states none.
+ */
+function ycRegions(location: string | null): string[] {
+  const inner = location?.match(/Remote\s*\(([^)]*)\)/i)?.[1];
+  if (!inner) return [];
+  const places = inner
+    .split(";")
+    .map((part) => placeName(part.split(",").at(-1)?.trim() ?? ""))
+    .filter(Boolean);
+  return [...new Set(places)];
+}
+
+export function parseYcJob(raw: unknown): PostingInput | null {
+  const item = obj(raw);
+  const apply = str(item.applyUrl, 2_000);
+  // The numeric WaaS id (in the sign-up link) keeps postings stored under earlier actors matched.
+  const waasId = apply ? decodeURIComponent(apply).match(/signup_job_id=(\d+)/)?.[1] : undefined;
+  const id = waasId ?? str(item.jobId, 200);
+  const url = waasId ? `https://www.workatastartup.com/jobs/${waasId}` : httpUrl(item.url);
+  if (!id || !url) return null;
+  const location = str(item.location);
+  const remote = location ? /\bremote\b/i.test(location) : null;
+  const salaryText = str(item.salaryRange, 200);
+  const min = num(item.salaryMin);
+  const max = num(item.salaryMax);
+  // Only yearly pay as numbers ("$4K - $8K / monthly" stays text).
+  const yearly = min !== null && min >= 10_000 && !salaryText?.includes("/");
+  const html = typeof item.descriptionHtml === "string" ? item.descriptionHtml : "";
+  return posting({
+    source: "ycombinator",
+    externalId: id,
+    url,
+    applyUrl: null,
+    title: str(item.title) ?? "",
+    company: str(item.companyName, 200) ?? "",
+    location,
+    remote,
+    regions: remote ? ycRegions(location) : [],
+    salaryMin: yearly ? min : null,
+    salaryMax: yearly ? (max ?? min) : null,
+    salaryCurrency: yearly ? str(item.salaryCurrency, 10) : null,
+    salaryPeriod: yearly ? "year" : undefined,
+    salaryText,
+    seniority: null,
+    employmentType: str(item.jobType, 100),
+    postedAt: agoDate(str(item.postedAgo, 60), date(item.scrapedAt)) ?? date(item.datePosted),
+    description: html
+      ? htmlToText(html)
+      : plainMarkdown(typeof item.description === "string" ? item.description : ""),
+  });
+}
+
+/**
+ * YC (`memo23/y-combinator-scraper`): one run reads the public remote software-engineering page
+ * (about 20 jobs, the same ones every run), so it runs once a day and the phrases aren't sent.
+ * $0.008 per run plus $0.001 per job.
+ */
+export const ycombinatorBoard: ActorBoard = {
+  id: "ycombinator",
+  actorId: "memo23/y-combinator-scraper",
+  prices: pricesOf(0.001, 0.008),
+  searches: ({ settings }) => [
+    {
+      label: "remote software engineering jobs",
+      input: {
+        startUrls: [YC_REMOTE_JOBS_URL],
+        maxItems: settings.sources.ycombinator.limitPerSearch,
+      },
+    },
+  ],
+  parse: parseYcJob,
+};
+
+// --- Jobgether -------------------------------------------------------------------------------
+
+export function parseJobgetherItem(raw: unknown): PostingInput | null {
+  const item = obj(raw);
+  const id = str(item.offerId, 100);
+  const url = httpUrl(item.canonicalUrl);
+  if (!id || !url) return null;
+  const remote = workplace(str(item.remoteScope, 40));
+  // Country codes, country names and "New York (USA)" mixed: codes become names, repeats go.
+  const places = [...new Set(strings(item.locations).map(placeName))];
+  const min = num(item.salaryMin);
+  const max = num(item.salaryMax);
+  const period = str(item.salaryPeriod, 20)?.toLowerCase();
+  const yearly = min !== null && period === "year";
+  const currency = yearly ? str(item.salaryCurrency, 10) : null;
+  const apply = httpUrl(item.applyUrl);
+  const money = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  return posting({
+    source: "jobgether",
+    externalId: id,
+    url,
+    // Jobgether's own "auto-apply" page isn't the employer's form.
+    applyUrl: apply && !/^https?:\/\/(www\.)?jobgether\.com\//i.test(apply) ? apply : null,
+    title: str(item.title) ?? "",
+    company: str(item.company, 200) ?? "",
+    location: places.join(" / ").slice(0, 300) || (remote ? "Remote" : null),
+    remote,
+    regions: remote ? broadOrList(places) : [],
+    salaryMin: yearly ? min : null,
+    salaryMax: yearly ? (max ?? min) : null,
+    salaryCurrency: currency,
+    salaryPeriod: yearly ? "year" : undefined,
+    salaryText:
+      min !== null
+        ? `${currency ?? str(item.salaryCurrency, 10) ?? ""} ${money(min)}${max ? `–${money(max)}` : ""}${period ? ` per ${period}` : ""}`.trim()
+        : null,
+    seniority: null,
+    employmentType: strings(item.employmentTypes).join(", ") || null,
+    postedAt: date(item.postedAt),
+    description: plainMarkdown(typeof item.description === "string" ? item.description : ""),
+  });
+}
+
+/**
+ * Jobgether (`automation-lab/jobgether-remote-jobs-scraper`): remote jobs only, one run per
+ * phrase with full details, posted within whole days since the last good run. $0.005 per run plus
+ * about $0.07 per 1,000 jobs.
+ */
 export const jobgetherBoard: ActorBoard = {
   id: "jobgether",
-  actorId: "nomad-agent/jobgether-scraper",
-  prices: pricesOf(0.0001, 0.00005),
-  searches: (context) =>
-    perPhraseSearches(context, context.settings.sources.jobgether.limitPerSearch),
-  parse: parseNomadRow("jobgether"),
+  actorId: "automation-lab/jobgether-remote-jobs-scraper",
+  // Its own event names (not Apify's default ones).
+  prices: { start: 0.005, item: 0.000073 },
+  searches: ({ settings, since }) =>
+    settings.queries.map((keyword) => ({
+      label: `"${keyword}"`,
+      input: {
+        keyword,
+        recencyDays: daysSince(since),
+        includeDetails: true,
+        maxItems: settings.sources.jobgether.limitPerSearch,
+      },
+    })),
+  parse: parseJobgetherItem,
 };
 
 // --- Dice ------------------------------------------------------------------------------------
