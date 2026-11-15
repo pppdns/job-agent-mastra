@@ -19,8 +19,9 @@ import {
 import type { ActorPrices, ApifyRunner } from "./apify";
 
 // A board read through an Apify Store actor: a pure input builder (one actor run per search),
-// a pure item parser, and this loop. Runs go one by one until the source's per-run cap is spent;
-// a failed search never loses the others, a bad key or an exhausted account stops the source.
+// a pure item parser, and this loop. Runs go one by one (or a few at a time, `concurrency`) until
+// the source's per-run cap is spent; a failed search never loses the others, a bad key or an
+// exhausted account stops the source.
 
 export type ActorSearch = {
   /** Shown in failures, e.g. `"AI Engineer"`. */
@@ -42,6 +43,12 @@ export type ActorBoard = {
    * else the first one, so an eligible office is never dropped for an ineligible one.
    */
   onePerTitle?: boolean;
+  /**
+   * Searches run this many at a time (default 1), each with an equal share of what's left of the
+   * cap, so together they never spend more. For slow actors that would otherwise hit the
+   * source's time limit (HiringCafe: ~3 min per phrase).
+   */
+  concurrency?: number;
 };
 
 const RUN_TIMEOUT_SECS = 300;
@@ -71,8 +78,57 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
       const providerRuns: ProviderRun[] = [];
       /** Company + title → the kept variant's id, and whether it passes the screen. */
       const titles = new Map<string, { id: string; pass: boolean }>();
-      for (const [i, search] of searches.entries()) {
-        context.onProgress?.(i, searches.length, search.label);
+      const batchSize = Math.max(1, Math.floor(board.concurrency ?? 1));
+      /** One search's result, handled in search order whatever order the batch finished in. */
+      const handle = (
+        search: ActorSearch,
+        settled: PromiseSettledResult<Awaited<ReturnType<ApifyRunner>>>,
+      ) => {
+        if (settled.status === "rejected") {
+          const error = settled.reason;
+          if (context.signal?.aborted) throw error;
+          const message = error instanceof Error ? error.message : "failed";
+          // The key or the account is the problem: no point in trying the other searches.
+          if (/401|402/.test(message)) throw new SourceError(message);
+          failures.push(`${search.label}: ${message}`);
+          // Rate limited for longer than we retry: stop asking for this run.
+          return error instanceof CooldownError ? "stop" : "go";
+        }
+        const result = settled.value;
+        costUsd += result.costUsd;
+        if (result.runId && result.datasetId) {
+          providerRuns.push({
+            label: search.label,
+            runId: result.runId,
+            datasetId: result.datasetId,
+          });
+        }
+        if (result.partial) failures.push(result.partial);
+        else succeeded += 1;
+        returned += result.items.length;
+        for (const raw of result.items) {
+          const posting = board.parse(raw);
+          if (!posting) {
+            invalid += 1;
+            raws.invalid(raw);
+            continue;
+          }
+          raws.valid(raw);
+          if (board.onePerTitle) {
+            const key = `${companyKey(posting.company)}|${normalizeText(posting.title)}`;
+            const pass = screenPosting(context.settings, posting).pass;
+            const kept = titles.get(key);
+            if (kept && (kept.pass || !pass)) continue;
+            if (kept) byId.delete(kept.id);
+            titles.set(key, { id: posting.externalId, pass });
+          }
+          // Kept whatever its date (it's paid for): the screen's age limit drops old ones.
+          byId.set(posting.externalId, posting);
+        }
+        return "go";
+      };
+      for (let i = 0; i < searches.length; ) {
+        context.onProgress?.(i, searches.length, (searches[i] as ActorSearch).label);
         const remaining = context.maxUsd - costUsd;
         if (remaining < 0.01) {
           notes.push(`spend cap reached after ${costUsd.toFixed(2)} USD`);
@@ -83,56 +139,32 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
           failures.push(timeLimitFailure(searches.length - i, searches.length));
           break;
         }
-        try {
-          const result = await runActor(board.actorId, search.input, {
-            maxUsd: remaining,
-            // Shortened so the run ends (TIMED-OUT keeps its items) within the source's time.
-            timeoutSecs: Math.min(
-              board.timeoutSecs ?? RUN_TIMEOUT_SECS,
-              Math.max(60, leftSecs - RUNNER_SLACK_SECS),
-            ),
-            prices: board.prices,
-            signal: context.signal,
-          });
-          costUsd += result.costUsd;
-          if (result.runId && result.datasetId) {
-            providerRuns.push({
-              label: search.label,
-              runId: result.runId,
-              datasetId: result.datasetId,
-            });
-          }
-          if (result.partial) failures.push(result.partial);
-          else succeeded += 1;
-          returned += result.items.length;
-          for (const raw of result.items) {
-            const posting = board.parse(raw);
-            if (!posting) {
-              invalid += 1;
-              raws.invalid(raw);
-              continue;
-            }
-            raws.valid(raw);
-            if (board.onePerTitle) {
-              const key = `${companyKey(posting.company)}|${normalizeText(posting.title)}`;
-              const pass = screenPosting(context.settings, posting).pass;
-              const kept = titles.get(key);
-              if (kept && (kept.pass || !pass)) continue;
-              if (kept) byId.delete(kept.id);
-              titles.set(key, { id: posting.externalId, pass });
-            }
-            // Kept whatever its date (it's paid for): the screen's age limit drops old ones.
-            byId.set(posting.externalId, posting);
-          }
-        } catch (error) {
-          if (context.signal?.aborted) throw error;
-          const message = error instanceof Error ? error.message : "failed";
-          // The key or the account is the problem: no point in trying the other searches.
-          if (/401|402/.test(message)) throw new SourceError(message);
-          failures.push(`${search.label}: ${message}`);
-          // Rate limited for longer than we retry: stop asking for this run.
-          if (error instanceof CooldownError) break;
+        // Each run in the batch gets an equal share of the cap (at least a cent each).
+        const size = Math.max(
+          1,
+          Math.min(batchSize, searches.length - i, Math.floor(remaining / 0.01)),
+        );
+        const batch = searches.slice(i, i + size);
+        const settled = await Promise.allSettled(
+          batch.map((search) =>
+            runActor(board.actorId, search.input, {
+              maxUsd: remaining / size,
+              // Shortened so the run ends (TIMED-OUT keeps its items) within the source's time.
+              timeoutSecs: Math.min(
+                board.timeoutSecs ?? RUN_TIMEOUT_SECS,
+                Math.max(60, leftSecs - RUNNER_SLACK_SECS),
+              ),
+              prices: board.prices,
+              signal: context.signal,
+            }),
+          ),
+        );
+        i += size;
+        let stop = false;
+        for (const [j, search] of batch.entries()) {
+          if (handle(search, settled[j] as (typeof settled)[number]) === "stop") stop = true;
         }
+        if (stop) break;
       }
       // Several broad searches all coming back empty is the actor misbehaving, not a quiet day
       // (seen: Dice returned nothing for all 7 phrases of a 30-day backfill). Reported as a
