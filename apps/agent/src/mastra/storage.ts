@@ -10,12 +10,15 @@ import {
 import { DuckDBStore } from "@mastra/duckdb";
 import { LibSQLStore } from "@mastra/libsql";
 
-/** How long traces, logs, metrics, scores and feedback stay in DuckDB (Studio's history). */
-export const OBSERVABILITY_MAX_AGE = "7d";
+/**
+ * How long traces, logs, metrics, scores and feedback stay in DuckDB (Studio's history). Busy days
+ * add about 1 GB; 7 days filled the then 3 GB Fly volume, so 4 days keep the 10 GB one well clear.
+ */
+export const OBSERVABILITY_MAX_AGE = "4d";
 
-const week = { maxAge: OBSERVABILITY_MAX_AGE } as const;
+const kept = { maxAge: OBSERVABILITY_MAX_AGE } as const;
 export const RETENTION = {
-  observability: { spans: week, logs: week, metrics: week, scores: week, feedback: week },
+  observability: { spans: kept, logs: kept, metrics: kept, scores: kept, feedback: kept },
 } satisfies RetentionConfig;
 
 export type CopilotStorage = {
