@@ -209,3 +209,9 @@ Live, on local production builds (bundled agent run like `start-prod.sh`, `next 
 - Web route error (a temporary throwing route, removed afterwards): captured through `onRequestError`.
 
 Not verified: browser errors and web source-map upload (needs the `SENTRY_AUTH_TOKEN` repo secret), and the Fly deploy itself. Sentry stores the client IP as the event's user unless the project's "Prevent Storing of IP Addresses" setting is on.
+
+## Discovery source fixes (2026-11-15)
+
+- Trace review of the Fly backup (Nov 10–12, 124k spans): `processor_run` spans held ~870 MB of the ~1.8 GB of span payload and `model_chunk` 43k rows; now excluded. Checked live with one local copilot turn: only agent, generation, step, inference and memory spans were stored.
+- YC and Jobgether actors (`nomad-agent/*`) failed every run from 2026-11-14 with `InventoryUnavailable` (their side). Replacements checked live through the adapters (one phrase, $0.10 cap): YC (`memo23/y-combinator-scraper`) 21 jobs, 0 invalid, $0.029, numeric WaaS ids as before; Jobgether (`automation-lab/jobgether-remote-jobs-scraper`) 6 jobs in a 2-day window, 0 invalid, same offer ids as before. That Jobgether run was first recorded at $0 (its events are named `start`/`item`); `runCost` now reads the run's primary and one-time events.
+- Structured-output failures in the traces after the headline fix: assessment `salary` over 120 characters, triage location quotes over 300, more than 10 places, hard conflicts over 200. The limits were raised (display still shortens them).
