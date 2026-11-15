@@ -1,5 +1,6 @@
 import { LOCAL_USER_ID } from "@copilot/shared";
 import { Mastra } from "@mastra/core/mastra";
+import { SpanType } from "@mastra/core/observability";
 import { SimpleAuth } from "@mastra/core/server";
 import { PinoLogger } from "@mastra/loggers";
 import { MastraStorageExporter, Observability, SensitiveDataFilter } from "@mastra/observability";
@@ -60,6 +61,10 @@ export const mastra = new Mastra({
         serviceName: "copilot-agent",
         exporters: [new MastraStorageExporter()],
         spanOutputProcessors: [traceRedaction],
+        // Noise that filled the DuckDB file: one span per streamed chunk, and Mastra's built-in
+        // message processors, which recorded the whole prompt three times per call (about half
+        // of the stored trace data, mostly discovery triage). Model, step and tool spans stay.
+        excludeSpanTypes: [SpanType.MODEL_CHUNK, SpanType.PROCESSOR_RUN],
       },
     },
   }),

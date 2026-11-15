@@ -67,8 +67,16 @@ function Check({ name, label, checked }: { name: string; label: string; checked:
 
 /** Paid boards with the shared actor settings (results per search, spend cap per run). */
 const ACTOR_BOARDS = [
-  { id: "ycombinator", label: "YC Work at a Startup", price: "about $0.10 per 1,000 results" },
-  { id: "jobgether", label: "Jobgether", price: "about $0.10 per 1,000 results" },
+  {
+    id: "ycombinator",
+    label: "YC Work at a Startup",
+    price: "$0.008 per run plus $0.001 per job; the ~20 remote engineering jobs, phrases unused",
+  },
+  {
+    id: "jobgether",
+    label: "Jobgether",
+    price: "$0.005 per phrase plus about $0.07 per 1,000 results",
+  },
   {
     id: "dice",
     label: "Dice",

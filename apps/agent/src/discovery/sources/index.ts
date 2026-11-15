@@ -88,7 +88,7 @@ const fixtureRss: HttpText = async (url) => {
 /** Offline Apify: a fixture dataset per actor (LinkedIn and YC; the other boards find nothing). */
 const ACTOR_FIXTURES: Record<string, { file: string; date: string }> = {
   [LINKEDIN_ACTOR]: { file: "linkedin-items.json", date: "postedDate" },
-  "nomad-agent/ycombinator-was-scraper": { file: "ycombinator-items.json", date: "postedAt" },
+  "memo23/y-combinator-scraper": { file: "ycombinator-items.json", date: "scrapedAt" },
 };
 
 const fixtureRunner: ApifyRunner = async (actorId, _input, { prices }) => {

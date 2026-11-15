@@ -116,8 +116,12 @@ describe("normalizeModelAssessment", () => {
     expect(normalizeModelAssessment({ ...minimal, headline: "Short" } as never).headline).toBe(
       "Short",
     );
-    // An over-long salary is still rejected by the model schema, so Mastra's retry fixes it.
-    expect(modelAssessmentSchema.safeParse({ ...minimal, salary: "x".repeat(121) }).success).toBe(
+    // A long pay line (bonus, equity, ranges) is kept; only a runaway one is rejected, so
+    // Mastra's retry fixes it.
+    expect(modelAssessmentSchema.safeParse({ ...minimal, salary: "x".repeat(250) }).success).toBe(
+      true,
+    );
+    expect(modelAssessmentSchema.safeParse({ ...minimal, salary: "x".repeat(301) }).success).toBe(
       false,
     );
     expect(modelAssessmentSchema.safeParse({ ...minimal, salary: "" }).success).toBe(true);

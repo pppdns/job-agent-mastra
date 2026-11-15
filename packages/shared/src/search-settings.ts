@@ -26,11 +26,11 @@ const feed = (hours = 0) =>
     .object({ enabled: z.boolean().default(true), minHoursBetweenRuns: minHours(hours) })
     .prefault({});
 /** A board read through an Apify actor: on/off, results per search and a per-run spend cap. */
-const actorBoard = (enabled: boolean, limit: number, maxUsd: number) =>
+const actorBoard = (enabled: boolean, limit: number, maxUsd: number, hours = 0) =>
   z
     .object({
       enabled: z.boolean().default(enabled),
-      minHoursBetweenRuns: minHours(0),
+      minHoursBetweenRuns: minHours(hours),
       /** Results per search (Apify bills per result). */
       limitPerSearch: z.number().int().min(1).max(200).default(limit),
       /** Hard cap on what one run may spend on this board (USD). */
@@ -140,10 +140,13 @@ export const searchSettingsSchema = z.object({
           maxUsdPerRun: z.number().min(0.01).max(20).default(0.5),
         })
         .prefault({}),
-      /** YC's Work at a Startup (about $0.10 per 1,000 results; one run for all phrases). */
-      ycombinator: actorBoard(true, 50, 0.05),
-      /** Jobgether, remote-first (about $0.10 per 1,000; one run per phrase, at most 200 each). */
-      jobgether: actorBoard(true, 50, 0.05),
+      /**
+       * YC's public remote engineering jobs ($0.008 per run plus $0.001 per job; ~20 jobs, the
+       * same ones every run, so once a day; the phrases aren't used).
+       */
+      ycombinator: actorBoard(true, 50, 0.1, 20),
+      /** Jobgether, remote-first ($0.005 per run plus ~$0.07 per 1,000; one run per phrase). */
+      jobgether: actorBoard(true, 50, 0.1),
       /** Dice, US tech (about $1 per 1,000; mostly on-site US roles, which the screen drops). */
       dice: actorBoard(false, 25, 0.1),
       /** Built In (about $1.07 per 1,000, billed in pages of 25; one run for all phrases). */

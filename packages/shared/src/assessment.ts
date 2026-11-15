@@ -30,6 +30,8 @@ export const EVIDENCE_LABELS: Record<EvidenceClass, string> = {
 };
 
 const text = (max: number) => z.string().trim().min(1).max(max);
+/** Pay as the listing states it (bonus, equity and per-region ranges included). */
+const SALARY_MAX = 300;
 
 export const assessmentPointSchema = z.object({
   text: text(600),
@@ -109,7 +111,7 @@ export const assessmentSchema = z.object({
       "Always set: one line with the gist, e.g. 'Senior IC backend role; 4 office days conflicts with remote'",
     ),
   overview: text(1500).describe("Short role and company overview"),
-  salary: text(120)
+  salary: text(SALARY_MAX)
     .optional()
     .describe(
       "Pay as the listing states it, figures copied as written, e.g. 'EUR 75,000 – 90,000 / year + equity'. Omit when no figure is stated ('competitive' is not one); never estimate",
@@ -153,7 +155,8 @@ const HEADLINE_MAX = 140;
 /**
  * What the model is asked for when app code saves the result (re-score, discovery): the same
  * shape, but a headline over its limit or an empty salary doesn't fail the whole call (a salary
- * over its limit still does, so the structured-output retry corrects it). Those
+ * over its limit still does, so the structured-output retry corrects it; the limit is generous,
+ * since a listing's pay with bonus and equity terms ran past the earlier 120). Those
  * failed about 1 in 100 assessments even after a retry; `normalizeModelAssessment` fixes them.
  */
 export const modelAssessmentSchema = assessmentSchema.extend({
@@ -166,7 +169,7 @@ export const modelAssessmentSchema = assessmentSchema.extend({
   salary: z
     .string()
     .trim()
-    .max(120)
+    .max(SALARY_MAX)
     .optional()
     .describe(assessmentSchema.shape.salary.description ?? ""),
 });

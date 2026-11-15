@@ -4,19 +4,21 @@ import { normalizeText } from "./posting";
 // A location block: the listing explicitly limits where the hire may live or work, and the
 // person is outside those places. Triage and assessments report one with a verbatim quote; app
 // code checks the quote against the stored listing and hides the job (see `visibleJobs`).
+// The limits are generous (a quote over 300 characters or more than 10 places failed whole triage
+// calls); lists and the job page shorten what they show (`locationBlockReason`).
 
 export const locationBlockSchema = z
   .object({
     places: z
-      .array(z.string().trim().min(1).max(80))
+      .array(z.string().trim().min(1).max(120))
       .min(1)
-      .max(10)
+      .max(40)
       .describe("Where the hire must be, as the listing says, e.g. ['United States']"),
     quote: z
       .string()
       .trim()
       .min(3)
-      .max(300)
+      .max(800)
       .describe("The listing's own words stating the restriction, copied verbatim"),
   })
   .nullable();

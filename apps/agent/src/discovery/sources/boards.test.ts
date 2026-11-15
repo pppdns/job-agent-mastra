@@ -4,6 +4,7 @@ import type { FetchContext } from "../types";
 import { createActorSource, windowFor } from "./actor-source";
 import type { ApifyRunner } from "./apify";
 import {
+  agoDate,
   builtInBoard,
   careerSitesBoard,
   diceBoard,
@@ -13,9 +14,11 @@ import {
   parseCareerSiteItem,
   parseDiceItem,
   parseHiringCafeItem,
-  parseNomadRow,
+  parseJobgetherItem,
   parseWellfoundItem,
+  parseYcJob,
   wellfoundBoard,
+  YC_REMOTE_JOBS_URL,
   ycombinatorBoard,
   yearlyPay,
 } from "./boards";
@@ -37,18 +40,17 @@ describe("inputs", () => {
     expect(windowFor(new Date("2026-11-09T11:00:00Z"), [1, 3, 7], now)).toBe(3);
     expect(windowFor(new Date("2026-11-09T13:00:00Z"), [1, 3, 7], now)).toBe(1);
     expect(windowFor(new Date("2026-10-01T00:00:00Z"), [1, 3, 7], now)).toBe(7);
-    const [yc] = ycombinatorBoard.searches(context());
-    expect(yc?.input).toMatchObject({
-      schemaVersion: "nomad-agent-simple-inventory-search-v2",
-      queries: DEFAULT_SEARCH_SETTINGS.queries,
-      maxItems: 200,
-      dedupe: { enabled: false },
-    });
+    expect(ycombinatorBoard.searches(context())).toEqual([
+      {
+        label: "remote software engineering jobs",
+        input: { startUrls: [YC_REMOTE_JOBS_URL], maxItems: 50 },
+      },
+    ]);
     const jobgether = jobgetherBoard.searches(context());
     expect(jobgether).toHaveLength(DEFAULT_SEARCH_SETTINGS.queries.length);
     expect(jobgether[0]).toMatchObject({
       label: '"Applied AI Engineer"',
-      input: { queries: ["Applied AI Engineer"], maxItems: 50 },
+      input: { keyword: "Applied AI Engineer", includeDetails: true, maxItems: 50 },
     });
     expect(diceBoard.searches(context())).toHaveLength(DEFAULT_SEARCH_SETTINGS.queries.length);
     expect(diceBoard.searches(context())[0]?.input).toMatchObject({
@@ -83,26 +85,32 @@ describe("inputs", () => {
   });
 });
 
-describe("YC Work at a Startup and Jobgether", () => {
-  const row = {
-    schemaVersion: "nomad-agent-job-row-v5",
-    id: "121173",
-    url: "https://www.workatastartup.com/jobs/121173",
-    title: "Design Engineer",
-    company: "Entangl",
-    locations: ["San Francisco, CA, US / London, England, GB"],
-    applicantLocations: ["US", "GB"],
-    postedAt: "2026-11-09T16:00:00Z",
-    workType: "remote",
-    salary: "$120K - $180K",
-    employmentTypes: ["Full-time"],
-    descriptionHtml: "<p>Build the <a href='https://x.example'>editor</a>.</p>",
-  };
+const ycItem = {
+  title: "Design Engineer",
+  companyName: "Entangl",
+  jobType: "Full-time",
+  location: "San Francisco, CA, US / London, England, GB / Remote (US; London, England, GB)",
+  salaryMin: 120_000,
+  salaryMax: 180_000,
+  salaryCurrency: "USD",
+  salaryRange: "$120K - $180K",
+  postedAgo: "6 days",
+  datePosted: "2026-03-01T10:00:00Z",
+  applyUrl:
+    "https://account.ycombinator.com/authenticate?continue=https%3A%2F%2Fwww.workatastartup.com%2Fapplication%3Fsignup_job_id%3D121173&defaults%5BsignUpActive%5D=true",
+  url: "https://www.ycombinator.com/companies/entangl/jobs/CJBPxvX-design-engineer",
+  jobId: "CJBPxvX-design-engineer",
+  descriptionHtml: "<p>Build the <a href='https://x.example'>editor</a>.</p>",
+  scrapedAt: "2026-11-10T12:00:00Z",
+};
 
-  it("maps rows: country codes as names, yearly pay, date-only dates", () => {
-    expect(parseNomadRow("ycombinator")(row)).toMatchObject({
+describe("YC Work at a Startup", () => {
+  it("maps items under the numeric WaaS id, with regions from the remote part", () => {
+    expect(parseYcJob(ycItem)).toMatchObject({
       source: "ycombinator",
       externalId: "121173",
+      url: "https://www.workatastartup.com/jobs/121173",
+      applyUrl: null,
       remote: true,
       regions: ["United States", "United Kingdom"],
       salaryMin: 120_000,
@@ -110,24 +118,89 @@ describe("YC Work at a Startup and Jobgether", () => {
       salaryCurrency: "USD",
       salaryPeriod: "year",
       employmentType: "Full-time",
+      // Last active 6 days before the scrape, not the months-old creation date.
+      postedAt: new Date("2026-11-04T12:00:00Z"),
       description: "Build the editor.",
     });
+    // Without the sign-up link: the slug id and the YC page.
+    expect(parseYcJob({ ...ycItem, applyUrl: null })).toMatchObject({
+      externalId: "CJBPxvX-design-engineer",
+      url: ycItem.url,
+    });
+    expect(parseYcJob({ ...ycItem, applyUrl: null, url: "javascript:x" })).toBeNull();
+    // Monthly pay stays text; a bare "Remote" states no regions.
     expect(
-      parseNomadRow("jobgether")({ ...row, postedAt: "2026-11-10", salary: null }),
-    ).toMatchObject({ postedAt: new Date("2026-11-10T00:00:00Z"), salaryMax: null });
-    expect(parseNomadRow("ycombinator")({ ...row, url: "javascript:x" })).toBeNull();
-    // An "EMEA" list of ~130 country codes restricts nothing useful.
-    const emea = Array.from({ length: 130 }, (_, i) => `C${i}`);
-    expect(parseNomadRow("jobgether")({ ...row, applicantLocations: emea })?.regions).toEqual([]);
+      parseYcJob({
+        ...ycItem,
+        location: "Remote",
+        salaryMin: 4_000,
+        salaryRange: "$4K - $8K / monthly",
+      }),
+    ).toMatchObject({ regions: [], salaryMin: null, salaryText: "$4K - $8K / monthly" });
+  });
+
+  it("reads YC's relative times", () => {
+    const base = new Date("2026-11-10T12:00:00Z");
+    expect(agoDate("27 minutes", base)).toEqual(new Date("2026-11-10T11:33:00Z"));
+    expect(agoDate("about 1 month", base)).toEqual(new Date("2026-10-11T12:00:00Z"));
+    expect(agoDate("an hour", base)).toEqual(new Date("2026-11-10T11:00:00Z"));
+    expect(agoDate("less than a minute", base)).toEqual(base);
+    expect(agoDate("soon", base)).toBeNull();
+    expect(agoDate("6 days", null)).toBeNull();
   });
 
   it("screens an on-site role elsewhere out, a remote one from the UK through", () => {
-    const remote = parseNomadRow("ycombinator")(row);
-    const onsite = parseNomadRow("ycombinator")({ ...row, workType: "onsite" });
+    const remote = parseYcJob(ycItem);
+    const onsite = parseYcJob({ ...ycItem, location: "San Francisco, CA, US" });
     expect(remote && screenPosting(DEFAULT_SEARCH_SETTINGS, remote, now).pass).toBe(true);
     expect(onsite && screenPosting(DEFAULT_SEARCH_SETTINGS, onsite, now).reasons).toEqual([
-      "not remote, in San Francisco, CA, US / London, England, GB",
+      "not remote, in San Francisco, CA, US",
     ]);
+  });
+});
+
+describe("Jobgether", () => {
+  const item = {
+    offerId: "6af6aeb2081ddfee5005a119",
+    title: "Staff AI Engineer, Agentic Systems",
+    company: "Clearer.io",
+    postedAt: "2026-11-09T06:31:14.406Z",
+    remoteScope: "Remote",
+    locations: ["DE", "PL", "HU", "Germany", "Europe"],
+    salaryMin: 90_000,
+    salaryMax: 100_000,
+    salaryCurrency: "GBP",
+    salaryPeriod: "YEAR",
+    canonicalUrl:
+      "https://jobgether.com/offer/6af6aeb2081ddfee5005a119-staff-ai-engineer-agentic-systems",
+    applyUrl: "https://jobgether.com/auto-apply",
+    employmentTypes: ["FULL_TIME"],
+    description: "This a Full Remote job, the offer is available from: Europe. Build agents.",
+  };
+
+  it("maps items: country codes as names without repeats, yearly pay, no auto-apply link", () => {
+    expect(parseJobgetherItem(item)).toMatchObject({
+      source: "jobgether",
+      externalId: "6af6aeb2081ddfee5005a119",
+      url: item.canonicalUrl,
+      applyUrl: null,
+      remote: true,
+      regions: ["Germany", "Poland", "Hungary", "Europe"],
+      salaryMin: 90_000,
+      salaryMax: 100_000,
+      salaryCurrency: "GBP",
+      salaryPeriod: "year",
+      salaryText: "GBP 90,000–100,000 per year",
+      employmentType: "FULL_TIME",
+      postedAt: new Date("2026-11-09T06:31:14.406Z"),
+    });
+    expect(
+      parseJobgetherItem({ ...item, applyUrl: "https://boards.greenhouse.io/x/jobs/1" })?.applyUrl,
+    ).toBe("https://boards.greenhouse.io/x/jobs/1");
+    expect(parseJobgetherItem({ ...item, canonicalUrl: "javascript:x" })).toBeNull();
+    // An "EMEA" list of ~130 country codes restricts nothing useful.
+    const emea = Array.from({ length: 130 }, (_, i) => `C${i}`);
+    expect(parseJobgetherItem({ ...item, locations: emea })?.regions).toEqual([]);
   });
 });
 
@@ -336,13 +409,10 @@ describe("Company career sites", () => {
 });
 
 describe("actor sources", () => {
-  const row = (id: string, postedAt: string) => ({
-    id,
-    url: `https://www.workatastartup.com/jobs/${id}`,
-    title: "AI Engineer",
-    company: "Fernhollow AI",
-    workType: "remote",
-    postedAt,
+  const row = (id: string, postedAgo: string) => ({
+    ...ycItem,
+    applyUrl: `https://www.workatastartup.com/application?signup_job_id=${id}`,
+    postedAgo,
   });
 
   it("runs each search within the spend cap and keeps every valid item", async () => {
@@ -350,7 +420,7 @@ describe("actor sources", () => {
     const runner: ApifyRunner = async (actorId, input, { maxUsd }) => {
       calls.push({ actorId, input, maxUsd });
       return {
-        items: [row("1", "2026-11-10T00:00:00Z"), row("2", "2026-11-01T00:00:00Z"), {}],
+        items: [row("1", "1 day"), row("2", "9 days"), {}],
         costUsd: 0.03,
         runId: `run-${calls.length}`,
         datasetId: `ds-${calls.length}`,
@@ -364,10 +434,15 @@ describe("actor sources", () => {
     const yc = await createActorSource(ycombinatorBoard, runner).fetch(context());
     expect(yc.postings.map((p) => p.externalId)).toEqual(["1", "2"]);
     expect(yc.invalid).toBe(1);
-    expect(yc.providerRuns).toEqual([{ label: "all phrases", runId: "run-4", datasetId: "ds-4" }]);
+    expect(yc.providerRuns).toEqual([
+      { label: "remote software engineering jobs", runId: "run-4", datasetId: "ds-4" },
+    ]);
     expect(yc.raw).toEqual({
       invalid: [{}],
-      sample: [expect.objectContaining({ id: "1" }), expect.objectContaining({ id: "2" })],
+      sample: [
+        expect.objectContaining({ postedAgo: "1 day" }),
+        expect.objectContaining({ postedAgo: "9 days" }),
+      ],
     });
   });
 

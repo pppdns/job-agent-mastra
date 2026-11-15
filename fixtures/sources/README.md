@@ -16,6 +16,6 @@ run, 2026-11-10). No real listings or third-party text. Served instead of the li
 - `remoteok-api.json`: the API array (legal notice first): an AI engineer role with pay, a sales
   role with garbage pay (screened out), an invalid item.
 - `remotive-jobs.json`: the Lanternfish role again (merged) and a junior role (screened out).
-- `ycombinator-items.json`: rows of `nomad-agent/ycombinator-was-scraper`: a remote AI engineer
-  role, an on-site San Francisco role (screened out), an invalid row. The other Apify boards return
+- `ycombinator-items.json`: dataset items of `memo23/y-combinator-scraper`: a remote AI engineer
+  role open to the US, UK and Germany, an on-site San Francisco role (screened out), an invalid row. The other Apify boards return
   nothing offline; their parsers are tested with inline items (`boards.test.ts`).

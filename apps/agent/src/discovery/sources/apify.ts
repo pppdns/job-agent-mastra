@@ -32,7 +32,12 @@ type Run = {
   usageTotalUsd?: number;
   chargedEventCounts?: Record<string, number>;
   pricingInfo?: {
-    pricingPerEvent?: { actorChargeEvents?: Record<string, { eventPriceUsd?: number }> };
+    pricingPerEvent?: {
+      actorChargeEvents?: Record<
+        string,
+        { eventPriceUsd?: number; isPrimaryEvent?: boolean; isOneTimeEvent?: boolean }
+      >;
+    };
   };
 };
 
@@ -51,7 +56,9 @@ export type ApifyRunner = (
  * times the run's event prices (falling back to our price table; without counts, items plus one
  * start). Both lag right after a run finishes: `usageTotalUsd` and the result count can still
  * show only the start fee (seen on Fly: $0.001 recorded, $0.401 final for 200 items). So results
- * are counted as at least the items we read: every item in the dataset is billed.
+ * are counted as at least the items we read (every item in the dataset is billed) and the start
+ * as at least one. Actors may name these events themselves (Jobgether's `start` and `item`,
+ * recorded as $0 before): the run's primary event is its result, its one-time event its start.
  */
 export function runCost(
   run: Pick<Run, "usageTotalUsd" | "chargedEventCounts" | "pricingInfo">,
@@ -59,8 +66,16 @@ export function runCost(
   items: number,
 ) {
   const runPrices = run.pricingInfo?.pricingPerEvent?.actorChargeEvents ?? {};
-  const reported = run.chargedEventCounts ?? { [START_EVENT]: 1 };
-  const counts = { ...reported, [RESULT_EVENT]: Math.max(reported[RESULT_EVENT] ?? 0, items) };
+  const named = (flag: "isPrimaryEvent" | "isOneTimeEvent") =>
+    Object.entries(runPrices).find(([, event]) => event[flag])?.[0];
+  const resultEvent = named("isPrimaryEvent") ?? RESULT_EVENT;
+  const startEvent = named("isOneTimeEvent") ?? START_EVENT;
+  const reported = run.chargedEventCounts ?? {};
+  const counts = {
+    ...reported,
+    [startEvent]: Math.max(reported[startEvent] ?? 0, 1),
+    [resultEvent]: Math.max(reported[resultEvent] ?? 0, items),
+  };
   const events = Object.entries(counts).reduce(
     (sum, [event, n]) => sum + (runPrices[event]?.eventPriceUsd ?? prices[event] ?? 0) * n,
     0,
