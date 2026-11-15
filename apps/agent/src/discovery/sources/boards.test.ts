@@ -472,13 +472,54 @@ describe("actor sources", () => {
     const outcome = await createActorSource(hiringCafeBoard, slow).fetch(
       context({ maxUsd: 1, deadline: new Date(start + 10 * 60_000) }),
     );
-    // 600 s left: the actor's 600 s timeout is cut to leave room for the runner's own wait.
-    expect(timeouts).toEqual([480]);
+    // 600 s left: the actor's 600 s timeout is cut to leave room for the runner's own wait. Two
+    // searches start together (HiringCafe runs two at a time), then the time is up.
+    expect(timeouts).toEqual([480, 480]);
     const total = DEFAULT_SEARCH_SETTINGS.queries.length;
     expect(outcome.failures).toEqual([
-      `time limit reached, ${total - 1} of ${total} searches not run`,
+      `time limit reached, ${total - 2} of ${total} searches not run`,
     ]);
     expect(outcome.partial).toContain("time limit reached");
+  });
+
+  it("runs a board's searches a few at a time, sharing the cap, in search order", async () => {
+    const board = { ...diceBoard, concurrency: 2 };
+    const item = (id: string) => ({
+      jobId: id,
+      title: "AI Engineer",
+      companyName: "Fernhollow AI",
+      detailsPageUrl: `https://www.dice.com/job-detail/${id}`,
+      isRemote: true,
+      description_text: "Build agents.",
+    });
+    let running = 0;
+    let most = 0;
+    const shares: number[] = [];
+    const runner: ApifyRunner = async (_actor, input, { maxUsd }) => {
+      shares.push(maxUsd);
+      running += 1;
+      most = Math.max(most, running);
+      const keyword = (input as { keyword: string }).keyword;
+      // The first search of each pair finishes last.
+      const index = DEFAULT_SEARCH_SETTINGS.queries.indexOf(keyword);
+      await new Promise((resolve) => setTimeout(resolve, index % 2 === 0 ? 5 : 0));
+      running -= 1;
+      return { items: [item(`id-${index}`)], costUsd: 0.03 };
+    };
+    const total = DEFAULT_SEARCH_SETTINGS.queries.length;
+    const outcome = await createActorSource(board, runner).fetch(context({ maxUsd: 1 }));
+    expect(most).toBe(2);
+    expect(outcome.postings.map((p) => p.externalId)).toEqual(
+      DEFAULT_SEARCH_SETTINGS.queries.map((_, i) => `id-${i}`),
+    );
+    expect(outcome.costUsd).toBeCloseTo(0.03 * total);
+    // Each of a pair gets half of what's left, so the two together stay within the cap.
+    expect(shares.slice(0, 2)).toEqual([0.5, 0.5]);
+    expect(shares[2]).toBeCloseTo((1 - 0.06) / 2);
+    // A cap that covers two searches stops after the first pair.
+    const capped = await createActorSource(board, runner).fetch(context({ maxUsd: 0.065 }));
+    expect(capped.postings).toHaveLength(2);
+    expect(capped.partial).toBe("spend cap reached after 0.06 USD");
   });
 
   it("says why it can't run without a key, and stops on an exhausted account", async () => {

@@ -473,6 +473,8 @@ export const hiringCafeBoard: ActorBoard = {
   actorId: "memo23/apify-hiring-cafe-scraper",
   prices: pricesOf(0.00125, 0.005),
   timeoutSecs: 600,
+  // ~3 min per phrase: one by one, 7 phrases ran into the source's 20 min limit.
+  concurrency: 2,
   searches: ({ settings, since }) =>
     settings.queries.map((keyword) => ({
       label: `"${keyword}"`,
