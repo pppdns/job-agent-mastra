@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchPlace, matchPlaces } from "./remote-scope";
+import { matchCommute, matchPlace, matchPlaces } from "./remote-scope";
 
 describe("matchPlace", () => {
   it.each([
@@ -21,9 +21,23 @@ describe("matchPlace", () => {
     ["Spain or Portugal", "excludes"],
     ["LATAM", "excludes"],
     ["Romania, the US, and Canada", "excludes"],
+    ["another Eastern European country", "covers"],
+    ["any large European city", "covers"],
+    ["Western Europe", "excludes"],
     ["Springfield", "unknown"],
   ] as const)("%s → %s", (place, expected) => {
     expect(matchPlace(place)).toBe(expected);
+  });
+
+  it.each([
+    ["Budapest, Hungary", "covers"],
+    ["Törökbálint, Pest, Hungary", "covers"],
+    ["Környe, Komárom-Esztergom, Hungary", "excludes"],
+    ["Hungary", "unknown"],
+    ["Berlin, Germany", "excludes"],
+    ["Springfield", "unknown"],
+  ] as const)("commute %s → %s", (place, expected) => {
+    expect(matchCommute(place)).toBe(expected);
   });
 
   it("any covering place wins in a list", () => {

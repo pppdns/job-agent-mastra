@@ -146,6 +146,8 @@ function classifyPart(raw: string, trailing: boolean): PlaceMatch {
   if (COVERS_SET.has(part)) return "covers";
   if (OTHER_SET.has(part)) return "excludes";
   if (trailing && US_STATE_CODES.has(part)) return "excludes";
+  // "another Eastern European country", "any large European city": Europe unless a named subregion.
+  if (/\beurop(?:e|ean)\b/.test(part)) return "covers";
   return "unknown";
 }
 
@@ -163,6 +165,28 @@ export function matchPlace(place: string): PlaceMatch {
   if (results.includes("covers")) return "covers";
   if (results.includes("excludes")) return "excludes";
   return classifyPart(place, false);
+}
+
+/** Budapest and the towns around it: in commuting reach for office work. */
+const COMMUTE =
+  /\b(?:budapest|pest county|pest megye|torokbalint|budaors|erd|godollo|vac|szentendre|dunakeszi|fot|gyal|vecses|szigetszentmiklos|pilisvorosvar|biatorbagy|budakeszi|kerepes|kistarcsa|veresegyhaz|monor)\b/;
+
+/**
+ * Whether an office place is in commuting reach of Budapest: Budapest or a nearby town covers;
+ * another named town in Hungary, or any known place abroad, excludes; "Hungary" alone is unknown.
+ */
+export function matchCommute(place: string): PlaceMatch {
+  const text = normalizeText(place);
+  if (COMMUTE.test(text) || /\bpest\b/.test(text)) return "covers";
+  const parts = text
+    .split(/\s{2,}/)
+    .join(" ")
+    .replace(/\b(?:hungary|magyarorszag)\b/g, "|")
+    .split("|")
+    .map((p) => p.replace(FILLER, " ").trim())
+    .filter(Boolean);
+  if (/\b(?:hungary|magyarorszag)\b/.test(text)) return parts.length > 0 ? "excludes" : "unknown";
+  return matchPlace(place) === "excludes" ? "excludes" : "unknown";
 }
 
 /** Several places together: any that covers home wins; else any known other place excludes. */
