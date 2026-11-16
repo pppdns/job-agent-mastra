@@ -5,9 +5,9 @@ import { DEFAULT_SEARCH_SETTINGS, type SearchSettings } from "@copilot/shared";
 import { describe, expect, it } from "vitest";
 import type { FetchContext } from "../types";
 import { CooldownError, SourceError } from "../types";
-import { type ApifyRunner, createApifyRunner, runCost } from "./apify";
+import { type ApifyRunner, actorError, createApifyRunner, runCost } from "./apify";
 import { createHimalayasSource, parseHimalayasJob } from "./himalayas";
-import type { HttpJson } from "./http";
+import type { HttpJson, HttpText } from "./http";
 import {
   createLinkedInSource,
   datePostedFor,
@@ -263,6 +263,63 @@ describe("Apify runner", () => {
       throw new SourceError("api.apify.com answered 402");
     };
     await expect(createApifyRunner(broke, "t")("a/b", {}, options)).rejects.toThrow("usage limit");
+  });
+
+  it("names the actor's error of a FAILED run, and takes its 'nothing matched' error as empty", async () => {
+    const log = [
+      '2026-11-16T06:24:04.372Z INFO  Jobgether acquisition path selected {"url":"/offer/1"}',
+      "2026-11-16T06:24:04.896Z ERROR Run failed",
+      "2026-11-16T06:24:04.897Z   Jobgether pages were fetched, but no offers passed all requested filters.",
+      "2026-11-16T06:24:04.900Z ERROR [Status message]: Jobgether pages were fetched, but no offers passed all requested filters.",
+    ].join("\n");
+    const failed: HttpJson = async () =>
+      run("FAILED", { chargedEventCounts: { start: 1, item: 0 }, usageTotalUsd: 0.005 });
+    const logs: string[] = [];
+    const text: HttpText = async (url, init) => {
+      logs.push(`${url.pathname} ${init?.headers?.authorization}`);
+      return log;
+    };
+    const options = { maxUsd: 1, timeoutSecs: 60, prices: { start: 0.005, item: 0.0001 } };
+    await expect(createApifyRunner(failed, "t", text)("a/b", {}, options)).rejects.toThrow(
+      "Apify run run1 failed: Jobgether pages were fetched, but no offers passed all requested filters.",
+    );
+    expect(logs).toEqual(["/v2/actor-runs/run1/log Bearer t"]);
+    const empty = await createApifyRunner(failed, "t", text)(
+      "a/b",
+      {},
+      {
+        ...options,
+        emptyRunError: /no offers passed all requested filters/,
+      },
+    );
+    expect(empty).toMatchObject({ items: [], status: "FAILED", runId: "run1" });
+    expect(empty.partial).toBeUndefined();
+    expect(empty.costUsd).toBeCloseTo(0.005);
+    // Another error is still a failure; an unreadable log leaves the plain message.
+    const other: HttpText = async () => "2026-11-16T06:24:04Z ERROR Proxy blocked\n";
+    await expect(
+      createApifyRunner(failed, "t", other)("a/b", {}, { ...options, emptyRunError: /no offers/ }),
+    ).rejects.toThrow("failed: Proxy blocked");
+    const down: HttpText = async () => {
+      throw new SourceError("api.apify.com answered 500");
+    };
+    await expect(createApifyRunner(failed, "t", down)("a/b", {}, options)).rejects.toThrow(
+      /^Apify run run1 failed$/,
+    );
+    expect(actorError("2026-11-16T06:23:59Z INFO  fine\n")).toBeUndefined();
+    // The run's own status message, when Apify sends it, saves reading the log.
+    const withMessage: HttpJson = async () =>
+      run("FAILED", { statusMessage: "No matching Jobgether offers were found." });
+    await expect(
+      createApifyRunner(withMessage, "t", down)(
+        "a/b",
+        {},
+        {
+          ...options,
+          emptyRunError: /no matching jobgether offers/i,
+        },
+      ),
+    ).resolves.toMatchObject({ items: [] });
   });
 
   it("aborts the actor run when it is stopped while waiting", async () => {

@@ -223,6 +223,12 @@ export const jobgetherBoard: ActorBoard = {
   actorId: "automation-lab/jobgether-remote-jobs-scraper",
   // Its own event names (not Apify's default ones).
   prices: { start: 0.005, item: 0.000073 },
+  // A search takes 5–25 s; a stalled start (no output after "System info") runs to the timeout.
+  timeoutSecs: 90,
+  retryStalledRuns: true,
+  // It fails a search that matched nothing instead of returning no items: none in the window
+  // ("no offers passed all requested filters"), or none at all (checked live 2026-11-16).
+  emptyRunError: /no offers passed all requested filters|no matching jobgether offers were found/i,
   searches: ({ settings, since }) =>
     settings.queries.map((keyword) => ({
       label: `"${keyword}"`,

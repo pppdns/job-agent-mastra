@@ -200,10 +200,11 @@ async function report(db: Db, runId: string, funnel: FunnelResult) {
     discoveryRunsSince(db, new Date(Date.now() - ALERT_REPEAT_MS)),
   ]);
   const problems = run ? runProblems(run, funnel, sourceStates(recent, DISCOVERY_SOURCES)) : [];
+  const threshold = Math.max(settings.digestThreshold, settings.triageThreshold);
   const matches = await digestMatches(db, {
     since: run?.startedAt ?? new Date(),
     // Only strong matches are emailed; never one the job list hides.
-    threshold: Math.max(settings.digestThreshold, settings.triageThreshold),
+    threshold,
   });
   const digest = await sendDigest(
     httpJson,
@@ -216,6 +217,8 @@ async function report(db: Db, runId: string, funnel: FunnelResult) {
     matches,
     problems,
     lastDay.filter((r) => r.id !== runId),
+    // The run's matches that weren't strong enough to email, so "no email" says why.
+    { count: Math.max(0, funnel.matched - matches.length), threshold },
   );
   const next: FunnelResult = { ...funnel, digest };
   await progress.flush();

@@ -455,9 +455,52 @@ describe("actor sources", () => {
     const yc = await createActorSource(ycombinatorBoard, empty).fetch(context());
     expect(yc.failures).toEqual([]);
     expect(yc.partial).toBeUndefined();
+    // The actor said nothing matched (a FAILED run taken as empty): a quiet window, no problem.
+    const confirmed: ApifyRunner = async () => ({ items: [], costUsd: 0.005, status: "FAILED" });
+    const jobgether = await createActorSource(jobgetherBoard, confirmed).fetch(
+      context({ maxUsd: 1 }),
+    );
+    expect(jobgether.failures).toEqual([]);
+    expect(jobgether.partial).toBeUndefined();
   });
 
   afterEach(() => vi.restoreAllMocks());
+
+  it("runs a stalled Jobgether search again once, and names the search of a partial run", async () => {
+    const calls: number[] = [];
+    // The first search stalls twice, the second once, the rest succeed.
+    const stalls = new Map([
+      [0, 2],
+      [1, 1],
+    ]);
+    const runner: ApifyRunner = async (_actor, input, { timeoutSecs }) => {
+      calls.push(timeoutSecs);
+      const index = DEFAULT_SEARCH_SETTINGS.queries.indexOf((input as { keyword: string }).keyword);
+      const left = stalls.get(index) ?? 0;
+      if (left > 0) {
+        stalls.set(index, left - 1);
+        return {
+          items: [],
+          costUsd: 0.005,
+          status: "TIMED-OUT",
+          partial: "Apify run timed-out, kept 0 items",
+        };
+      }
+      return { items: [], costUsd: 0.005, status: "SUCCEEDED" };
+    };
+    const total = DEFAULT_SEARCH_SETTINGS.queries.length;
+    const outcome = await createActorSource(jobgetherBoard, runner).fetch(context({ maxUsd: 1 }));
+    expect(calls).toHaveLength(total + 2);
+    expect(calls.every((t) => t === 90)).toBe(true);
+    const first = `"${DEFAULT_SEARCH_SETTINGS.queries[0]}"`;
+    expect(outcome.failures).toEqual([`${first}: Apify run timed-out, kept 0 items`]);
+    expect(outcome.costUsd).toBeCloseTo(0.005 * (total + 2));
+    // Boards without the option don't retry.
+    calls.length = 0;
+    stalls.set(0, 1);
+    await createActorSource(diceBoard, runner).fetch(context({ maxUsd: 1 }));
+    expect(calls).toHaveLength(total);
+  });
 
   it("fits each search into the source's time and stops starting searches when it runs out", async () => {
     const start = Date.now();

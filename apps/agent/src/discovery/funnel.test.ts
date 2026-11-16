@@ -461,6 +461,38 @@ describe("problems and alerts", () => {
     expect(sent[1]?.text.startsWith("Needs a look:")).toBe(true);
     expect(buildDigest([], "http://x", ["<b>"]).html).toContain("&lt;b&gt;");
   });
+
+  it("says when a run's matches stayed under the digest threshold", async () => {
+    const sent: { text: string }[] = [];
+    const http: HttpJson = async (_url, init) => {
+      sent.push(init?.body as { text: string });
+      return { id: "e" };
+    };
+    const config = { apiKey: "re_x", to: "me@example.com", from: "a <b@c.d>", baseUrl: "http://x" };
+    const below = { count: 1, threshold: 75 };
+    expect(await sendDigest(http, config, [], [], [], below)).toMatchObject({
+      status: "skipped",
+      message: "1 match below the digest threshold (75)",
+    });
+    const problems = [{ key: "jobgether:searches-failed", message: "Jobgether: 1 search failed" }];
+    const alert = await sendDigest(http, config, [], problems, [], { count: 2, threshold: 75 });
+    expect(alert.message).toBe(
+      "2 matches below the digest threshold (75); alert sent to me@example.com",
+    );
+    expect(sent[0]?.text).toContain("no new matches scored 75 or more");
+    const earlier = {
+      id: "r0",
+      startedAt: new Date(Date.now() - 3_600_000),
+      funnel: { ...funnel, digest: alert },
+    } as unknown as DiscoveryRun;
+    expect(await sendDigest(http, config, [], problems, [earlier], below)).toMatchObject({
+      message: "1 match below the digest threshold (75); same problems already emailed today",
+    });
+    // Nothing under the threshold: the plain reason.
+    expect((await sendDigest(http, config, [], [], [], { count: 0, threshold: 75 })).message).toBe(
+      "no new matches",
+    );
+  });
 });
 
 describe("funnel steps (mock model)", () => {

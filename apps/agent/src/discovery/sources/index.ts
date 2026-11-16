@@ -120,7 +120,9 @@ export function discoverySources(): Record<DiscoverySource, JobSource> {
       ...actorSources(fixtureRunner),
     } as Record<DiscoverySource, JobSource>;
   }
-  const runner = env.APIFY_API_KEY ? createApifyRunner(httpJson, env.APIFY_API_KEY) : null;
+  const runner = env.APIFY_API_KEY
+    ? createApifyRunner(httpJson, env.APIFY_API_KEY, httpText)
+    : null;
   return {
     himalayas: createHimalayasSource(httpJson, env.HIMALAYAS_API_KEY),
     weworkremotely: createWwrSource(httpText),

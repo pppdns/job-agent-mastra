@@ -49,6 +49,14 @@ export type ActorBoard = {
    * source's time limit (HiringCafe: ~3 min per phrase).
    */
   concurrency?: number;
+  /** The actor's error when a search matched nothing: that FAILED run counts as empty. */
+  emptyRunError?: RegExp;
+  /**
+   * Run a search again (once) when its run timed out without a single item: the actor stalled
+   * at startup (Jobgether: 3 of 9 runs on 2026-11-16 hung right after starting). Use with a short
+   * `timeoutSecs`, so a stall costs little time.
+   */
+  retryStalledRuns?: boolean;
 };
 
 const RUN_TIMEOUT_SECS = 300;
@@ -74,6 +82,8 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
       const notes: string[] = [];
       let succeeded = 0;
       let returned = 0;
+      /** Searches the actor itself said matched nothing (`emptyRunError`): a quiet window. */
+      let emptyByActor = 0;
       const raws = rawSampler();
       const providerRuns: ProviderRun[] = [];
       /** Company + title → the kept variant's id, and whether it passes the screen. */
@@ -103,9 +113,10 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
             datasetId: result.datasetId,
           });
         }
-        if (result.partial) failures.push(result.partial);
+        if (result.partial) failures.push(`${search.label}: ${result.partial}`);
         else succeeded += 1;
         returned += result.items.length;
+        if (result.status === "FAILED") emptyByActor += 1;
         for (const raw of result.items) {
           const posting = board.parse(raw);
           if (!posting) {
@@ -127,6 +138,31 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
         }
         return "go";
       };
+      const secsLeft = () => Math.floor(timeLeftMs(context) / 1_000);
+      /** `leftSecs`: the source's time left when the search (or its batch) starts. */
+      const runOnce = (search: ActorSearch, maxUsd: number, leftSecs: number) =>
+        runActor(board.actorId, search.input, {
+          maxUsd,
+          // Shortened so the run ends (TIMED-OUT keeps its items) within the source's time.
+          timeoutSecs: Math.min(
+            board.timeoutSecs ?? RUN_TIMEOUT_SECS,
+            Math.max(60, leftSecs - RUNNER_SLACK_SECS),
+          ),
+          prices: board.prices,
+          signal: context.signal,
+          emptyRunError: board.emptyRunError,
+        });
+      /** One search, run again once if it stalled (and the board allows it, and time is left). */
+      const runSearch = async (search: ActorSearch, maxUsd: number, leftSecs: number) => {
+        const first = await runOnce(search, maxUsd, leftSecs);
+        const stalled = first.status === "TIMED-OUT" && first.items.length === 0;
+        const left = maxUsd - first.costUsd;
+        if (!board.retryStalledRuns || !stalled || left < 0.01 || secsLeft() < MIN_SEARCH_SECS) {
+          return first;
+        }
+        const second = await runOnce(search, left, secsLeft());
+        return { ...second, costUsd: first.costUsd + second.costUsd };
+      };
       for (let i = 0; i < searches.length; ) {
         context.onProgress?.(i, searches.length, (searches[i] as ActorSearch).label);
         const remaining = context.maxUsd - costUsd;
@@ -134,7 +170,7 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
           notes.push(`spend cap reached after ${costUsd.toFixed(2)} USD`);
           break;
         }
-        const leftSecs = Math.floor(timeLeftMs(context) / 1_000);
+        const leftSecs = secsLeft();
         if (leftSecs < MIN_SEARCH_SECS) {
           failures.push(timeLimitFailure(searches.length - i, searches.length));
           break;
@@ -146,18 +182,7 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
         );
         const batch = searches.slice(i, i + size);
         const settled = await Promise.allSettled(
-          batch.map((search) =>
-            runActor(board.actorId, search.input, {
-              maxUsd: remaining / size,
-              // Shortened so the run ends (TIMED-OUT keeps its items) within the source's time.
-              timeoutSecs: Math.min(
-                board.timeoutSecs ?? RUN_TIMEOUT_SECS,
-                Math.max(60, leftSecs - RUNNER_SLACK_SECS),
-              ),
-              prices: board.prices,
-              signal: context.signal,
-            }),
-          ),
+          batch.map((search) => runSearch(search, remaining / size, leftSecs)),
         );
         i += size;
         let stop = false;
@@ -169,7 +194,13 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
       // Several broad searches all coming back empty is the actor misbehaving, not a quiet day
       // (seen: Dice returned nothing for all 7 phrases of a 30-day backfill). Reported as a
       // failure, so the run is partial: it's emailed and the next run asks for the window again.
-      if (searches.length >= MIN_SEARCHES_FOR_EMPTY && succeeded === searches.length && !returned) {
+      // Not when the actor said so itself: Jobgether's 1-day window is often empty for every phrase.
+      if (
+        searches.length >= MIN_SEARCHES_FOR_EMPTY &&
+        succeeded === searches.length &&
+        !returned &&
+        emptyByActor === 0
+      ) {
         failures.push(`every search came back empty (${searches.length} searches)`);
       }
       if (succeeded === 0 && byId.size === 0 && failures.length > 0) {
