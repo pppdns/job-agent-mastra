@@ -189,6 +189,9 @@ async function assess(
   return next;
 }
 
+/** Most matches under the digest threshold counted for the "no email" reason. */
+const BELOW_DIGEST_COUNT_LIMIT = 500;
+
 async function report(db: Db, runId: string, funnel: FunnelResult) {
   const progress = createProgress(db, runId);
   progress.step("report");
@@ -200,11 +203,22 @@ async function report(db: Db, runId: string, funnel: FunnelResult) {
     discoveryRunsSince(db, new Date(Date.now() - ALERT_REPEAT_MS)),
   ]);
   const problems = run ? runProblems(run, funnel, sourceStates(recent, DISCOVERY_SOURCES)) : [];
-  const matches = await digestMatches(db, {
-    since: run?.startedAt ?? new Date(),
-    // Only strong matches are emailed; never one the job list hides.
-    threshold: Math.max(settings.digestThreshold, settings.triageThreshold),
-  });
+  const threshold = Math.max(settings.digestThreshold, settings.triageThreshold);
+  const since = run?.startedAt ?? new Date();
+  // Only strong matches are emailed; never one the job list hides.
+  const matches = await digestMatches(db, { since, threshold });
+  // Without a digest: the run's matches the job list shows that scored under the digest
+  // threshold (the same filters, from the triage threshold up), so "no email" can say why.
+  const below =
+    matches.length === 0 && threshold > settings.triageThreshold
+      ? (
+          await digestMatches(db, {
+            since,
+            threshold: settings.triageThreshold,
+            limit: BELOW_DIGEST_COUNT_LIMIT,
+          })
+        ).length
+      : 0;
   const digest = await sendDigest(
     httpJson,
     {
@@ -216,6 +230,7 @@ async function report(db: Db, runId: string, funnel: FunnelResult) {
     matches,
     problems,
     lastDay.filter((r) => r.id !== runId),
+    { count: below, threshold },
   );
   const next: FunnelResult = { ...funnel, digest };
   await progress.flush();

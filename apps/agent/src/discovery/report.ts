@@ -124,14 +124,25 @@ function problemsBlock(problems: string[], base: string) {
 export const DIGEST_EMOJI = "🎯";
 export const ALERT_EMOJI = "⚠️";
 
+/** Matches of a run that stayed under the digest threshold, so they weren't emailed. */
+export type BelowDigest = { count: number; threshold: number };
+
+/** "1 match below the digest threshold (75)", or nothing when there is none. */
+export function belowDigestNote(below?: BelowDigest) {
+  if (!below || below.count <= 0) return undefined;
+  return `${below.count} match${below.count === 1 ? "" : "es"} below the digest threshold (${below.threshold})`;
+}
+
 /** The problems-only email of a run without matches. */
-export function buildAlert(problems: string[], baseUrl: string): Digest {
+export function buildAlert(problems: string[], baseUrl: string, below?: BelowDigest): Digest {
   const base = baseUrl.replace(/\/+$/, "");
   const block = problemsBlock(problems, base);
+  const note = belowDigestNote(below);
+  const intro = `The latest discovery run found no new matches${note ? ` scored ${below?.threshold} or more (${note}; they're on the jobs page)` : ""}.`;
   return {
     subject: `${ALERT_EMOJI} Job discovery needs a look: ${problems[0]}`.slice(0, 150),
-    text: `The latest discovery run found no new matches.\n\n${block.text}`,
-    html: `<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.4;color:#111"><p>The latest discovery run found no new matches.</p>${block.html}</div>`,
+    text: `${intro}\n\n${block.text}`,
+    html: `<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.4;color:#111"><p>${escapeHtml(intro)}</p>${block.html}</div>`,
   };
 }
 
@@ -205,28 +216,35 @@ export async function sendDigest(
   problems: Problem[] = [],
   /** Runs of the last ALERT_REPEAT_MS (for the throttle). */
   recent: DiscoveryRun[] = [],
+  /** The run's matches under the digest threshold, named when no digest goes out. */
+  below?: BelowDigest,
 ): Promise<NonNullable<FunnelResult["digest"]>> {
   const messages = problems.map((p) => p.message);
+  // Why there's no digest though the run has matches.
+  const note = matches.length === 0 ? belowDigestNote(below) : undefined;
+  const why = (reason: string) => (note ? `${note}; ${reason}` : reason);
   const base = {
     matches: matches.length,
     ...(problems.length > 0 ? { problems: messages, problemKeys: problems.map((p) => p.key) } : {}),
   };
   if (matches.length === 0 && problems.length === 0) {
-    return { status: "skipped", message: "no new matches", ...base };
+    return { status: "skipped", message: note ?? "no new matches", ...base };
   }
   if (matches.length === 0 && alreadyAlerted(problems, recent)) {
-    return { status: "skipped", message: "same problems already emailed today", ...base };
+    return { status: "skipped", message: why("same problems already emailed today"), ...base };
   }
   if (!config.apiKey || !config.to) {
     return {
       status: "skipped",
-      message: `email not configured (${config.apiKey ? "DIGEST_TO" : "RESEND_API_KEY"} is not set)`,
+      message: why(
+        `email not configured (${config.apiKey ? "DIGEST_TO" : "RESEND_API_KEY"} is not set)`,
+      ),
       ...base,
     };
   }
   const alert = matches.length === 0;
   const email = alert
-    ? buildAlert(messages, config.baseUrl)
+    ? buildAlert(messages, config.baseUrl, below)
     : buildDigest(matches, config.baseUrl, messages);
   try {
     await http(new URL(RESEND_URL), {
@@ -242,7 +260,7 @@ export async function sendDigest(
     });
     return {
       status: "sent",
-      message: `${alert ? "alert" : "digest"} sent to ${config.to}`,
+      message: alert ? why(`alert sent to ${config.to}`) : `digest sent to ${config.to}`,
       ...base,
       ...(alert ? { alert: true } : {}),
     };

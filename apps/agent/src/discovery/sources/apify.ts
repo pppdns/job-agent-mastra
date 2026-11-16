@@ -1,5 +1,5 @@
 import { SourceError } from "../types";
-import type { HttpJson } from "./http";
+import type { HttpJson, HttpText } from "./http";
 
 // A minimal Apify REST runner for pay-per-event Store actors: start a run with a spend cap, wait
 // for it within our own deadline, read its dataset. Proxies are part of the actors' event price.
@@ -19,6 +19,8 @@ export type ActorRunResult = {
   costUsd: number;
   /** Set when the run stopped early (timed out or was aborted) but left some items. */
   partial?: string;
+  /** Apify's final status (SUCCEEDED, TIMED-OUT, ABORTED; FAILED only for an `emptyRunError` run). */
+  status?: string;
   /** The Apify run and its dataset (live runs only), to look the raw output up later. */
   runId?: string;
   datasetId?: string;
@@ -27,6 +29,8 @@ export type ActorRunResult = {
 type Run = {
   id: string;
   status: string;
+  /** The actor's last status message (its error, for a FAILED run); not always present. */
+  statusMessage?: string;
   defaultDatasetId: string;
   /** What Apify charged for the run (pay-per-event actors: the events), USD. */
   usageTotalUsd?: number;
@@ -48,8 +52,36 @@ export const START_EVENT = "apify-actor-start";
 export type ApifyRunner = (
   actorId: string,
   input: unknown,
-  options: { maxUsd: number; timeoutSecs: number; prices: ActorPrices; signal?: AbortSignal },
+  options: {
+    maxUsd: number;
+    timeoutSecs: number;
+    prices: ActorPrices;
+    signal?: AbortSignal;
+    /**
+     * The error an actor fails with when nothing matched (Jobgether: "no offers passed all
+     * requested filters"): such a FAILED run is an empty result, not a failure.
+     */
+    emptyRunError?: RegExp;
+  },
 ) => Promise<ActorRunResult>;
+
+/** Longest actor error kept in a failure message (shown on /discovery and emailed). */
+const MAX_ERROR_CHARS = 200;
+
+/**
+ * The actor's own error from its log: the last "[Status message]: …" line, else the last ERROR
+ * line. Third-party text, so it's cut short; it never holds our key (only the run's own output).
+ */
+export function actorError(log: string): string | undefined {
+  const lines = log.split("\n");
+  const status = lines.findLast((l) => l.includes("[Status message]:"));
+  const line = status?.split("[Status message]:")[1] ?? lines.findLast((l) => / ERROR /.test(l));
+  const text = line
+    ?.replace(/^\S+Z\s+ERROR\s+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text ? text.slice(0, MAX_ERROR_CHARS) : undefined;
+}
 
 /**
  * What the run cost: the larger of Apify's own `usageTotalUsd` and the charged event counts
@@ -84,7 +116,11 @@ export function runCost(
   return Math.max(usage, events);
 }
 
-export function createApifyRunner(http: HttpJson, token: string): ApifyRunner {
+/**
+ * `text` reads a failed run's log, to name the actor's error and to recognise an empty run;
+ * without it a FAILED run is just "failed".
+ */
+export function createApifyRunner(http: HttpJson, token: string, text?: HttpText): ApifyRunner {
   const auth = { authorization: `Bearer ${token}` };
   const call = async (path: string, init: Parameters<HttpJson>[1] = {}) => {
     try {
@@ -105,7 +141,21 @@ export function createApifyRunner(http: HttpJson, token: string): ApifyRunner {
     return run;
   };
 
-  return async (actorId, input, { maxUsd, timeoutSecs, prices, signal }) => {
+  /** The actor's error: its status message, else from the run's log if that can be read. */
+  const errorOf = async ({ id, statusMessage }: Run, signal?: AbortSignal) => {
+    const message = statusMessage?.replace(/\s+/g, " ").trim();
+    if (message) return message.slice(0, MAX_ERROR_CHARS);
+    if (!text) return undefined;
+    try {
+      return actorError(
+        await text(new URL(`${API}/actor-runs/${id}/log`), { headers: auth, signal }),
+      );
+    } catch {
+      return undefined;
+    }
+  };
+
+  return async (actorId, input, { maxUsd, timeoutSecs, prices, signal, emptyRunError }) => {
     const actor = actorId.replace("/", "~");
     const params = new URLSearchParams({
       maxTotalChargeUsd: maxUsd.toFixed(2),
@@ -143,7 +193,19 @@ export function createApifyRunner(http: HttpJson, token: string): ApifyRunner {
       if (signal?.aborted) await abortRemote(run.id);
       throw error;
     }
-    if (run.status === "FAILED") throw new SourceError(`Apify run ${run.id} failed`);
+    if (run.status === "FAILED") {
+      const error = await errorOf(run, signal);
+      if (error && emptyRunError?.test(error)) {
+        return {
+          items: [],
+          costUsd: runCost(run, prices, 0),
+          runId: run.id,
+          datasetId: run.defaultDatasetId,
+          status: run.status,
+        };
+      }
+      throw new SourceError(`Apify run ${run.id} failed${error ? `: ${error}` : ""}`);
+    }
 
     const items: unknown[] = [];
     for (let offset = 0; offset < MAX_ITEMS; offset += PAGE) {
@@ -160,6 +222,7 @@ export function createApifyRunner(http: HttpJson, token: string): ApifyRunner {
       costUsd: runCost(run, prices, items.length),
       runId: run.id,
       datasetId: run.defaultDatasetId,
+      status: run.status,
       partial:
         run.status === "SUCCEEDED"
           ? undefined

@@ -35,8 +35,11 @@ export const httpJson: HttpJson = (url, init = {}) =>
     init.signal,
   );
 
-/** GET a text document (RSS feeds), with the same timeout, size cap and retries. */
-export type HttpText = (url: URL, init?: { signal?: AbortSignal }) => Promise<string>;
+/** GET a text document (RSS feeds, Apify run logs), with the same timeout, size cap and retries. */
+export type HttpText = (
+  url: URL,
+  init?: { signal?: AbortSignal; headers?: Record<string, string> },
+) => Promise<string>;
 
 export const httpText: HttpText = (url, init = {}) =>
   withCooldown(
