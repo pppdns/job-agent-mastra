@@ -160,8 +160,17 @@ export function createActorSource(board: ActorBoard, runActor: ApifyRunner | nul
         if (!board.retryStalledRuns || !stalled || left < 0.01 || secsLeft() < MIN_SEARCH_SECS) {
           return first;
         }
-        const second = await runOnce(search, left, secsLeft());
-        return { ...second, costUsd: first.costUsd + second.costUsd };
+        // The stalled run is counted now, so its cost and run id stay recorded whatever the
+        // retry does (a retry that throws would otherwise lose them).
+        costUsd += first.costUsd;
+        if (first.runId && first.datasetId) {
+          providerRuns.push({
+            label: `${search.label} (stalled)`,
+            runId: first.runId,
+            datasetId: first.datasetId,
+          });
+        }
+        return runOnce(search, left, secsLeft());
       };
       for (let i = 0; i < searches.length; ) {
         context.onProgress?.(i, searches.length, (searches[i] as ActorSearch).label);

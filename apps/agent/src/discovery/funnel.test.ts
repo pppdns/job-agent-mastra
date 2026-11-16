@@ -520,6 +520,19 @@ describe("funnel steps (mock model)", () => {
     expect(Object.keys(await latestRunStatuses(db))).toEqual([]);
   });
 
+  it("names the run's listed matches under the digest threshold when nothing is emailed", async () => {
+    // Mock triage: 70 for "Platform Engineer" (a match under 75), 35 for the intern (no match).
+    const runId = await discovered(["a", "Platform Engineer"], ["b", "Data intern"]);
+    const funnel = await assessStep(db, runId, await triageStep(db, runId));
+    const report = await reportStep(db, runId, funnel);
+    expect(report.digest).toMatchObject({
+      status: "skipped",
+      matches: 0,
+      message: "1 match below the digest threshold (75)",
+    });
+    await closeUsage(db, runId, false);
+  });
+
   it("raises the spend cap to cover a picked assessment batch", async () => {
     const runId = await discovered(["a", "Founding Engineer"], ["b", "Platform Engineer"]);
     await triageJobs({

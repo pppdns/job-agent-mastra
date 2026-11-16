@@ -1,6 +1,6 @@
 import { DEFAULT_SEARCH_SETTINGS, screenPosting } from "@copilot/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { FetchContext } from "../types";
+import { type FetchContext, SourceError } from "../types";
 import { createActorSource, windowFor } from "./actor-source";
 import type { ApifyRunner } from "./apify";
 import {
@@ -495,6 +495,29 @@ describe("actor sources", () => {
     const first = `"${DEFAULT_SEARCH_SETTINGS.queries[0]}"`;
     expect(outcome.failures).toEqual([`${first}: Apify run timed-out, kept 0 items`]);
     expect(outcome.costUsd).toBeCloseTo(0.005 * (total + 2));
+    // A retry that fails still leaves the stalled run's cost and run id counted.
+    let attempt = 0;
+    const flaky: ApifyRunner = async () => {
+      attempt += 1;
+      if (attempt === 1) {
+        return {
+          items: [],
+          costUsd: 0.005,
+          status: "TIMED-OUT",
+          partial: "Apify run timed-out, kept 0 items",
+          runId: "stalled",
+          datasetId: "ds-stalled",
+        };
+      }
+      if (attempt === 2) throw new SourceError("Apify run r2 failed");
+      return { items: [], costUsd: 0.005, status: "SUCCEEDED" };
+    };
+    const retried = await createActorSource(jobgetherBoard, flaky).fetch(context({ maxUsd: 1 }));
+    expect(retried.costUsd).toBeCloseTo(0.005 * total);
+    expect(retried.failures).toEqual([`${first}: Apify run r2 failed`]);
+    expect(retried.providerRuns).toEqual([
+      { label: `${first} (stalled)`, runId: "stalled", datasetId: "ds-stalled" },
+    ]);
     // Boards without the option don't retry.
     calls.length = 0;
     stalls.set(0, 1);
