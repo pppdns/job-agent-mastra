@@ -2,6 +2,7 @@ import {
   assessedJobCounts,
   belowThresholdJobs,
   companyJobCounts,
+  currentPreferences,
   type JobOverview,
   jobTabCounts,
   listJobsPage,
@@ -14,20 +15,15 @@ import {
   DISCOVERY_SOURCE_LABELS,
   type DiscoverySource,
   locationBlockReason,
+  type Preferences,
 } from "@copilot/shared";
 import { cn } from "cn";
 import { RadarIcon, SearchIcon } from "lucide-react";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import {
-  FIT_TONE,
-  FitMeter,
-  SalaryLabel,
-  TONE_FILL,
-  TONES,
-  VerdictIcon,
-} from "@/components/assessment-visuals";
+import { FIT_TONE, FitMeter, TONE_FILL, TONES, VerdictIcon } from "@/components/assessment-visuals";
+import { JobChips } from "@/components/job-chips";
 import { JobFilters } from "@/components/job-filters";
 import { BulkBar, JobSelection, RowCheckbox, SelectAllCheckbox } from "@/components/job-selection";
 import { JobStatusMenu } from "@/components/job-status-menu";
@@ -48,6 +44,7 @@ import {
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { type Age, jobAge, stageAge } from "@/lib/job-age";
+import { jobChips, overviewChipInput } from "@/lib/job-chips";
 import { fitMatters, quietStatus, showsStageAge } from "@/lib/job-emphasis";
 import {
   defaultSort,
@@ -196,12 +193,13 @@ async function JobPage({
       </p>
     );
   }
-  const [sources, perCompany] = await Promise.all([
+  const [sources, perCompany, preferences] = await Promise.all([
     postingSourcesByJob(
       db,
       jobs.filter((j) => j.origin === "discovery").map((j) => j.id),
     ),
     companyJobCounts(db, [...new Set(jobs.flatMap((j) => (j.companyKey ? [j.companyKey] : [])))]),
+    currentPreferences(db),
   ]);
   return (
     // Keyed by the list's URL: a new page, tab, search or filter starts with nothing selected.
@@ -213,6 +211,7 @@ async function JobPage({
         now={new Date()}
         sources={sources}
         perCompany={perCompany}
+        preferences={preferences}
       />
       <Pager params={params} total={total} shown={jobs.length} />
     </JobSelection>
@@ -252,9 +251,10 @@ function Pager({ params, total, shown }: { params: JobListParams; total: number;
 async function ScreenedOut({ params }: { params: JobListParams }) {
   const db = await appDb();
   const offset = (params.page - 1) * JOBS_PAGE_SIZE;
-  const [below, dropped] = await Promise.all([
+  const [below, dropped, preferences] = await Promise.all([
     belowThresholdJobs(db, { limit: JOBS_PAGE_SIZE, offset }),
     screenedOutPostings(db, { since: daysAgo(SCREENED_DAYS), limit: JOBS_PAGE_SIZE, offset }),
+    currentPreferences(db),
   ]);
   const more = below.total > offset + JOBS_PAGE_SIZE || dropped.total > offset + JOBS_PAGE_SIZE;
   return (
@@ -293,6 +293,11 @@ async function ScreenedOut({ params }: { params: JobListParams }) {
                   <span className="text-muted-foreground">
                     {[job.company, job.location].filter(Boolean).join(" · ")}
                   </span>
+                  <JobChips
+                    {...jobChips(overviewChipInput(job), preferences)}
+                    compact
+                    className="my-1"
+                  />
                   {(job.screenReasons ?? hiddenByLocation(job) ?? job.triageReason) && (
                     <span className="block text-xs text-muted-foreground">
                       {job.screenReasons
@@ -457,12 +462,14 @@ function JobTable({
   now,
   sources,
   perCompany,
+  preferences,
 }: {
   jobs: JobOverview[];
   tab: JobTab;
   now: Date;
   sources: Record<string, DiscoverySource[]>;
   perCompany: Record<string, number>;
+  preferences: Preferences;
 }) {
   return (
     <Table aria-label="Jobs" className="table-fixed">
@@ -488,6 +495,7 @@ function JobTable({
             now={now}
             sources={sources[job.id] ?? []}
             moreAtCompany={job.companyKey ? (perCompany[job.companyKey] ?? 1) - 1 : 0}
+            preferences={preferences}
           />
         ))}
       </TableBody>
@@ -502,6 +510,7 @@ function JobRow({
   now,
   sources,
   moreAtCompany,
+  preferences,
 }: {
   job: JobOverview;
   tab: JobTab;
@@ -509,6 +518,7 @@ function JobRow({
   sources: DiscoverySource[];
   /** Other visible, active jobs at the same company. */
   moreAtCompany: number;
+  preferences: Preferences;
 }) {
   const { summary } = job;
   const age = showsStageAge(tab) ? stageAge(job, now) : jobAge(job, now);
@@ -536,9 +546,9 @@ function JobRow({
         >
           {title}
         </Link>
+        <JobChips {...jobChips(overviewChipInput(job), preferences)} compact className="my-1" />
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           {meta && <span className="truncate">{meta}</span>}
-          {summary?.salary && <SalaryLabel salary={summary.salary} className="[&>svg]:size-3.5" />}
           <AgePill age={age} compact className="sm:hidden" />
           <JobFlags job={job} />
           {job.origin === "discovery" && job.seenAt === null && job.triageScore !== null && (

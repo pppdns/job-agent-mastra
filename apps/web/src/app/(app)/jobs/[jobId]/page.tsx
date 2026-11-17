@@ -1,4 +1,4 @@
-import { getJobDetail, jobPostings } from "@copilot/db";
+import { currentPreferences, getJobDetail, jobPostings } from "@copilot/db";
 import {
   DISCOVERY_SOURCE_LABELS,
   JOB_STATUS_LABELS,
@@ -21,8 +21,9 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { AssessmentView } from "@/components/assessment-view";
-import { SalaryLabel, VerdictBadge } from "@/components/assessment-visuals";
+import { VerdictBadge } from "@/components/assessment-visuals";
 import { EvidenceList } from "@/components/evidence-list";
+import { ChipEvidence, JobChips } from "@/components/job-chips";
 import { JobStatusMenu } from "@/components/job-status-menu";
 import { AssessButton } from "@/components/keep-buttons";
 import { MarkSeen } from "@/components/mark-seen";
@@ -34,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { APPROXIMATE_HINT, formatDay, isApproximate, postedVerb } from "@/lib/job-age";
+import { jobChips } from "@/lib/job-chips";
 import { listingLinks } from "@/lib/listing-links";
 import { appDb } from "@/server/db";
 
@@ -79,7 +81,10 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
   const db = await appDb();
   const detail = await getJobDetail(db, jobId);
   if (!detail) notFound();
-  const postings = await jobPostings(db, jobId);
+  const [postings, preferences] = await Promise.all([
+    jobPostings(db, jobId),
+    currentPreferences(db),
+  ]);
   const { job, sources, draft, history, profileVersion, profileStale, claims, posted } = detail;
   const links = listingLinks(
     job.canonicalUrl,
@@ -145,7 +150,6 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
               {job.location}
             </span>
           )}
-          {draft?.assessment.salary && <SalaryLabel salary={draft.assessment.salary} />}
           <span className="inline-flex items-center gap-1.5">
             <CalendarIcon className="size-4" />
             {posted && (
@@ -169,6 +173,20 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
         </p>
         {job.origin === "discovery" && job.seenAt === null && <MarkSeen jobId={job.id} />}
       </div>
+
+      <AtAGlance
+        chips={jobChips(
+          {
+            facts: job.facts,
+            eligibility: job.eligibility,
+            eligibilityQuote: job.eligibilityQuote,
+            salaryText: draft?.assessment.salary,
+            hardConflicts: draft?.assessment.hardConflicts.length,
+          },
+          preferences,
+        )}
+        read={job.facts !== null}
+      />
 
       {job.origin === "discovery" && (
         <Card aria-label="Triage">
@@ -308,5 +326,31 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
         </ul>
       </section>
     </div>
+  );
+}
+
+/** The job's chips and, folded, the listing's words each one rests on. */
+function AtAGlance({ chips, read }: { chips: ReturnType<typeof jobChips>; read: boolean }) {
+  return (
+    <section aria-label="At a glance (job)" className="flex flex-col gap-2 rounded-xl border p-3">
+      <JobChips {...chips} />
+      {read ? (
+        <Collapsible>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="xs" className="group -ml-1.5 text-muted-foreground">
+              From the listing
+              <ChevronDownIcon className="transition-transform group-data-[state=open]:rotate-180" />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-1">
+            <ChipEvidence chips={[...chips.primary, ...chips.secondary]} />
+          </CollapsibleContent>
+        </Collapsible>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          The listing's facts haven't been read yet; the next discovery run reads them.
+        </p>
+      )}
+    </section>
   );
 }

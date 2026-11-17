@@ -103,7 +103,13 @@ test("run discovery, see screened jobs, loosen the screen", async ({ page }) => 
   await expect(tidewater.getByRole("row")).toHaveCount(3); // header + both roles
   await tidewater.getByRole("link", { name: "+1 more role here" }).first().click();
   await expect(page.getByRole("heading", { name: "Tidewater Robotics" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Roles" }).getByRole("listitem")).toHaveCount(2);
+  // Job rows (each row also holds chip lists): the ones linking to a job.
+  await expect(
+    page
+      .getByRole("region", { name: "Roles" })
+      .getByRole("listitem")
+      .filter({ has: page.locator('a[href^="/jobs/"]') }),
+  ).toHaveCount(2);
 
   await page.goto("/jobs?q=Tidewater");
   const bar = page.getByRole("toolbar", { name: "Selected jobs" });

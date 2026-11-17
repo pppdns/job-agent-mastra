@@ -2,8 +2,8 @@
 
 import { ASSESS_BATCH_SIZES } from "@copilot/shared";
 
-/** What reading one listing's facts costs on average (fast model; measured in the eval). */
-const FACTS_USD_PER_JOB = 0.0008;
+/** What reading one listing's facts costs on average (fast model; measured on real listings). */
+const FACTS_USD_PER_JOB = 0.0015;
 
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";

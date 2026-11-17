@@ -1,4 +1,4 @@
-import { companyJobs, getJobDetail } from "@copilot/db";
+import { companyJobs, currentPreferences, getJobDetail } from "@copilot/db";
 import { JOB_STATUS_LABELS } from "@copilot/shared";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -6,9 +6,11 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { FitMeter } from "@/components/assessment-visuals";
 import { EvidenceList } from "@/components/evidence-list";
+import { JobChips } from "@/components/job-chips";
 import { PageHeader } from "@/components/page-header";
 import { TriageScore } from "@/components/triage-score";
 import { Badge } from "@/components/ui/badge";
+import { jobChips, overviewChipInput } from "@/lib/job-chips";
 import { appDb } from "@/server/db";
 
 // One company: every role saved or discovered there (also the hidden ones, marked), their
@@ -38,7 +40,10 @@ async function Company({ params }: Pick<PageProps<"/companies/[key]">, "params">
   const { key } = await params;
   await connection(); // libsql is synchronous: keep these reads out of prerendering
   const db = await appDb();
-  const jobs = await companyJobs(db, decodeURIComponent(key));
+  const [jobs, preferences] = await Promise.all([
+    companyJobs(db, decodeURIComponent(key)),
+    currentPreferences(db),
+  ]);
   if (jobs.length === 0) notFound();
   const name = mostCommon(jobs.flatMap((j) => (j.company ? [j.company] : []))) ?? key;
   const researched = await Promise.all(
@@ -73,6 +78,11 @@ async function Company({ params }: Pick<PageProps<"/companies/[key]">, "params">
                   {job.title ?? "Untitled job"}
                 </Link>
                 {job.location && <span className="text-muted-foreground"> · {job.location}</span>}
+                <JobChips
+                  {...jobChips(overviewChipInput(job), preferences)}
+                  compact
+                  className="my-1"
+                />
                 {(job.summary?.headline ?? job.triageReason) && (
                   <span className="block text-xs text-muted-foreground">
                     {job.summary?.headline ?? job.triageReason}

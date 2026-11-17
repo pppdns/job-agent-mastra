@@ -70,8 +70,29 @@ test("shows the listing's salary in the chat, the job list and the job page", as
     .getByRole("table", { name: "Jobs" })
     .getByRole("row")
     .filter({ has: page.locator(`a[href="${jobPath}"]`) });
-  await expect(row).toContainText(salary);
+  // The listing facts' pay chip (mock extractor), compact.
+  const chips = row.getByRole("list", { name: "At a glance" });
+  await expect(chips).toContainText("€70–80k");
 
-  await row.getByRole("link").click();
-  await expect(page.getByRole("main")).toContainText(salary);
+  await row.getByRole("link", { name: "Backend Engineer" }).click();
+  const glance = page.getByRole("region", { name: "At a glance (job)" });
+  await expect(glance).toContainText("€70–80k");
+  await glance.getByRole("button", { name: "From the listing" }).click();
+  await expect(glance).toContainText("EUR 70,000 – 80,000");
+});
+
+test("shows work mode and pay chips for a remote listing", async ({ page }) => {
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
+  await send(
+    page,
+    "Listing: Chip Check Developer at Quiverfield.\nFully remote, work from anywhere in the world.\nPay: USD 150,000 – 180,000 a year. We write TypeScript.",
+  );
+  const card = visible(page, '[aria-label="Saved assessment"]').last();
+  const jobPath = await card.getByRole("link", { name: "Open job" }).getAttribute("href");
+  await page.goto(jobPath ?? "/jobs");
+  const glance = page.getByRole("region", { name: "At a glance (job)" });
+  await expect(glance).toContainText("Remote · anywhere");
+  await expect(glance).toContainText("$150–180k");
+  await expect(glance).toContainText("TypeScript");
 });

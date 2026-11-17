@@ -31,6 +31,7 @@ export * from "./posting";
 export * from "./preferences";
 export * from "./profile";
 export * from "./remote-scope";
+export * from "./salary";
 export * from "./screening";
 export * from "./search-settings";
 export * from "./sentry";
