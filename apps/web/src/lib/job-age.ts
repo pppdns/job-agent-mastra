@@ -30,7 +30,7 @@ export function compactAge(date: Date, now: Date): string {
   return `${Math.floor(days / 365)}y`;
 }
 
-export type AgeTone = "success" | "muted" | "warning";
+export type AgeTone = "success" | "muted" | "warning" | "destructive";
 
 /** An age pill: what it shows, its color, the full dates, and the date it counts from. */
 export type Age = { label: string; short: string; tone: AgeTone; tooltip: string; date: Date };
@@ -74,39 +74,92 @@ export function jobAge(
   };
 }
 
-/** No reply this long after applying: worth a follow-up. */
-export const FOLLOW_UP_DAYS = 14;
+/** No progress this long: worth a follow-up (amber). */
+export const FOLLOW_UP_DAYS = 7;
+/** No progress this long: probably stuck (red). */
+export const STUCK_DAYS = 14;
 
-const STAGE_VERB: Partial<Record<JobStatus, string>> = {
-  applied: "Applied",
-  interviewing: "Interviews began",
-  offer: "Offer",
+/** What a job in progress needs from the user; null = nothing, progress is recent. */
+export type Attention = "follow_up" | "stuck";
+
+/** Time since the last progress, with what it means for the user. */
+export type ProgressAge = Age & { attention: Attention | null };
+
+type ProgressJob = Pick<
+  JobOverview,
+  "status" | "statusChangedAt" | "progressedAt" | "interviewRound" | "archivedAt"
+>;
+
+/** Per in-progress status: what the date marks, and what to do when it gets old. */
+const STAGE: Partial<Record<JobStatus, { verb: string; followUp: string; stuck: string }>> = {
+  shortlisted: {
+    verb: "Shortlisted",
+    followUp: "not applied yet: apply or drop it",
+    stuck: "still not applied: apply or drop it",
+  },
+  applied: {
+    verb: "Applied",
+    followUp: "no reply yet: consider following up",
+    stuck: "no reply for 2 weeks: follow up or let it go",
+  },
+  interviewing: {
+    verb: "Interviews began",
+    followUp: "no news since: consider following up",
+    stuck: "no news for 2 weeks: follow up",
+  },
+  offer: {
+    verb: "Offer",
+    followUp: "open for a week: decide or ask for time",
+    stuck: "open for 2 weeks: decide",
+  },
 };
 
 /**
- * Time in the current pipeline stage ("Applied 12d ago"), for tabs where the user waits on the
- * employer. An application with no change for `FOLLOW_UP_DAYS` is `warning`. Falls back to the
- * listing age for other statuses or without a status change time.
+ * Time since the job last progressed in the pipeline (a status change or a new interview round),
+ * for jobs in progress. Under `FOLLOW_UP_DAYS` it needs nothing (`muted`); then `follow_up`
+ * (`warning`), from `STUCK_DAYS` `stuck` (`destructive`). Null for other statuses, archived
+ * jobs, or without a change time.
  */
-export function stageAge(
-  job: Pick<
-    JobOverview,
-    "postedAt" | "postedBasis" | "createdAt" | "status" | "statusChangedAt" | "archivedAt"
-  >,
-  now: Date,
-): Age {
-  const listing = jobAge(job, now);
-  const verb = STAGE_VERB[job.status];
-  const since = job.statusChangedAt;
-  if (!verb || !since) return listing;
+export function progressAge(job: ProgressJob, now: Date): ProgressAge | null {
+  const stage = STAGE[job.status];
+  const since = job.progressedAt ?? job.statusChangedAt;
+  if (!stage || !since || job.archivedAt) return null;
+  // A later progress time than the status change while interviewing = a new round.
+  const newRound =
+    job.status === "interviewing" &&
+    job.interviewRound !== null &&
+    job.statusChangedAt !== null &&
+    since.getTime() > job.statusChangedAt.getTime();
+  const verb = newRound ? `Moved to round ${job.interviewRound}` : stage.verb;
   const age = compactAge(since, now);
   const days = (now.getTime() - since.getTime()) / DAY_MS;
-  const followUp = job.status === "applied" && !job.archivedAt && days >= FOLLOW_UP_DAYS;
+  const attention: Attention | null =
+    days >= STUCK_DAYS ? "stuck" : days >= FOLLOW_UP_DAYS ? "follow_up" : null;
+  const hint = attention === "stuck" ? stage.stuck : attention ? stage.followUp : null;
   return {
     label: age === "today" ? `${verb} today` : `${verb} ${age} ago`,
     short: age,
-    tone: followUp ? "warning" : "muted",
-    tooltip: `${verb} ${formatDay(since)}${followUp ? " · no change since: consider following up" : ""} · ${listing.tooltip}`,
+    tone: attention === "stuck" ? "destructive" : attention ? "warning" : "muted",
+    tooltip: `${verb} ${formatDay(since)}${hint ? ` · ${hint}` : ""}`,
     date: since,
+    attention,
   };
+}
+
+/** Tabs that show time in stage only use it for these statuses; others keep the listing age. */
+const STAGE_AGE_STATUSES: readonly JobStatus[] = ["applied", "interviewing", "offer"];
+
+/**
+ * Time in the current pipeline stage ("Applied 12d ago"), for tabs where the user waits on the
+ * employer: `progressAge` plus the listing's dates in the tooltip. Falls back to the listing age
+ * for other statuses, archived jobs, or without a change time.
+ */
+export function stageAge(
+  job: ProgressJob & Pick<JobOverview, "postedAt" | "postedBasis" | "createdAt">,
+  now: Date,
+): Age {
+  const listing = jobAge(job, now);
+  const progress = STAGE_AGE_STATUSES.includes(job.status) ? progressAge(job, now) : null;
+  if (!progress) return listing;
+  return { ...progress, tooltip: `${progress.tooltip} · ${listing.tooltip}` };
 }

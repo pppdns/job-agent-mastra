@@ -167,6 +167,13 @@ export type JobOverview = {
   location: string | null;
   status: JobStatus;
   statusChangedAt: Date | null;
+  /** Last pipeline progress: a status change or a new interview round. */
+  progressedAt: Date | null;
+  /** Current / next interview round and the total when known (set by the user). */
+  interviewRound: number | null;
+  interviewRounds: number | null;
+  /** The job has a note (the text itself is read on the job page). */
+  hasNotes: boolean;
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -246,6 +253,10 @@ export const overviewColumns = {
   location: jobs.location,
   status: jobs.status,
   statusChangedAt: jobs.statusChangedAt,
+  progressedAt: jobs.progressedAt,
+  interviewRound: jobs.interviewRound,
+  interviewRounds: jobs.interviewRounds,
+  hasNotes: sql<number>`("app_jobs"."notes" is not null)`,
   archivedAt: jobs.archivedAt,
   createdAt: jobs.createdAt,
   updatedAt: jobs.updatedAt,
@@ -271,7 +282,8 @@ export const overviewColumns = {
   postedBasis: sql<PostedBasis | null>`(select s.posted_basis from app_sources s ${sql.raw(DATED_LISTING_SOURCE)})`,
 };
 
-type OverviewRow = Omit<JobOverview, "postedAt" | "summary" | "profileStale"> & {
+type OverviewRow = Omit<JobOverview, "postedAt" | "summary" | "profileStale" | "hasNotes"> & {
+  hasNotes: number | boolean;
   draftAssessment: string | null;
   postedAtMs: number | null;
 };
@@ -283,6 +295,7 @@ export function toOverview(
 ): JobOverview {
   return {
     ...row,
+    hasNotes: Boolean(row.hasNotes),
     postedAt: postedAtMs === null ? null : new Date(postedAtMs),
     summary: summaryOf(draftAssessment),
     profileStale: row.draftProfileVersion !== null && row.draftProfileVersion !== profileVersion,

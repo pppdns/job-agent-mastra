@@ -1,4 +1,9 @@
-import { type DiscoverySource, JOB_STATUSES, type JobStatus } from "@copilot/shared";
+import {
+  type DiscoverySource,
+  JOB_STATUSES,
+  type JobStatus,
+  PIPELINE_STATUSES,
+} from "@copilot/shared";
 import { and, count, desc, eq, gte, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 import { type JobOverview, latestAssessmentSql, overviewColumns, toOverview } from "./assessments";
 import { getSearchSettings, visibleJobs } from "./discovery";
@@ -188,6 +193,20 @@ export async function assessedJobCounts(db: Db): Promise<{ active: number; stale
       ),
     );
   return { active: row?.active ?? 0, stale: row?.stale ?? 0 };
+}
+
+/**
+ * Jobs in progress for the board: not archived, status shortlisted / applied / interviewing /
+ * offer. Least recent progress first, so what needs a follow-up comes first.
+ */
+export async function listPipelineJobs(db: Db): Promise<JobOverview[]> {
+  const profileVersion = await currentProfileVersion(db);
+  const rows = await db
+    .select(overviewColumns)
+    .from(jobs)
+    .where(and(isNull(jobs.archivedAt), inArray(jobs.status, [...PIPELINE_STATUSES])))
+    .orderBy(sql`coalesce(${jobs.progressedAt}, ${jobs.statusChangedAt}, ${jobs.createdAt})`);
+  return rows.map((r) => toOverview(r, profileVersion));
 }
 
 /** Sets the same pipeline status on many jobs (bulk actions), like `setJobStatus` each. */

@@ -21,7 +21,9 @@ import {
   rescreenPostings,
   resetStaleTriage,
   saveSearchSettings,
+  setInterviewRounds,
   setJobArchived,
+  setJobNotes,
   setJobStatus,
   setJobsStatus,
 } from "@copilot/db";
@@ -32,6 +34,8 @@ import {
   type DiscoverySource,
   eligibilityFor,
   JOB_STATUSES,
+  MAX_INTERVIEW_ROUNDS,
+  MAX_JOB_NOTES_CHARS,
   RESCORE_BATCH_SIZES,
   RESEARCH_TOPICS,
   RETRIAGE_MAX_JOBS,
@@ -76,6 +80,46 @@ export async function setJobStatusAction(jobId: string, status: string): Promise
 export async function setJobArchivedAction(jobId: string, archived: boolean): Promise<void> {
   await setJobArchived(await appDb(), jobIdSchema.parse(jobId), z.boolean().parse(archived));
   refresh();
+}
+
+const roundSchema = z.number().int().min(1).max(MAX_INTERVIEW_ROUNDS);
+
+/** The current / next interview round and the total (null = unknown), set by the user. */
+export async function setInterviewRoundsAction(
+  jobId: string,
+  round: number,
+  total: number | null,
+): Promise<void> {
+  await setInterviewRounds(await appDb(), jobIdSchema.parse(jobId), {
+    round: roundSchema.parse(round),
+    total: roundSchema.nullable().parse(total),
+  });
+  refresh();
+}
+
+/**
+ * Saves the user's note on a job. `expectedUpdatedAtMs` is the note's save time the editor
+ * loaded; a note saved elsewhere since is never overwritten (`conflict`).
+ */
+export async function setJobNotesAction(
+  jobId: string,
+  notes: string,
+  expectedUpdatedAtMs: number | null,
+): Promise<{ status: "saved"; notesUpdatedAtMs: number | null } | { status: "conflict" }> {
+  const expected = z.number().int().nonnegative().nullable().parse(expectedUpdatedAtMs);
+  const result = await setJobNotes(
+    await appDb(),
+    jobIdSchema.parse(jobId),
+    z
+      .string()
+      .max(MAX_JOB_NOTES_CHARS + 1_000)
+      .parse(notes),
+    expected === null ? null : new Date(expected),
+  );
+  if (result.status === "not_found") throw new Error("Job not found");
+  if (result.status === "conflict") return result;
+  refresh();
+  return { status: "saved", notesUpdatedAtMs: result.notesUpdatedAt?.getTime() ?? null };
 }
 
 const decisionSchema = z.object({

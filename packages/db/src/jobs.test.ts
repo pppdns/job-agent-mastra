@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getJobDetail, listJobs } from "./assessments";
 import { createDb, type Db, migrateDb } from "./index";
+import { listPipelineJobs } from "./job-list";
 import {
   addSource,
   backfillAtsKeys,
@@ -13,7 +14,9 @@ import {
   findJobByUrl,
   latestListingSource,
   MAX_SNAPSHOT_CHARS,
+  setInterviewRounds,
   setJobArchived,
+  setJobNotes,
   setJobStatus,
   upsertJob,
 } from "./jobs";
@@ -314,6 +317,90 @@ describe("job status", () => {
     expect(overview).toMatchObject({ id: job.id, status: "dismissed" });
     expect(overview?.archivedAt).toBeInstanceOf(Date);
     expect(overview?.createdAt).toBeInstanceOf(Date);
+  });
+});
+
+describe("pipeline progress", () => {
+  it("stamps progress on status changes and starts interviews at round 1", async () => {
+    const { job } = await upsertJob(db, northwind);
+    const applied = await setJobStatus(db, job.id, "applied");
+    expect(applied?.progressedAt?.getTime()).toBe(applied?.statusChangedAt?.getTime());
+    expect(applied?.interviewRound).toBeNull();
+    const interviewing = await setJobStatus(db, job.id, "interviewing");
+    expect(interviewing?.interviewRound).toBe(1);
+    await setInterviewRounds(db, job.id, { round: 3, total: 4 });
+    await setJobStatus(db, job.id, "offer");
+    const back = await setJobStatus(db, job.id, "interviewing");
+    expect(back).toMatchObject({ interviewRound: 3, interviewRounds: 4 });
+  });
+
+  it("counts a new round as progress, a new total alone not", async () => {
+    const { job } = await upsertJob(db, northwind);
+    await setJobStatus(db, job.id, "interviewing");
+    const old = new Date("2026-01-01T00:00:00Z");
+    await db.update(jobs).set({ progressedAt: old }).where(eq(jobs.id, job.id));
+    const total = await setInterviewRounds(db, job.id, { round: 1, total: 5 });
+    expect(total?.interviewRounds).toBe(5);
+    expect(total?.progressedAt?.getTime()).toBe(old.getTime());
+    const next = await setInterviewRounds(db, job.id, { round: 2, total: 5 });
+    expect(next?.interviewRound).toBe(2);
+    expect(next?.progressedAt?.getTime()).toBeGreaterThan(old.getTime());
+  });
+
+  it("clamps the round to the total and rejects out-of-range numbers", async () => {
+    const { job } = await upsertJob(db, northwind);
+    expect(await setInterviewRounds(db, job.id, { round: 4, total: 2 })).toMatchObject({
+      interviewRound: 2,
+      interviewRounds: 2,
+    });
+    expect(await setInterviewRounds(db, job.id, { round: 6, total: null })).toMatchObject({
+      interviewRound: 6,
+      interviewRounds: null,
+    });
+    await expect(setInterviewRounds(db, job.id, { round: 0, total: null })).rejects.toThrow();
+    await expect(setInterviewRounds(db, job.id, { round: 1, total: 13 })).rejects.toThrow();
+    await expect(setInterviewRounds(db, job.id, { round: 1.5, total: null })).rejects.toThrow();
+    expect(await setInterviewRounds(db, "missing", { round: 1, total: null })).toBeUndefined();
+  });
+
+  it("lists in-progress jobs, least recent progress first", async () => {
+    const a = (await upsertJob(db, northwind)).job;
+    const b = (await upsertJob(db, { company: "Acme", title: "Staff Engineer" })).job;
+    const c = (await upsertJob(db, { company: "Globex", title: "Engineer" })).job;
+    await upsertJob(db, { company: "Initech", title: "Engineer" }); // new: not listed
+    await setJobStatus(db, a.id, "applied");
+    await setJobStatus(db, b.id, "shortlisted");
+    await setJobStatus(db, c.id, "offer");
+    await setJobArchived(db, c.id, true);
+    await db
+      .update(jobs)
+      .set({ progressedAt: new Date("2026-01-01T00:00:00Z") })
+      .where(eq(jobs.id, b.id));
+    const listed = await listPipelineJobs(db);
+    expect(listed.map((j) => j.id)).toEqual([b.id, a.id]);
+    expect(listed[0]).toMatchObject({ status: "shortlisted", hasNotes: false });
+  });
+});
+
+describe("job notes", () => {
+  it("saves, trims, clears, and flags notes in the list", async () => {
+    const { job } = await upsertJob(db, northwind);
+    const saved = await setJobNotes(db, job.id, "  Round 1: recruiter call\n", null);
+    expect(saved).toMatchObject({ status: "saved", notes: "Round 1: recruiter call" });
+    const [overview] = await listJobs(db);
+    expect(overview?.hasNotes).toBe(true);
+    const at = saved.status === "saved" ? saved.notesUpdatedAt : null;
+    const cleared = await setJobNotes(db, job.id, "   ", at);
+    expect(cleared).toMatchObject({ status: "saved", notes: null });
+    expect((await listJobs(db))[0]?.hasNotes).toBe(false);
+  });
+
+  it("refuses to overwrite a note saved elsewhere since the editor loaded it", async () => {
+    const { job } = await upsertJob(db, northwind);
+    await setJobNotes(db, job.id, "from the phone", null);
+    expect(await setJobNotes(db, job.id, "from the laptop", null)).toEqual({ status: "conflict" });
+    expect((await getJobDetail(db, job.id))?.job.notes).toBe("from the phone");
+    expect(await setJobNotes(db, "missing", "x", null)).toEqual({ status: "not_found" });
   });
 });
 

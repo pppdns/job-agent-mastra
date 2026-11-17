@@ -4,6 +4,8 @@ import {
   companyKey,
   type JobStatus,
   listingPostedDate,
+  MAX_INTERVIEW_ROUNDS,
+  MAX_JOB_NOTES_CHARS,
   normalizeText,
 } from "@copilot/shared";
 import { and, desc, eq, inArray, isNull, like, or, sql } from "drizzle-orm";
@@ -405,11 +407,83 @@ export function setJobStatus(db: Db, jobId: string, status: JobStatus): Promise<
       .set({
         status,
         statusChangedAt: now,
+        progressedAt: now,
         archivedAt: CLOSED_JOB_STATUSES.includes(status) ? (job.archivedAt ?? now) : null,
+        // Interviews start at round 1; rounds are kept when leaving, so going back restores them.
+        ...(status === "interviewing" && job.interviewRound === null && { interviewRound: 1 }),
       })
       .where(eq(jobs.id, jobId))
       .returning();
     return updated;
+  });
+}
+
+/**
+ * Sets the current / next interview round and the total (null = unknown). The round is clamped
+ * to the total; a new round counts as progress (`progressedAt`), a new total alone doesn't.
+ * Throws on out-of-range numbers; undefined for an unknown job.
+ */
+export async function setInterviewRounds(
+  db: Db,
+  jobId: string,
+  input: { round: number; total: number | null },
+): Promise<Job | undefined> {
+  const { total } = input;
+  const valid = (n: number) => Number.isInteger(n) && n >= 1 && n <= MAX_INTERVIEW_ROUNDS;
+  if (!valid(input.round) || (total !== null && !valid(total))) {
+    throw new RangeError(
+      `Interview rounds must be whole numbers from 1 to ${MAX_INTERVIEW_ROUNDS}`,
+    );
+  }
+  const round = total === null ? input.round : Math.min(input.round, total);
+  return serializeWrites(db, async () => {
+    const job = await db.query.jobs.findFirst({ where: eq(jobs.id, jobId) });
+    if (!job || (job.interviewRound === round && job.interviewRounds === total)) return job;
+    const [updated] = await db
+      .update(jobs)
+      .set({
+        interviewRound: round,
+        interviewRounds: total,
+        ...(job.interviewRound !== round && { progressedAt: new Date() }),
+      })
+      .where(eq(jobs.id, jobId))
+      .returning();
+    return updated;
+  });
+}
+
+export type SetJobNotesResult =
+  | { status: "saved"; notes: string | null; notesUpdatedAt: Date | null }
+  | { status: "conflict" }
+  | { status: "not_found" };
+
+/**
+ * Saves the user's note (trimmed; empty clears it). `expectedUpdatedAt` is the
+ * `notesUpdatedAt` the editor loaded: when the note was saved elsewhere since, nothing is
+ * written and the result is `conflict`.
+ */
+export async function setJobNotes(
+  db: Db,
+  jobId: string,
+  notes: string,
+  expectedUpdatedAt: Date | null,
+): Promise<SetJobNotesResult> {
+  const text = notes.trim() || null;
+  if (text && text.length > MAX_JOB_NOTES_CHARS) {
+    throw new RangeError(`Notes are limited to ${MAX_JOB_NOTES_CHARS} characters`);
+  }
+  return serializeWrites(db, async () => {
+    const job = await db.query.jobs.findFirst({ where: eq(jobs.id, jobId) });
+    if (!job) return { status: "not_found" };
+    if ((job.notesUpdatedAt?.getTime() ?? null) !== (expectedUpdatedAt?.getTime() ?? null)) {
+      return { status: "conflict" };
+    }
+    if (job.notes === text) {
+      return { status: "saved", notes: job.notes, notesUpdatedAt: job.notesUpdatedAt };
+    }
+    const now = new Date();
+    await db.update(jobs).set({ notes: text, notesUpdatedAt: now }).where(eq(jobs.id, jobId));
+    return { status: "saved", notes: text, notesUpdatedAt: now };
   });
 }
 
