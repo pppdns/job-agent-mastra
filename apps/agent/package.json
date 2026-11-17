@@ -8,6 +8,7 @@
     "typecheck": "tsc",
     "test": "vitest run",
     "eval": "vitest run --config vitest.eval.config.ts",
+    "listings:live": "vitest run --config vitest.listings.config.ts",
     "eval:studio": "DATABASE_URL=\"file:$(cd ../.. && pwd)/data/eval.db\" WEB_MODE=fixture TAVILY_API_KEY= FIRECRAWL_API_KEY= mastra dev"
   },
   "dependencies": {

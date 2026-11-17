@@ -30,14 +30,20 @@ describe("planProbe", () => {
       "https://boards-api.greenhouse.io/v1/boards/acme/jobs/4748844005",
     ],
     [
-      "https://boards.greenhouse.io/embed/job_app?for=acme&token=123456",
+      "https://boards.greenhouse.io/embed/job_app?for=Acme&token=123456",
       "greenhouse",
-      "https://boards-api.greenhouse.io/v1/boards/acme/jobs/123456",
+      "https://boards-api.greenhouse.io/v1/boards/Acme/jobs/123456",
     ],
     [
       "https://jobs.lever.co/acme/439684e2-2efd-4c48-aa24-5d54c633fd9f/apply",
       "lever",
       "https://api.lever.co/v0/postings/acme/439684e2-2efd-4c48-aa24-5d54c633fd9f",
+    ],
+    [
+      // Lever's API is case-sensitive: keep the company as the URL spells it.
+      "https://jobs.lever.co/Clearer/b4fde148-be5a-45bb-ad28-b12c0c60a5db",
+      "lever",
+      "https://api.lever.co/v0/postings/Clearer/b4fde148-be5a-45bb-ad28-b12c0c60a5db",
     ],
     [
       "https://jobs.eu.lever.co/acme/439684e2-2efd-4c48-aa24-5d54c633fd9f",
@@ -47,7 +53,7 @@ describe("planProbe", () => {
     [
       "https://jobs.ashbyhq.com/Acme/e9f8842c-3ed3-4b89-bd55-f59cff9773cb/application",
       "ashby",
-      "https://jobs.ashbyhq.com/acme/e9f8842c-3ed3-4b89-bd55-f59cff9773cb",
+      "https://jobs.ashbyhq.com/Acme/e9f8842c-3ed3-4b89-bd55-f59cff9773cb",
     ],
     [
       "https://jobs.workable.com/view/8WC5qCLvwaUSHdFMRt81Zd/remote-engineer?x=1",

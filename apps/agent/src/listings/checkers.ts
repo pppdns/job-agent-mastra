@@ -39,6 +39,19 @@ export type Classification = { verdict: Verdict; signal: string };
 export const linkedinGuestUrl = (id: string) =>
   `https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/${id}`;
 
+/** `lower` as the URL spells it (a path segment or query value), else `lower` itself. */
+function urlSpelling(url: URL, lower: string): string {
+  const candidates = [...url.pathname.split("/"), ...url.searchParams.values()];
+  for (const raw of candidates) {
+    let value = raw;
+    try {
+      value = decodeURIComponent(raw);
+    } catch {}
+    if (value.toLowerCase().trim() === lower) return value.trim();
+  }
+  return lower;
+}
+
 /** The check for a listing URL, or null when no verified rule covers its site. */
 export function planProbe(raw: string): ListingProbe | null {
   let url: URL;
@@ -60,7 +73,9 @@ export function planProbe(raw: string): ListingProbe | null {
   const ats = atsKey(href);
   if (ats) {
     const [kind, company, id] = ats.split(":") as [string, string, string];
-    const c = encodeURIComponent(company);
+    // atsKey lowercases the company, but Lever's API is case-sensitive ("clearer" 404s where
+    // "Clearer" is a live job): use the company as the URL spells it.
+    const c = encodeURIComponent(urlSpelling(url, company));
     if (kind === "greenhouse") {
       return {
         site: "greenhouse",
@@ -155,13 +170,27 @@ const MAX_BODY_CHARS = 2_000_000;
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36";
 
+const MAX_REDIRECTS = 3;
+
 export const probeFetch: ProbeFetch = async (url, signal) => {
   const timeout = AbortSignal.timeout(TIMEOUT_MS);
-  const response = await fetch(url, {
-    redirect: "manual",
-    headers: { "user-agent": USER_AGENT, accept: "text/html,application/json;q=0.9,*/*;q=0.5" },
-    signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-  });
+  let current = new URL(url);
+  let response: Response;
+  for (let hop = 0; ; hop++) {
+    response = await fetch(current, {
+      redirect: "manual",
+      headers: { "user-agent": USER_AGENT, accept: "text/html,application/json;q=0.9,*/*;q=0.5" },
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+    });
+    // Follow redirects on the same host only (Workable completes a cut-off URL slug); a
+    // redirect elsewhere stays a 3xx, which reads as unknown.
+    const location = response.headers.get("location");
+    if (response.status < 300 || response.status >= 400 || !location || hop >= MAX_REDIRECTS) break;
+    const next = new URL(location, current);
+    if (next.host !== current.host || next.protocol !== "https:") break;
+    await response.body?.cancel();
+    current = next;
+  }
   // Only the start of a page matters (LinkedIn's top card, a board's banner).
   const body = response.status === 200 || response.status === 410 ? await response.text() : "";
   return { status: response.status, body: body.slice(0, MAX_BODY_CHARS) };
