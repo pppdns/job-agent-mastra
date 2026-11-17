@@ -47,6 +47,26 @@ describe("assessmentSchema", () => {
     expect(assessmentSummary(withHeadline).headline).toBe("Gist");
   });
 
+  it("offers labelled hard conflicts, and labelled strengths / weaknesses with a quote, as chips", () => {
+    const point = (label: string | undefined, quote?: string) => ({
+      label,
+      text: `${label} text`,
+      evidence: "inference" as const,
+      quote,
+    });
+    const parsed = assessmentSchema.parse({
+      ...minimal,
+      hardConflicts: [point("On-site in Munich"), point(undefined)],
+      strengths: [point("Agent platform", "agents"), point("No quote")],
+      weaknesses: [point("Python only", "Python")],
+    });
+    expect(assessmentSummary(parsed).fitChips).toEqual([
+      { kind: "conflict", label: "On-site in Munich", quote: null },
+      { kind: "strength", label: "Agent platform", quote: "agents" },
+      { kind: "weakness", label: "Python only", quote: "Python" },
+    ]);
+  });
+
   it("hides a fit level unless the profile informed the assessment", () => {
     const parsed = assessmentSchema.parse({ ...minimal, fitLevel: "strong" });
     expect(assessmentSummary(parsed).fitLevel).toBeUndefined();

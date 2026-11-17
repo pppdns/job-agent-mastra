@@ -1,5 +1,6 @@
 import {
   type Eligibility,
+  type FitChip,
   formatPay,
   JOB_LEVEL_LABELS,
   type JobLevel,
@@ -41,6 +42,8 @@ export type JobChipInput = {
   /** Pay as the assessment states it (a fallback when the facts have none). */
   salaryText?: string | null;
   hardConflicts?: number;
+  /** Labelled assessment points (hard conflicts, quoted strengths and weaknesses). */
+  fitChips?: FitChip[];
 };
 
 export const LEVEL_TONE: Record<PreferenceLevel, ChipTone> = {
@@ -219,7 +222,28 @@ function levelChip(facts: ListingFacts | null, prefs: Preferences): Chip | null 
 function secondaryChips(job: JobChipInput, prefs: Preferences): Chip[] {
   const f = job.facts;
   const chips: Chip[] = [];
-  if (job.hardConflicts) {
+  const fit = job.fitChips ?? [];
+  const FIT_TONE: Record<FitChip["kind"], ChipTone> = {
+    conflict: "destructive",
+    strength: "success",
+    weakness: "warning",
+  };
+  const FIT_HINT: Record<FitChip["kind"], string> = {
+    conflict: "The assessment found this conflicts with a hard requirement.",
+    strength: "A strength the assessment found in the listing.",
+    weakness: "A weakness the assessment found in the listing.",
+  };
+  fit.forEach((c, i) => {
+    chips.push({
+      key: `fit-${c.kind}-${i}`,
+      label: short(c.label, 28),
+      tone: FIT_TONE[c.kind],
+      hint: FIT_HINT[c.kind],
+      quote: c.quote,
+    });
+  });
+  // Without labels (older assessments): just how many conflicts there are.
+  if (job.hardConflicts && !fit.some((c) => c.kind === "conflict")) {
     chips.push({
       key: "conflicts",
       label: `${job.hardConflicts} hard conflict${job.hardConflicts === 1 ? "" : "s"}`,
@@ -299,13 +323,14 @@ export const overviewChipInput = (job: {
   facts: ListingFacts | null;
   eligibility: Eligibility | null;
   eligibilityQuote: string | null;
-  summary: { salary?: string; counts: { hardConflicts: number } } | null;
+  summary: { salary?: string; counts: { hardConflicts: number }; fitChips?: FitChip[] } | null;
 }): JobChipInput => ({
   facts: job.facts,
   eligibility: job.eligibility,
   eligibilityQuote: job.eligibilityQuote,
   salaryText: job.summary?.salary,
   hardConflicts: job.summary?.counts.hardConflicts,
+  fitChips: job.summary?.fitChips,
 });
 
 /** The two chip lines of a job: always work mode and pay (and level when known); then extras. */

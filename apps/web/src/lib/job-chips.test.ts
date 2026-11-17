@@ -47,6 +47,28 @@ const chips = (
 ) => jobChips({ facts: f, eligibility, eligibilityQuote: "anywhere in the EU" }, prefs);
 
 describe("jobChips", () => {
+  it("shows labelled fit points: conflicts red, strengths green, weaknesses amber", () => {
+    const { secondary } = jobChips(
+      {
+        facts: facts(),
+        eligibility: "open",
+        eligibilityQuote: null,
+        hardConflicts: 1,
+        fitChips: [
+          { kind: "conflict", label: "On-site in Munich", quote: null },
+          { kind: "strength", label: "Agent platform", quote: "agents" },
+          { kind: "weakness", label: "Python only", quote: "Python" },
+        ],
+      },
+      prefs,
+    );
+    expect(secondary.map((c) => [c.label, c.tone])).toEqual([
+      ["On-site in Munich", "destructive"],
+      ["Agent platform", "success"],
+      ["Python only", "warning"],
+    ]);
+  });
+
   it("shows an open remote role green with its place, pay and level", () => {
     const { primary } = chips(
       facts({

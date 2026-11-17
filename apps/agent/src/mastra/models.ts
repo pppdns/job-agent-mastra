@@ -204,9 +204,17 @@ const MOCK_ASSESSMENT = (sourceId: string, salary?: string) => ({
   ...(salary && { salary }),
   fitBasis: "role_only",
   strengths: [
-    { text: "The listing text was provided.", evidence: "official", sourceIds: [sourceId] },
+    {
+      label: "Listing provided",
+      text: "The listing text was provided.",
+      evidence: "official",
+      sourceIds: [sourceId],
+      quote: "Listing",
+    },
   ],
-  weaknesses: [{ text: "Mock weakness: on-call is likely.", evidence: "inference" }],
+  weaknesses: [
+    { label: "On-call likely", text: "Mock weakness: on-call is likely.", evidence: "inference" },
+  ],
   unknowns: [{ question: "What is the salary?", whyItMatters: "Not stated." }],
   researchTopics: ["business", "business_health"],
   recommendation: { verdict: "investigate_further", rationale: "Mock rationale." },
