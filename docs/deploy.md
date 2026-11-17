@@ -35,7 +35,7 @@ No value is printed or written to disk. Running it again rotates the password an
 
 GitHub holds the repo secret `FLY_API_TOKEN`: a deploy token for this app only (`fly tokens create deploy`). An optional `SENTRY_AUTH_TOKEN` uploads source maps ([Sentry](#sentry)).
 
-Discovery: `pnpm fly:secrets` also copies `APIFY_API_KEY`, `HIMALAYAS_API_KEY`, `RESEND_API_KEY`, `DIGEST_FROM` and `DIGEST_TO` when they are set locally, and `APP_BASE_URL` in `fly.toml` points digest links here. The schedule (twice a day, `0 7,16 * * *` in `DISCOVERY_TZ`) runs on Fly once `DISCOVERY_SCHEDULE=on` is set there (`fly secrets set DISCOVERY_SCHEDULE=on`, or in `fly.toml` `[env]`): `discoveryScheduleEnabled()` allows it in the production image (`NODE_ENV=production`). Turn it off locally then (`DISCOVERY_SCHEDULE=off` in the main checkout's `apps/agent/.env`), or both machines run, bill and email against their own databases. Manual runs from `/discovery` always work.
+Discovery: `pnpm fly:secrets` also copies `APIFY_API_KEY`, `HIMALAYAS_API_KEY`, `RESEND_API_KEY`, `DIGEST_FROM` and `DIGEST_TO` when they are set locally, and `APP_BASE_URL` in `fly.toml` points digest links here. The schedule (twice a day, `0 7,16 * * *` in `DISCOVERY_TZ`) runs on Fly once `DISCOVERY_SCHEDULE=on` is set there (`fly secrets set DISCOVERY_SCHEDULE=on`, or in `fly.toml` `[env]`): `discoveryScheduleEnabled()` allows it in the production image (`NODE_ENV=production`). The same switch schedules the daily closed-listing check (`check-listings`, `30 6 * * *`). Turn both off locally then (`DISCOVERY_SCHEDULE=off` in the main checkout's `apps/agent/.env`), or both machines run, bill and email against their own databases. Manual runs from `/discovery` always work.
 
 ## Deploys
 

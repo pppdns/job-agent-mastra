@@ -339,6 +339,17 @@ flowchart LR
 - **Cost control:** runs are started by our code, with per-run caps and a 30-day budget check. Spend is recorded per source and run.
 - **Hidden jobs:** discovered jobs hidden by the screen, the triage threshold, or their location (eligibility closed or likely closed: decided by code from the listing facts' verified quotes and the home preference) are filtered by `visibleJobs` in `listJobs`; they show under "Screened out" with "Keep anyway". Chat tools and re-score therefore only see jobs worth showing.
 
+## Closed listings
+
+Every morning (06:30, before discovery) the `check-listings` workflow re-checks the links of shortlisted jobs and new jobs scored at least the digest threshold. Each site has one deterministic rule proven on real listings (LinkedIn's closed banner or a 404, ATS APIs answering 404, boards answering 410 with their expired text); anything else is "unknown" and changes nothing. A closed link dismisses the job only while it is still `new` or `shortlisted`, records why (shown on the job page), and the day's dismissals are emailed. Details: [apps/agent/src/listings/AGENTS.md](../apps/agent/src/listings/AGENTS.md).
+
+```mermaid
+flowchart LR
+  CRON["schedule 06:30"] --> SEL[shortlisted + new ≥ digest threshold] --> CHK{per-site rule}
+  CHK -->|closed| DIS[dismiss + archive<br/>if still new/shortlisted] --> MAIL["email: N jobs no longer available"]
+  CHK -->|open / unknown / no rule| KEEP[unchanged]
+```
+
 ## Durable runs: refresh, reconnect, stop
 
 Chat runs outlive the HTTP request. Closing the tab or refreshing never stops a run; Stop does.

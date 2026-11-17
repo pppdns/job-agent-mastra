@@ -37,9 +37,14 @@
       "note": "deleted: guest 404"
     },
     {
+      "url": "https://www.linkedin.com/jobs/view/4478322811/",
+      "expect": "closed",
+      "note": "No longer accepting applications on the guest page; the view page redirects with trk=expired_jd_redirect (browser-confirmed)"
+    },
+    {
       "url": "https://www.linkedin.com/jobs/view/4490725331/",
       "expect": "open",
-      "note": "trap: no Apply button on the logged-out page but live (browser-confirmed)"
+      "note": "trap: no Apply button on the logged-out page; LinkedIn still lists it although the employer's Ashby job below is gone (browser-confirmed)"
     },
     {
       "url": "https://www.linkedin.com/jobs/view/4491056601/",
@@ -87,6 +92,11 @@
       "url": "https://jobs.ashbyhq.com/Centralize/fdfc7439-4e87-4e4d-afc9-37ac29d9700f",
       "expect": "closed",
       "note": "page 404"
+    },
+    {
+      "url": "https://jobs.ashbyhq.com/elevenlabs/5f83c6ff-bc79-4199-ba59-6abab6d69567",
+      "expect": "closed",
+      "note": "page 404 and gone from the ElevenLabs board, while its LinkedIn copy (4490725331) still shows: the employer closes first"
     },
     {
       "url": "https://jobs.ashbyhq.com/bjakcareer/136b1e8e-e7cf-4157-8c8f-bb21ab88790b",
