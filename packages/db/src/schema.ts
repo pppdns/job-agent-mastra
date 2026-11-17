@@ -1,6 +1,7 @@
 import type {
   Assessment,
   EvidenceClass,
+  Preferences,
   ProfileFactKind,
   ResearchTopic,
   StoredLocationBlock,
@@ -136,6 +137,8 @@ export type ProfileChangePayload = {
       }
     | { op: "remove"; factId: string; before: { kind: ProfileFactKind; text: string } }
   )[];
+  /** A change of the structured preferences (edited on the profile page). */
+  preferences?: { before: Preferences; after: Preferences };
 };
 
 export const APPROVAL_KINDS = ["profile_change"] as const;
@@ -169,6 +172,8 @@ export const approvals = sqliteTable("app_approvals", {
 export const profileVersions = sqliteTable("app_profile_versions", {
   version: integer("version").primaryKey(),
   approvalId: text("approval_id").notNull().unique(),
+  /** Structured preferences as of this version (carried forward by fact-only changes). */
+  preferences: text("preferences", { mode: "json" }).$type<Preferences>(),
   createdAt: createdAt(),
 });
 

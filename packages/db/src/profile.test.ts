@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DEFAULT_PREFERENCES, preferencesSchema } from "@copilot/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getJobDetail, listJobs, saveDraft } from "./assessments";
 import { AssessmentError } from "./hash";
@@ -9,6 +10,7 @@ import { addSource, ftsQuery, searchJobIds, upsertJob } from "./jobs";
 import {
   currentProfile,
   decideApproval,
+  editPreferences,
   editProfile,
   pendingApprovalsForThread,
   profileHistory,
@@ -48,7 +50,7 @@ async function approvedFact(text: string, kind = "soft_preference") {
 
 describe("profile changes", () => {
   it("starts empty at version 0", async () => {
-    expect(await currentProfile(db)).toEqual({ version: 0, facts: [] });
+    expect(await currentProfile(db)).toMatchObject({ version: 0, facts: [] });
   });
 
   it("changes nothing until the user approves", async () => {
@@ -154,7 +156,7 @@ describe("profile changes", () => {
       ok: true,
       approval: { status: "rejected" },
     });
-    expect(await currentProfile(db)).toEqual({ version: 0, facts: [] });
+    expect(await currentProfile(db)).toMatchObject({ version: 0, facts: [] });
   });
 });
 
@@ -190,6 +192,47 @@ describe("profile page edits", () => {
   it("makes a pending chat proposal from before the edit stale", async () => {
     const { approval } = await propose([{ op: "add", kind: "soft_preference", text: "Remote" }]);
     await edit([{ op: "add", kind: "background", text: "Writes Go" }], 0);
+    expect(await decide(approval)).toMatchObject({ ok: false, error: "stale" });
+  });
+});
+
+describe("structured preferences", () => {
+  const prefs = preferencesSchema.parse({
+    home: { city: "Budapest", country: "Hungary" },
+    languages: [{ name: "TypeScript", level: "preferred" }],
+  });
+  const setPrefs = (preferences: unknown, baseVersion: number) =>
+    editPreferences(db, { threadId: "profile-page", baseVersion, preferences });
+
+  it("start at the defaults and save as a new version with a before/after diff", async () => {
+    expect((await currentProfile(db)).preferences).toEqual(DEFAULT_PREFERENCES);
+    const { version } = await setPrefs(prefs, 0);
+    expect(version).toBe(1);
+    expect((await currentProfile(db)).preferences).toEqual(prefs);
+    expect(await profileHistory(db)).toMatchObject([
+      {
+        version: 1,
+        change: { changes: [], preferences: { before: DEFAULT_PREFERENCES, after: prefs } },
+      },
+    ]);
+  });
+
+  it("carry forward when only facts change, and fact changes keep working", async () => {
+    await setPrefs(prefs, 0);
+    await approvedFact("Likes small teams");
+    expect(await currentProfile(db)).toMatchObject({ version: 2, preferences: prefs });
+  });
+
+  it("refuse invalid preferences, no change, and an outdated base version", async () => {
+    await expect(setPrefs({ salary: { floor: -1 } }, 0)).rejects.toThrow(/invalid preferences/);
+    await expect(setPrefs(DEFAULT_PREFERENCES, 0)).rejects.toThrow(/nothing changed/);
+    await setPrefs(prefs, 0);
+    await expect(setPrefs(DEFAULT_PREFERENCES, 0)).rejects.toThrow(/profile changed/);
+  });
+
+  it("make a pending chat proposal stale", async () => {
+    const { approval } = await propose([{ op: "add", kind: "soft_preference", text: "Remote" }]);
+    await setPrefs(prefs, 0);
     expect(await decide(approval)).toMatchObject({ ok: false, error: "stale" });
   });
 });

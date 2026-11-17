@@ -1,6 +1,7 @@
 "use client";
 
 import { DISCOVERY_SOURCE_LABELS, DISCOVERY_SOURCES, type SearchSettings } from "@copilot/shared";
+import Link from "next/link";
 import { useActionState } from "react";
 import { type DiscoveryActionState, saveSearchSettingsAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
@@ -130,22 +131,14 @@ export function SearchSettingsForm({ settings }: { settings: SearchSettings }) {
           values={settings.blockedCompanies}
           rows={2}
         />
-        <div className="grid gap-3 sm:grid-cols-2">
-          <ListField
-            name="remoteRegions"
-            label="Remote from"
-            hint="A remote role limited only to other countries is dropped. “Europe” covers European countries."
-            values={settings.remoteRegions}
-            rows={4}
-          />
-          <ListField
-            name="onsitePlaces"
-            label="On-site or hybrid in"
-            hint="A role the source marks as not remote is dropped elsewhere."
-            values={settings.onsitePlaces}
-            rows={4}
-          />
-        </div>
+        <p className="text-sm text-muted-foreground">
+          Where you live, where office work is fine and your pay bands are{" "}
+          <Link href="/profile" className="underline">
+            structured preferences on your profile
+          </Link>
+          . The screen drops remote roles limited to places that exclude your home, and on-site or
+          hybrid roles in places you ruled out.
+        </p>
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Max age (days)" hint="Older postings are dropped.">
             <Input
@@ -154,27 +147,6 @@ export function SearchSettingsForm({ settings }: { settings: SearchSettings }) {
               min={1}
               max={90}
               defaultValue={settings.maxAgeDays}
-            />
-          </Field>
-          <Field label="Minimum salary (yearly)" hint="Only applied when pay is stated.">
-            <Input
-              name="minSalaryAmount"
-              type="number"
-              min={0}
-              step={1000}
-              defaultValue={settings.minSalary?.amount ?? ""}
-              placeholder="none"
-            />
-          </Field>
-          <Field
-            label="Currency"
-            hint="EUR and USD pay are compared at a rough fixed rate; other currencies aren't."
-          >
-            <Input
-              name="minSalaryCurrency"
-              maxLength={3}
-              defaultValue={settings.minSalary?.currency ?? "EUR"}
-              className="uppercase"
             />
           </Field>
         </div>

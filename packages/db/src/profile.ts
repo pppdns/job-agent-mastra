@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { type ProfileProposal, profileProposalSchema } from "@copilot/shared";
+import {
+  type Preferences,
+  type ProfileProposal,
+  parsePreferences,
+  preferencesSchema,
+  profileProposalSchema,
+} from "@copilot/shared";
 import { and, asc, desc, eq, isNull, max, TransactionRollbackError } from "drizzle-orm";
 import { AssessmentError, hashPayload } from "./hash";
 import type { Db } from "./index";
@@ -21,18 +27,29 @@ export async function currentProfileVersion(db: Reader): Promise<number> {
   return row?.v ?? 0;
 }
 
-/** The approved profile: current facts and the version they belong to. */
+/** Structured preferences of the current version (defaults before any were saved). */
+export async function currentPreferences(db: Reader): Promise<Preferences> {
+  const [row] = await db
+    .select({ preferences: profileVersions.preferences })
+    .from(profileVersions)
+    .orderBy(desc(profileVersions.version))
+    .limit(1);
+  return parsePreferences(row?.preferences);
+}
+
+/** The approved profile: current facts, structured preferences and their version. */
 export async function currentProfile(
   db: Reader,
-): Promise<{ version: number; facts: ProfileFact[] }> {
-  const [version, facts] = await Promise.all([
+): Promise<{ version: number; facts: ProfileFact[]; preferences: Preferences }> {
+  const [version, facts, preferences] = await Promise.all([
     currentProfileVersion(db),
     db.query.profileFacts.findMany({
       where: isNull(profileFacts.supersededInVersion),
       orderBy: [asc(profileFacts.kind), asc(profileFacts.createdAt)],
     }),
+    currentPreferences(db),
   ]);
-  return { version, facts };
+  return { version, facts, preferences };
 }
 
 /**
@@ -160,31 +177,73 @@ export function editProfile(
     if (payload.baseVersion !== input.baseVersion) {
       throw new AssessmentError("the profile changed meanwhile; reload and edit again");
     }
-    const payloadHash = hashPayload(payload);
-    return db.transaction(async (tx) => {
-      const [approval] = await tx
-        .insert(approvals)
-        .values({
-          id: randomUUID(),
-          kind: "profile_change",
-          status: "approved",
-          threadId: input.threadId,
-          payload,
-          payloadHash,
-          idempotencyKey: `profile_edit:${randomUUID()}`,
-          resolvedAt: new Date(),
-        })
-        .returning();
-      if (!approval) throw new Error("approval insert returned no row");
-      const version = await applyProfileChange(tx, approval, payload);
-      if (version === null) throw new Error("profile moved inside the write lock");
-      const [final] = await tx
-        .update(approvals)
-        .set({ profileVersion: version })
-        .where(eq(approvals.id, approval.id))
-        .returning();
-      return { approval: final ?? approval, version };
+    return applyPageEdit(db, input.threadId, payload);
+  });
+}
+
+/**
+ * The user's edit of the structured preferences on the profile page: applied right away as a
+ * new profile version, like `editProfile`. Throws AssessmentError for invalid preferences, no
+ * change, or a profile that moved on since the page was loaded.
+ */
+export function editPreferences(
+  db: Db,
+  input: { threadId: string; preferences: unknown; baseVersion: number },
+): Promise<{ approval: Approval; version: number }> {
+  return serializeWrites(db, async () => {
+    const parsed = preferencesSchema.safeParse(input.preferences);
+    if (!parsed.success) {
+      throw new AssessmentError(`invalid preferences: ${parsed.error.issues[0]?.message}`);
+    }
+    const [baseVersion, before] = await Promise.all([
+      currentProfileVersion(db),
+      currentPreferences(db),
+    ]);
+    if (baseVersion !== input.baseVersion) {
+      throw new AssessmentError("the profile changed meanwhile; reload and edit again");
+    }
+    if (JSON.stringify(before) === JSON.stringify(parsed.data)) {
+      throw new AssessmentError("nothing changed");
+    }
+    return applyPageEdit(db, input.threadId, {
+      baseVersion,
+      reason: "Edited preferences on the profile page",
+      changes: [],
+      preferences: { before, after: parsed.data },
     });
+  });
+}
+
+/** Records a profile-page edit as an approved profile_change and applies it (inside the lock). */
+async function applyPageEdit(
+  db: Db,
+  threadId: string,
+  payload: ProfileChangePayload,
+): Promise<{ approval: Approval; version: number }> {
+  const payloadHash = hashPayload(payload);
+  return db.transaction(async (tx) => {
+    const [approval] = await tx
+      .insert(approvals)
+      .values({
+        id: randomUUID(),
+        kind: "profile_change",
+        status: "approved",
+        threadId,
+        payload,
+        payloadHash,
+        idempotencyKey: `profile_edit:${randomUUID()}`,
+        resolvedAt: new Date(),
+      })
+      .returning();
+    if (!approval) throw new Error("approval insert returned no row");
+    const version = await applyProfileChange(tx, approval, payload);
+    if (version === null) throw new Error("profile moved inside the write lock");
+    const [final] = await tx
+      .update(approvals)
+      .set({ profileVersion: version })
+      .where(eq(approvals.id, approval.id))
+      .returning();
+    return { approval: final ?? approval, version };
   });
 }
 
@@ -202,7 +261,8 @@ export async function applyProfileChange(
   const current = await currentProfileVersion(tx);
   if (current !== payload.baseVersion) return null;
   const version = current + 1;
-  await tx.insert(profileVersions).values({ version, approvalId: approval.id });
+  const preferences = payload.preferences?.after ?? (await currentPreferences(tx));
+  await tx.insert(profileVersions).values({ version, approvalId: approval.id, preferences });
   const [last] = await tx.select({ handle: max(profileFacts.handle) }).from(profileFacts);
   let nextHandle = (last?.handle ?? 0) + 1;
   for (const change of payload.changes) {
@@ -387,7 +447,7 @@ export async function pendingApprovalsForThread(db: Reader, threadId: string) {
   return rows.map((a) => ({
     id: a.id,
     kind: a.kind,
-    summary: `profile change: ${a.payload.changes
+    summary: `profile change: ${a.payload.preferences ? "structured preferences; " : ""}${a.payload.changes
       .map((c) => (c.op === "remove" ? `remove "${c.before.text}"` : `${c.op} "${c.text}"`))
       .join("; ")}`,
   }));

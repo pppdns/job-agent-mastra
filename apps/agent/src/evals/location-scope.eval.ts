@@ -31,6 +31,7 @@ const OUT = join(ROOT, "data/location-eval");
 const BUDGET = Number(process.env.EVAL_BUDGET_USD ?? 20);
 const LIMIT = Number(process.env.EVAL_LIMIT ?? 0) || Number.POSITIVE_INFINITY;
 const FAST = process.env.EVAL_FAST_MODEL ?? "anthropic/claude-haiku-5.5";
+const HOME = { city: "Budapest", country: "Hungary" };
 const LABELERS = ["anthropic/claude-opus-5.5", "openai/gpt-6.1-sol"] as const;
 const MAX_LISTING_CHARS = 12_000;
 const CONCURRENCY = 6;
@@ -232,17 +233,20 @@ export function decideFromFacts(facts: Extract, listing: string): Eligibility {
   const worldwide = facts.remoteScope === "worldwide" && ok(facts.scopeQuote);
   const stated = ok(facts.workModeQuote);
 
-  const residence = matchPlaces([...at("residence", "hiring_entity"), ...headerPlaces(listing)]);
+  const residence = matchPlaces(
+    [...at("residence", "hiring_entity"), ...headerPlaces(listing)],
+    HOME,
+  );
   if (residence === "covers") return "open";
   if (residence === "excludes") return worldwide ? "unclear" : "closed";
-  if (matchPlaces(at("citizenship")) === "excludes") return "closed";
+  if (matchPlaces(at("citizenship"), HOME) === "excludes") return "closed";
   if (worldwide) return "open";
 
   if (facts.workMode === "hybrid" || facts.workMode === "onsite") {
     const office = commute([...at("office"), ...at("listed")]);
     if (office === "covers") return "open";
     // A listed region that includes home ("Location: Europe / EMEA") outweighs hybrid boilerplate.
-    if (matchPlaces(at("listed")) === "covers") return "likely_open";
+    if (matchPlaces(at("listed"), HOME) === "covers") return "likely_open";
     const remoteOption = open.some((s) => s.kind === "remote_option");
     if (office === "excludes") return stated && !remoteOption ? "closed" : "likely_closed";
     return "unclear";
@@ -252,18 +256,24 @@ export function decideFromFacts(facts: Extract, listing: string): Eligibility {
   const flexible = open.some(
     (s) => s.kind === "location_flexible" || s.kind === "contractors_any_country",
   );
-  const listed = matchPlaces([...at("listed"), ...at("office")]);
+  const listed = matchPlaces([...at("listed"), ...at("office")], HOME);
   if (listed === "covers") return facts.workMode === "remote" ? "open" : "likely_open";
-  if (matchPlaces(at("work_authorization")) === "excludes") return "likely_closed";
+  if (matchPlaces(at("work_authorization"), HOME) === "excludes") return "likely_closed";
   if (commute(at("listed", "office")) === "covers") return "likely_open";
-  if (matchPlaces(at("timezone")) === "covers") return "likely_open";
+  if (matchPlaces(at("timezone"), HOME) === "covers") return "likely_open";
   if (listed === "excludes") return flexible ? "unclear" : "likely_closed";
-  if (matchPlaces(signals.map((s) => s.country)) === "excludes") return "likely_closed";
+  if (
+    matchPlaces(
+      signals.map((s) => s.country),
+      HOME,
+    ) === "excludes"
+  )
+    return "likely_closed";
   return open.length > 0 ? "likely_open" : "unclear";
 }
 
 function commute(places: string[]): PlaceMatch {
-  const results = places.map(matchCommute);
+  const results = places.map((p) => matchCommute(p, HOME));
   if (results.includes("covers")) return "covers";
   return results.includes("excludes") ? "excludes" : "unknown";
 }
@@ -273,7 +283,7 @@ export function decideByRegex(listing: string): Eligibility {
   const text = listing.replace(/\s+/g, " ");
   const header = text.match(/Remote: yes \(([^)]+)\)/i)?.[1];
   if (header) {
-    const m = matchPlaces([header]);
+    const m = matchPlaces([header], HOME);
     if (m !== "unknown") return m === "covers" ? "open" : "closed";
   }
   const capture = [
@@ -286,7 +296,7 @@ export function decideByRegex(listing: string): Eligibility {
   for (const re of capture) {
     const place = text.match(re)?.[1];
     if (!place) continue;
-    const m = matchPlaces([place.split(/[.;:]| who | and /)[0] ?? place]);
+    const m = matchPlaces([place.split(/[.;:]| who | and /)[0] ?? place], HOME);
     if (m === "excludes") return "closed";
     if (m === "covers") return "open";
   }

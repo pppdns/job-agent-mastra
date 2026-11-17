@@ -5,6 +5,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { ProfileDiff } from "@/components/approval-card";
 import { PageHeader } from "@/components/page-header";
+import { PreferencesEditor } from "@/components/preferences-editor";
 import { AddFactForm, FactRow } from "@/components/profile-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,10 @@ export default function ProfilePage() {
 async function Profile() {
   await connection(); // libsql is synchronous: keep these reads out of prerendering
   const db = await appDb();
-  const [{ version, facts }, history] = await Promise.all([currentProfile(db), profileHistory(db)]);
+  const [{ version, facts, preferences }, history] = await Promise.all([
+    currentProfile(db),
+    profileHistory(db),
+  ]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -51,6 +55,8 @@ async function Profile() {
             changes the copilot suggests in a chat apply after you approve them there.
           </p>
         </div>
+
+        <PreferencesEditor preferences={preferences} version={version} />
 
         {PROFILE_FACT_KINDS.map((kind) => {
           const items = facts.filter((f) => f.kind === kind);

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ApprovalView, DecisionError, ProfileChangePayload } from "@copilot/db";
-import { PROFILE_FACT_LABELS } from "@copilot/shared";
+import { PROFILE_FACT_LABELS, renderPreferences } from "@copilot/shared";
 import { CheckIcon } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 import { decideApprovalAction } from "@/app/actions";
@@ -112,8 +112,27 @@ export function ApprovalCard({
 
 /** The exact change, line by line: what is added, what it replaces, what is removed. */
 export function ProfileDiff({ payload }: { payload: ProfileChangePayload }) {
+  const prefs = payload.preferences;
+  const before = prefs ? renderPreferences(prefs.before) : [];
+  const after = prefs ? renderPreferences(prefs.after) : [];
   return (
     <ul className="w-full space-y-1.5 text-sm" aria-label="Proposed profile changes">
+      {before
+        .filter((line) => !after.includes(line))
+        .map((line) => (
+          <li key={`-${line}`} className="flex flex-wrap items-baseline gap-x-2">
+            <Badge variant="outline">Preference</Badge>
+            <span className="text-muted-foreground line-through">{line}</span>
+          </li>
+        ))}
+      {after
+        .filter((line) => !before.includes(line))
+        .map((line) => (
+          <li key={`+${line}`} className="flex flex-wrap items-baseline gap-x-2">
+            <Badge variant="secondary">Preference</Badge>
+            <span>{line}</span>
+          </li>
+        ))}
       {payload.changes.map((change, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: changes have no id and never reorder
         <li key={i} className="flex flex-wrap items-baseline gap-x-2">
