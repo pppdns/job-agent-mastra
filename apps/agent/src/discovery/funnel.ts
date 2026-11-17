@@ -15,7 +15,7 @@ import {
 } from "@copilot/db";
 import { DISCOVERY_SOURCES } from "@copilot/shared";
 import type { TracingContext } from "@mastra/core/observability";
-import { env } from "../env";
+import { emailConfig } from "../email";
 import { RunRecorder } from "../usage/recorder";
 import { assessTopMatches } from "./assess";
 import {
@@ -273,12 +273,7 @@ async function report(db: Db, runId: string, funnel: FunnelResult) {
       : 0;
   const digest = await sendDigest(
     httpJson,
-    {
-      apiKey: env.RESEND_API_KEY,
-      to: env.DIGEST_TO,
-      from: env.DIGEST_FROM,
-      baseUrl: env.APP_BASE_URL,
-    },
+    emailConfig(),
     matches,
     problems,
     lastDay.filter((r) => r.id !== runId),

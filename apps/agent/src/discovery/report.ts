@@ -1,5 +1,6 @@
 import type { DigestMatch, DiscoveryRun, FunnelResult, SourceState } from "@copilot/db";
 import { DISCOVERY_SOURCE_LABELS, triageBand } from "@copilot/shared";
+import { type Email, type EmailConfig, emailNotConfigured, escapeHtml, sendEmail } from "../email";
 import type { HttpJson } from "./sources/http";
 
 // The per-run email: the run's new matches, best first, with links into the app, plus anything
@@ -8,17 +9,10 @@ import type { HttpJson } from "./sources/http";
 // from job boards or our own error messages: the HTML escapes every value and links only to
 // the app's own pages.
 
-const RESEND_URL = "https://api.resend.com/emails";
 /** Most matches listed in one email (the rest are on the jobs page). */
 export const DIGEST_MAX_MATCHES = 20;
 
-const escapeHtml = (s: string) =>
-  s.replace(
-    /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c,
-  );
-
-export type Digest = { subject: string; text: string; html: string };
+export type Digest = Email;
 
 /** Don't repeat an alert for the same problems within this long. */
 export const ALERT_REPEAT_MS = 24 * 3_600_000;
@@ -198,12 +192,7 @@ export function buildDigest(
   return { subject, text, html };
 }
 
-export type DigestConfig = {
-  apiKey?: string;
-  to?: string;
-  from: string;
-  baseUrl: string;
-};
+export type DigestConfig = EmailConfig;
 
 /**
  * Sends the run's email: the digest when there are matches (with any problems on top), else a
@@ -233,31 +222,14 @@ export async function sendDigest(
   if (matches.length === 0 && alreadyAlerted(problems, recent)) {
     return { status: "skipped", message: why("same problems already emailed today"), ...base };
   }
-  if (!config.apiKey || !config.to) {
-    return {
-      status: "skipped",
-      message: why(
-        `email not configured (${config.apiKey ? "DIGEST_TO" : "RESEND_API_KEY"} is not set)`,
-      ),
-      ...base,
-    };
-  }
+  const notConfigured = emailNotConfigured(config);
+  if (notConfigured) return { status: "skipped", message: why(notConfigured), ...base };
   const alert = matches.length === 0;
   const email = alert
     ? buildAlert(messages, config.baseUrl, below)
     : buildDigest(matches, config.baseUrl, messages);
   try {
-    await http(new URL(RESEND_URL), {
-      method: "POST",
-      headers: { authorization: `Bearer ${config.apiKey}` },
-      body: {
-        from: config.from,
-        to: config.to.split(",").map((s) => s.trim()),
-        subject: email.subject,
-        text: email.text,
-        html: email.html,
-      },
-    });
+    await sendEmail(http, config, email);
     return {
       status: "sent",
       message: alert ? why(`alert sent to ${config.to}`) : `digest sent to ${config.to}`,
