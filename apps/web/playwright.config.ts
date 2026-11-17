@@ -24,7 +24,9 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [
-    { name: "main", testIgnore: /rescore\.spec\.ts/ },
+    // Sets the structured preferences every spec assumes, before any of them runs.
+    { name: "setup", testMatch: /setup\.spec\.ts/ },
+    { name: "main", testIgnore: [/rescore\.spec\.ts/, /setup\.spec\.ts/], dependencies: ["setup"] },
     // Re-scores every stale job in the shared database: runs after the other specs.
     { name: "rescore", testMatch: /rescore\.spec\.ts/, dependencies: ["main"] },
   ],

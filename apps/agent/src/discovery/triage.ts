@@ -38,17 +38,7 @@ type Profile = Awaited<ReturnType<typeof currentProfile>>;
 
 /** What the triager is told about the search itself (the profile describes the person). */
 export function criteriaSummary(settings: SearchSettings): string {
-  const pay = settings.minSalary
-    ? `Minimum pay: ${settings.minSalary.amount.toLocaleString("en-US")} ${settings.minSalary.currency} a year.`
-    : null;
-  return [
-    `Roles searched for: ${settings.queries.join("; ")}.`,
-    `Remote is fine from: ${settings.remoteRegions.join(", ") || "anywhere"}.`,
-    `On-site or hybrid is fine in: ${settings.onsitePlaces.join(", ") || "nowhere"}.`,
-    pay,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  return `Roles searched for: ${settings.queries.join("; ")}.`;
 }
 
 /** The triage prompt: stable parts first (marker, profile, criteria) so the prefix caches. */

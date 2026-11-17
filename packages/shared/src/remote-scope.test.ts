@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { matchCommute, matchPlace, matchPlaces } from "./remote-scope";
+import { type Home, matchCommute, matchPlace, matchPlaces } from "./remote-scope";
+
+const HOME: Home = { city: "Budapest", country: "Hungary" };
 
 describe("matchPlace", () => {
   it.each([
@@ -26,7 +28,7 @@ describe("matchPlace", () => {
     ["Western Europe", "excludes"],
     ["Springfield", "unknown"],
   ] as const)("%s → %s", (place, expected) => {
-    expect(matchPlace(place)).toBe(expected);
+    expect(matchPlace(place, HOME)).toBe(expected);
   });
 
   it.each([
@@ -37,12 +39,21 @@ describe("matchPlace", () => {
     ["Berlin, Germany", "excludes"],
     ["Springfield", "unknown"],
   ] as const)("commute %s → %s", (place, expected) => {
-    expect(matchCommute(place)).toBe(expected);
+    expect(matchCommute(place, HOME)).toBe(expected);
   });
 
   it("any covering place wins in a list", () => {
-    expect(matchPlaces(["United States", "Europe"])).toBe("covers");
-    expect(matchPlaces(["United States", "Canada"])).toBe("excludes");
-    expect(matchPlaces([])).toBe("unknown");
+    expect(matchPlaces(["United States", "Europe"], HOME)).toBe("covers");
+    expect(matchPlaces(["United States", "Canada"], HOME)).toBe("excludes");
+    expect(matchPlaces([], HOME)).toBe("unknown");
+  });
+
+  it("follows home", () => {
+    const austin: Home = { city: "Austin", country: "United States" };
+    expect(matchPlace("Remote (US only)", austin)).toBe("covers");
+    expect(matchPlace("EMEA", austin)).toBe("excludes");
+    expect(matchPlace("North America", austin)).toBe("covers");
+    expect(matchPlace("Berlin, Germany", { city: "Munich", country: "Germany" })).toBe("covers");
+    expect(matchPlace("CEE", { city: "Lisbon", country: "Portugal" })).toBe("excludes");
   });
 });

@@ -5,8 +5,11 @@ import {
   type ApprovalView,
   AssessmentError,
   countAwaitingTriage,
+  currentPreferences,
+  type Db,
   type DecisionError,
   decideApproval,
+  editPreferences,
   editProfile,
   getApprovalView,
   getSearchSettings,
@@ -119,6 +122,32 @@ export async function editProfileAction(
   }
   refresh();
   return {};
+}
+
+/**
+ * The user's edit of the structured preferences on the profile page: a new profile version,
+ * then recent postings are re-screened (the screen reads home and the work-mode places).
+ */
+export async function editPreferencesAction(
+  preferences: unknown,
+  baseVersion: number,
+): Promise<{ error?: string; message?: string }> {
+  const version = z.number().int().min(0).safeParse(baseVersion);
+  if (!version.success) return { error: "Invalid profile version." };
+  const db = await appDb();
+  try {
+    await editPreferences(db, {
+      threadId: PROFILE_PAGE_THREAD,
+      preferences,
+      baseVersion: version.data,
+    });
+  } catch (error) {
+    if (error instanceof AssessmentError) return { error: error.message };
+    throw error;
+  }
+  const message = await rescreenRecent(db);
+  refresh();
+  return { message: `Saved. ${message}` };
 }
 
 // "use server" files may only export async functions.
@@ -289,19 +318,12 @@ export async function saveSearchSettingsAction(
 ): Promise<DiscoveryActionState> {
   const db = await appDb();
   const current = await getSearchSettings(db);
-  const amount = formData.get("minSalaryAmount");
-  const currency = String(formData.get("minSalaryCurrency") ?? "")
-    .trim()
-    .toUpperCase();
   const parsed = searchSettingsSchema.safeParse({
     ...current,
     queries: lines(formData.get("queries")),
     titleExclude: lines(formData.get("titleExclude")),
     blockedCompanies: lines(formData.get("blockedCompanies")),
-    remoteRegions: lines(formData.get("remoteRegions")),
-    onsitePlaces: lines(formData.get("onsitePlaces")),
     maxAgeDays: numberOr(formData.get("maxAgeDays"), current.maxAgeDays),
-    minSalary: amount && currency ? { amount: Number(amount), currency } : null,
     triageThreshold: numberOr(formData.get("triageThreshold"), current.triageThreshold),
     digestThreshold: numberOr(formData.get("digestThreshold"), current.digestThreshold),
     maxAssessmentsPerRun: numberOr(
@@ -382,29 +404,39 @@ export async function saveSearchSettingsAction(
       message: `Not saved: ${issue?.path.join(".") || "settings"}: ${issue?.message}`,
     };
   }
-  const settings = parsed.data;
-  await saveSearchSettings(db, settings);
+  await saveSearchSettings(db, parsed.data);
+  const message = await rescreenRecent(db);
+  refresh();
+  return { ok: true, message: `Saved. ${message}` };
+}
+
+/**
+ * Re-screens recent postings with the current settings and preferences: newly passing ones
+ * become jobs, untouched discovered jobs that now fail are hidden. Age is judged as of when a
+ * posting arrived, with the backfill window of the run that brought it.
+ */
+async function rescreenRecent(db: Db): Promise<string> {
+  const [settings, preferences] = await Promise.all([
+    getSearchSettings(db),
+    currentPreferences(db),
+  ]);
   const result = await rescreenPostings(
     db,
     (posting, intake) =>
       screenPosting(
-        settings,
+        { ...settings, preferences },
         posting,
         intake.seenAt,
         Math.max(settings.maxAgeDays, intake.lookbackDays ?? 0),
       ),
     new Date(Date.now() - RESCREEN_DAYS * 86_400_000),
   );
-  refresh();
   const changes = [
     result.promoted && `${result.promoted} new job${result.promoted === 1 ? "" : "s"} let through`,
     result.hidden && `${result.hidden} hidden`,
     result.shown && `${result.shown} shown again`,
   ].filter(Boolean);
-  return {
-    ok: true,
-    message: `Saved. Re-screened ${result.checked} recent postings${changes.length ? `: ${changes.join(", ")}` : ", nothing changed"}.`,
-  };
+  return `Re-screened ${result.checked} recent postings${changes.length ? `: ${changes.join(", ")}` : ", nothing changed"}.`;
 }
 
 /** The user opened a discovered job: it no longer counts as a new match. */

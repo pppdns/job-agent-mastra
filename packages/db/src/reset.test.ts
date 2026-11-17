@@ -29,7 +29,7 @@ it("resetAppTables empties app tables, search included, and keeps other tables",
 
   await resetAppTables(db);
 
-  expect(await currentProfile(db)).toEqual({ version: 0, facts: [] });
+  expect(await currentProfile(db)).toMatchObject({ version: 0, facts: [] });
   expect(await searchJobIds(db, "acme")).toEqual([]);
   expect(await db.all(sql`select * from mastra_keep`)).toHaveLength(1);
   // Still usable afterwards.

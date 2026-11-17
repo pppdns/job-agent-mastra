@@ -1,4 +1,5 @@
 import {
+  currentPreferences,
   type Db,
   type DiscoveryTrigger,
   discoveryRunsSince,
@@ -95,11 +96,13 @@ export async function runDiscoverySources(
   const now = options.now ?? (() => new Date());
   const progress = options.progress ?? noProgress;
   const started = now();
-  const [settings, run, recent] = await Promise.all([
+  const [searchSettings, preferences, run, recent] = await Promise.all([
     getSearchSettings(db),
+    currentPreferences(db),
     getDiscoveryRun(db, runId),
     listDiscoveryRuns(db, 20),
   ]);
+  const settings = { ...searchSettings, preferences };
   const lookbackDays = run?.lookbackDays ?? null;
   const backfill = lookbackDays !== null;
   const maxAgeDays = Math.max(settings.maxAgeDays, lookbackDays ?? 0);

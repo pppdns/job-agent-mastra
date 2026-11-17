@@ -1,7 +1,8 @@
-import type { DiscoverySource, PostingInput, SearchSettings } from "@copilot/shared";
+import type { DiscoverySource, PostingInput, Preferences, SearchSettings } from "@copilot/shared";
 
 export type FetchContext = {
-  settings: SearchSettings;
+  /** Search settings plus the profile's structured preferences (the screen reads both). */
+  settings: SearchSettings & { preferences?: Preferences };
   /** Ask for postings published since this date. */
   since: Date;
   /** Set for a manual backfill: the source may read deeper and spend more. */

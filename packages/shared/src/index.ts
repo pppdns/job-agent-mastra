@@ -27,6 +27,7 @@ export * from "./job-status";
 export * from "./location-block";
 export * from "./posted-date";
 export * from "./posting";
+export * from "./preferences";
 export * from "./profile";
 export * from "./remote-scope";
 export * from "./screening";

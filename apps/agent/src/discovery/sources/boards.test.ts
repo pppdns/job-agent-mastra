@@ -1,4 +1,4 @@
-import { DEFAULT_SEARCH_SETTINGS, screenPosting } from "@copilot/shared";
+import { DEFAULT_SEARCH_SETTINGS, preferencesSchema, screenPosting } from "@copilot/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type FetchContext, SourceError } from "../types";
 import { createActorSource, windowFor } from "./actor-source";
@@ -26,8 +26,21 @@ import {
 // Synthetic items shaped like each actor's live output (field names from one tiny run each).
 
 const now = new Date("2026-11-10T12:00:00Z");
+/** Lives in Budapest; office work only there. */
+const BUDAPEST = {
+  ...DEFAULT_SEARCH_SETTINGS,
+  preferences: preferencesSchema.parse({
+    home: { city: "Budapest", country: "Hungary" },
+    workMode: {
+      hybrid: [{ place: "Budapest", level: "ok" }],
+      hybridElsewhere: "no",
+      onsiteElsewhere: "no",
+    },
+  }),
+};
+
 const context = (over: Partial<FetchContext> = {}): FetchContext => ({
-  settings: DEFAULT_SEARCH_SETTINGS,
+  settings: BUDAPEST,
   since: new Date("2026-11-09T11:00:00Z"),
   backfill: false,
   knownIds: [],
@@ -149,11 +162,15 @@ describe("YC Work at a Startup", () => {
     expect(agoDate("6 days", null)).toBeNull();
   });
 
-  it("screens an on-site role elsewhere out, a remote one from the UK through", () => {
+  it("screens out on-site roles elsewhere and remote ones limited to the US and the UK", () => {
     const remote = parseYcJob(ycItem);
     const onsite = parseYcJob({ ...ycItem, location: "San Francisco, CA, US" });
-    expect(remote && screenPosting(DEFAULT_SEARCH_SETTINGS, remote, now).pass).toBe(true);
-    expect(onsite && screenPosting(DEFAULT_SEARCH_SETTINGS, onsite, now).reasons).toEqual([
+    const anywhere = parseYcJob({ ...ycItem, location: "Remote (Worldwide)" });
+    expect(remote && screenPosting(BUDAPEST, remote, now).reasons).toEqual([
+      "remote only from United States, United Kingdom",
+    ]);
+    expect(anywhere && screenPosting(BUDAPEST, anywhere, now).pass).toBe(true);
+    expect(onsite && screenPosting(BUDAPEST, onsite, now).reasons).toEqual([
       "not remote, in San Francisco, CA, US",
     ]);
   });
@@ -392,10 +409,11 @@ describe("Company career sites", () => {
     // The same role listed once per office becomes one posting: an eligible office wins over an
     // earlier one the screen would drop.
     const india = { ...item, id: 1, ai_remote_location_derived: ["India"] };
+    const eu = { ...item, ai_remote_location_derived: ["European Union"] };
     const runner: ApifyRunner = async () => ({
       items: [
         india,
-        item,
+        eu,
         { ...item, id: 2, locations_derived: ["Berlin"] },
         { ...item, id: 3, title: "Other" },
       ],

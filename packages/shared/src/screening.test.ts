@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { companyKey, type PostingInput, postingSnapshot } from "./posting";
+import { preferencesSchema } from "./preferences";
 import { screenPosting } from "./screening";
 import {
   DEFAULT_SEARCH_SETTINGS,
@@ -37,6 +38,19 @@ const settings = (over: Partial<SearchSettings> = {}): SearchSettings => ({
   ...over,
 });
 
+/** Lives in Budapest; hybrid fine there, nowhere else. */
+const withPrefs = () => ({
+  ...settings(),
+  preferences: preferencesSchema.parse({
+    home: { city: "Budapest", country: "Hungary" },
+    workMode: {
+      hybrid: [{ place: "Budapest", level: "disliked" }],
+      hybridElsewhere: "no",
+      onsiteElsewhere: "no",
+    },
+  }),
+});
+
 describe("screenPosting", () => {
   it("passes titles that match none of the search queries (titles vary too much)", () => {
     for (const title of ["Product Engineer", "Member of Technical Staff", "Builder #3"]) {
@@ -49,8 +63,8 @@ describe("screenPosting", () => {
 
   it("passes unknowns: no salary, no date, remote status unknown, no location", () => {
     const result = screenPosting(
-      settings({ minSalary: { amount: 100_000, currency: "EUR" } }),
-      posting({ postedAt: null, remote: null, location: "Lisbon, Portugal" }),
+      withPrefs(),
+      posting({ postedAt: null, remote: null, location: "Lisbon, Portugal", salaryMax: 1 }),
       now,
     );
     expect(result.pass).toBe(true);
@@ -86,70 +100,56 @@ describe("screenPosting", () => {
     expect(screenPosting(settings(), old, now, 60).pass).toBe(true);
   });
 
-  it("applies the salary floor to stated pay in EUR or USD", () => {
-    const floor = settings({ minSalary: { amount: 90_000, currency: "EUR" } });
+  it("never screens on pay (a salary floor only colors chips)", () => {
     expect(
-      screenPosting(
-        floor,
-        posting({ salaryMax: 6_000, salaryCurrency: "EUR", salaryPeriod: "month" }),
-        now,
-      ).reasons,
-    ).toEqual(["pay tops out at 72,000 EUR/year"]);
-    expect(
-      screenPosting(
-        floor,
-        posting({ salaryMax: 8_000, salaryCurrency: "EUR", salaryPeriod: "month" }),
-        now,
-      ).pass,
+      screenPosting(withPrefs(), posting({ salaryMax: 10, salaryCurrency: "EUR" }), now).pass,
     ).toBe(true);
-    expect(
-      screenPosting(floor, posting({ salaryMax: 50_000, salaryCurrency: "USD" }), now).reasons,
-    ).toEqual(["pay tops out at 50,000 USD/year (about 43,500 EUR)"]);
-    // Within the cross-currency margin: 100k USD ≈ 87k EUR, kept for triage.
-    expect(
-      screenPosting(floor, posting({ salaryMax: 100_000, salaryCurrency: "usd" }), now).pass,
-    ).toBe(true);
-    // Other or missing currencies aren't compared.
-    expect(
-      screenPosting(floor, posting({ salaryMax: 50_000, salaryCurrency: "GBP" }), now).pass,
-    ).toBe(true);
-    expect(
-      screenPosting(floor, posting({ salaryMax: 50_000, salaryCurrency: null }), now).pass,
-    ).toBe(true);
-    const usdFloor = settings({ minSalary: { amount: 150_000, currency: "USD" } });
-    expect(
-      screenPosting(usdFloor, posting({ salaryMax: 100_000, salaryCurrency: "EUR" }), now).reasons,
-    ).toEqual(["pay tops out at 100,000 EUR/year (about 114,943 USD)"]);
   });
 
-  it("checks remote region restrictions against allowed regions, expanding Europe", () => {
-    const s = settings();
-    expect(screenPosting(s, posting({ remote: true, regions: ["Germany"] }), now).pass).toBe(true);
+  it("screens out remote roles whose region tags all exclude home", () => {
+    const s = withPrefs();
+    expect(screenPosting(s, posting({ remote: true, regions: ["Germany"] }), now).reasons).toEqual([
+      "remote only from Germany",
+    ]);
     expect(
       screenPosting(s, posting({ remote: true, regions: ["United States"] }), now).reasons,
     ).toEqual(["remote only from United States"]);
     expect(
       screenPosting(s, posting({ remote: true, regions: ["United States", "Europe"] }), now).pass,
     ).toBe(true);
-    const withUs = settings({ remoteRegions: ["Europe", "United States"] });
-    expect(screenPosting(withUs, posting({ remote: true, regions: ["USA"] }), now).pass).toBe(true);
+    expect(screenPosting(s, posting({ remote: true, regions: ["EMEA"] }), now).pass).toBe(true);
     expect(screenPosting(s, posting({ remote: true, regions: [] }), now).pass).toBe(true);
     expect(screenPosting(s, posting({ remote: true, regions: ["Worldwide"] }), now).pass).toBe(
       true,
     );
-    expect(
-      screenPosting(s, posting({ remote: true, regions: ["India", "Philippines"] }), now).reasons,
-    ).toEqual(["remote only from India, Philippines"]);
+    // Unknown tags pass on to triage.
+    expect(screenPosting(s, posting({ remote: true, regions: ["Springfield"] }), now).pass).toBe(
+      true,
+    );
   });
 
-  it("screens out non-remote roles outside the allowed places", () => {
-    const s = settings();
+  it("screens out non-remote roles where the preferences rule out office work", () => {
+    const s = withPrefs();
     expect(
       screenPosting(s, posting({ remote: false, location: "Budapest, Hungary" }), now).pass,
     ).toBe(true);
     expect(
+      screenPosting(s, posting({ remote: false, location: "Törökbálint, Pest, Hungary" }), now)
+        .pass,
+    ).toBe(true);
+    expect(
       screenPosting(s, posting({ remote: false, location: "Munich, Germany" }), now).reasons,
     ).toEqual(["not remote, in Munich, Germany"]);
+  });
+
+  it("doesn't screen places without preferences or a home", () => {
+    const s = settings();
+    expect(screenPosting(s, posting({ remote: true, regions: ["United States"] }), now).pass).toBe(
+      true,
+    );
+    expect(
+      screenPosting(s, posting({ remote: false, location: "Munich, Germany" }), now).pass,
+    ).toBe(true);
   });
 });
 

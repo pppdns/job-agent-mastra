@@ -1,5 +1,10 @@
 import { factHandle, type ProfileFact } from "@copilot/db";
-import { PROFILE_FACT_KINDS, PROFILE_FACT_LABELS } from "@copilot/shared";
+import {
+  PROFILE_FACT_KINDS,
+  PROFILE_FACT_LABELS,
+  type Preferences,
+  renderPreferences,
+} from "@copilot/shared";
 
 /**
  * The approved profile as injected into the system prompt each turn. It comes from the
@@ -8,11 +13,20 @@ import { PROFILE_FACT_KINDS, PROFILE_FACT_LABELS } from "@copilot/shared";
 export function formatProfile({
   version,
   facts,
+  preferences,
 }: {
   version: number;
   facts: ProfileFact[];
+  preferences?: Preferences;
 }): string {
-  if (facts.length === 0) {
+  const structured = preferences ? renderPreferences(preferences) : [];
+  const prefBlock = structured.length
+    ? [
+        "Structured preferences (set by the user on the profile page; the app colors and filters jobs by them, so apply them exactly; changes are made on /profile, not proposed in chat):",
+        ...structured.map((line) => `- ${line}`),
+      ]
+    : [];
+  if (facts.length === 0 && prefBlock.length === 0) {
     return `Approved profile (version ${version}): empty. The user has not approved any profile facts yet.`;
   }
   const sections = PROFILE_FACT_KINDS.flatMap((kind) => {
@@ -24,7 +38,7 @@ export function formatProfile({
           ...items.map((f) => `- [fact:${factHandle(f)}] ${f.text}`),
         ];
   });
-  return [`Approved profile (version ${version}):`, ...sections].join("\n");
+  return [`Approved profile (version ${version}):`, ...prefBlock, ...sections].join("\n");
 }
 
 /** Pending approvals of this chat, from the database (they survive compaction and restarts). */

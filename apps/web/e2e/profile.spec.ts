@@ -105,3 +105,21 @@ test("approved profile reaches new chats; local notes and assessments behave", a
   await page.getByRole("button", { name: /^History/ }).click();
   await expect(page.getByLabel("History")).toContainText("Added on the profile page");
 });
+
+test("structured preferences save as a profile version and show in history", async ({ page }) => {
+  await page.goto("/profile");
+  // Home stays as the setup spec set it: discovery may be screening in parallel.
+  const form = page.getByRole("form", { name: "Structured preferences" });
+  await form.getByRole("button", { name: "Add language" }).click();
+  await form.getByRole("textbox", { name: "Language 1" }).fill("TypeScript");
+  await form.getByLabel("Language 1 level").selectOption("preferred");
+  await expect(form.getByText("Unsaved changes")).toBeVisible();
+  await form.getByRole("button", { name: "Save preferences" }).click();
+  await expect(form.getByText(/^Saved\. Re-screened/)).toBeVisible();
+  await expect(form.getByText("Unsaved changes")).toHaveCount(0);
+
+  await page.reload();
+  await expect(form.getByRole("textbox", { name: "Language 1" })).toHaveValue("TypeScript");
+  await page.getByRole("button", { name: /^History/ }).click();
+  await expect(page.getByText("Main programming languages preferred: TypeScript.")).toBeVisible();
+});

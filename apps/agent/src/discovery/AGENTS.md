@@ -89,4 +89,5 @@ flowchart LR
   - **Mock model:** a prompt starting with `TRIAGE_MARKER` gets a deterministic triage (88 for "Founding", 35 for "intern", else 70), so e2e runs the whole funnel offline.
 - **Storage and screening** (`@copilot/db` `discovery.ts`, `@copilot/shared` `screening.ts`): see [packages/db/AGENTS.md](../../../../packages/db/AGENTS.md#discovery).
   - The screen is deliberately permissive: it never requires a title match, and unknown fields pass.
+  - Places come from the profile's structured preferences (`currentPreferences`, passed as `settings.preferences`): a remote posting is dropped only when every known region tag excludes home (`matchPlaces` in `@copilot/shared` `remote-scope.ts`), a non-remote one when its place has level `no`. Without a home nothing is screened by place. Pay is never screened (the salary bands only color chips).
   - Triage and assessment do the real filtering.

@@ -64,21 +64,8 @@ export const searchSettingsSchema = z.object({
   ]),
   /** Companies never shown (matched by company key, so legal suffixes don't matter). */
   blockedCompanies: phrases(200).default([]),
-  /**
-   * Where a remote role may be limited to: places the person can work from (board region tags
-   * say where the hire must live). A remote posting restricted only to other places is screened
-   * out; "Europe" / "European Union" also match European countries.
-   */
-  remoteRegions: phrases(50).default(["Worldwide", "Europe", "European Union"]),
-  /** Places where a non-remote role is fine (a non-remote posting elsewhere is screened out). */
-  onsitePlaces: phrases(50).default(["Budapest", "Hungary"]),
   /** Postings older than this are screened out (and the first run looks back this far). */
   maxAgeDays: z.number().int().min(1).max(90).default(14),
-  /** Screens out postings whose stated pay tops out below this (only when pay is stated). */
-  minSalary: z
-    .object({ amount: z.number().positive(), currency: z.string().trim().length(3) })
-    .nullable()
-    .default(null),
   /** Triage score (0–100) a job needs to be shown (and to count as a match). */
   triageThreshold: z.number().int().min(0).max(100).default(60),
   /** Triage score a job needs to be emailed in the digest (never below `triageThreshold`). */

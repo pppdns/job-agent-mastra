@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { findWorkspaceRoot } from "@copilot/db";
-import { DEFAULT_SEARCH_SETTINGS, screenPosting } from "@copilot/shared";
+import { DEFAULT_SEARCH_SETTINGS, preferencesSchema, screenPosting } from "@copilot/shared";
 import { describe, expect, it } from "vitest";
 import { regionList } from "../text";
 import { CooldownError, type FetchContext, SourceError } from "../types";
@@ -56,7 +56,7 @@ describe("regionList", () => {
     expect(regionList(null)).toEqual([]);
   });
 
-  it("lets North America and US states through for someone who allows the US", () => {
+  it("lets North America and US states through for someone who lives in the US", () => {
     const posting = {
       title: "Engineer",
       company: "X",
@@ -68,7 +68,10 @@ describe("regionList", () => {
       salaryPeriod: null,
       postedAt: null,
     };
-    const allowsUs = { ...DEFAULT_SEARCH_SETTINGS, remoteRegions: ["Europe", "United States"] };
+    const allowsUs = {
+      ...DEFAULT_SEARCH_SETTINGS,
+      preferences: preferencesSchema.parse({ home: { city: "Austin", country: "United States" } }),
+    };
     expect(screenPosting(allowsUs, posting).pass).toBe(true);
     expect(screenPosting(allowsUs, { ...posting, regions: ["California"] }).pass).toBe(true);
     expect(screenPosting(allowsUs, { ...posting, regions: ["Latin America"] }).reasons).toEqual([

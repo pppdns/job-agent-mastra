@@ -1,4 +1,5 @@
 import type { ProfileFact } from "@copilot/db";
+import { DEFAULT_PREFERENCES, preferencesSchema } from "@copilot/shared";
 import { describe, expect, it } from "vitest";
 import { formatProfile, profileLearningHint, THIN_PROFILE_FACTS } from "./profile-context";
 
@@ -16,6 +17,20 @@ const fact = (id: string, kind: ProfileFact["kind"], text: string) =>
   }) as ProfileFact;
 
 describe("formatProfile", () => {
+  it("renders structured preferences first, even without facts", () => {
+    const preferences = preferencesSchema.parse({
+      home: { city: "Budapest", country: "Hungary" },
+      languages: [{ name: "PHP", level: "no" }],
+    });
+    const text = formatProfile({ version: 3, facts: [], preferences });
+    expect(text).toContain("Structured preferences");
+    expect(text).toContain("- Lives in Budapest, Hungary (won't relocate).");
+    expect(text).toContain("- Main programming languages not acceptable (deal-breaker): PHP.");
+    expect(formatProfile({ version: 0, facts: [], preferences: DEFAULT_PREFERENCES })).toMatch(
+      /empty/,
+    );
+  });
+
   it("says the profile is empty", () => {
     expect(formatProfile({ version: 0, facts: [] })).toMatch(/version 0\): empty/);
   });

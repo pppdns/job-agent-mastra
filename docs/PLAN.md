@@ -231,6 +231,15 @@ Scheduled ingestion from job boards, reported as an inbox plus an email digest. 
 - [x] Verified live: copied local DB, restart persistence, Studio via proxy, auth redirects/401s ([verification](verification.md#flyio-deployment--password-login-2026-11-10)).
 - [x] Verified live: sign-in with the real password + chat turn (LinkedIn URL); deploy from the Action.
 
+### M20 — At-a-glance chips (agreed 2026-11-17)
+
+Goal: judge a job from the list at first glance. Chips must be trustworthy: each rests on a verbatim quote code verifies; unsure shows as "?" or not at all. Location is decided by approach C of `location-scope.eval.ts` (fast-model extraction, code decides; hold-out: 90% of closed jobs hidden at 95% precision, no open job hidden).
+
+- [x] PR 1 — Structured preferences on `/profile` (home, work mode per place, salary bands, languages, role focus, levels, travel; 4 levels preferred / ok / disliked / no), versioned with the profile, rendered into every prompt; the screen reads them (search settings lose regions, office places and the salary floor; pay is never screened)
+- [ ] PR 2 — Listing facts extraction + eligibility (replaces the triage location block; closed and likely closed are hidden with the quote), discovery `extract` step, chat ingestion, backfill run
+- [ ] PR 3 — Chips on the job list, job page ("At a glance"), company pages and the chat card
+- [ ] PR 4 — Short labels on assessment points; hard conflicts and verified strengths / weaknesses as chips
+
 ## Simplifications chosen (tell me if any is unacceptable)
 
 1. **Reconnect across agent-server restarts** would need Redis (shared event cache). Plan: in-process cache — browser refresh/reconnect works; after a server restart the run is marked interrupted with partial results kept, and you re-ask. Redis can be added later without redesign.
