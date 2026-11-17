@@ -22,7 +22,8 @@ import { RadarIcon, SearchIcon } from "lucide-react";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { FIT_TONE, FitMeter, TONE_FILL, TONES, VerdictIcon } from "@/components/assessment-visuals";
+import { AgePill } from "@/components/age-pill";
+import { FIT_TONE, FitMeter, TONE_FILL, VerdictIcon } from "@/components/assessment-visuals";
 import { JobChips } from "@/components/job-chips";
 import { JobFilters } from "@/components/job-filters";
 import { BulkBar, JobSelection, RowCheckbox, SelectAllCheckbox } from "@/components/job-selection";
@@ -42,8 +43,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { type Age, jobAge, stageAge } from "@/lib/job-age";
+import { ViewToggle } from "@/components/view-toggle";
+import { jobAge, stageAge } from "@/lib/job-age";
 import { jobChips, overviewChipInput } from "@/lib/job-chips";
 import { fitMatters, quietStatus, showsStageAge } from "@/lib/job-emphasis";
 import {
@@ -71,6 +72,7 @@ export default function JobsPage({ searchParams }: PageProps<"/jobs">) {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader>
         <h1 className="text-sm font-semibold">Jobs</h1>
+        <ViewToggle current="list" />
         <Button asChild size="sm" variant="ghost" className="ml-auto">
           <Link href="/discovery">
             <RadarIcon />
@@ -613,39 +615,6 @@ function JobRow({
         />
       </TableCell>
     </TableRow>
-  );
-}
-
-/** The listing's age or time in stage (`jobAge` / `stageAge`), tinted by what it means. */
-function AgePill({
-  age: { label, short, tone, tooltip, date },
-  compact,
-  className,
-}: {
-  age: Age;
-  /** "~3w" instead of "Posted ~3w ago" (narrow screens). */
-  compact?: boolean;
-  className?: string;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        {/* A button so keyboard users can open the tooltip with the full dates. */}
-        <button
-          type="button"
-          className={cn(
-            "relative z-10 inline-flex items-center rounded-full border font-medium whitespace-nowrap tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-            compact ? "h-4 px-1.5 text-[11px]" : "px-2 py-0.5 text-xs",
-            TONES[tone],
-            className,
-          )}
-        >
-          <time dateTime={date.toISOString()}>{compact ? short : label}</time>
-          <span className="sr-only">. {tooltip}</span>
-        </button>
-      </TooltipTrigger>
-      <TooltipContent>{tooltip}</TooltipContent>
-    </Tooltip>
   );
 }
 
