@@ -1,4 +1,10 @@
-import { currentPreferences, getJobDetail, type Job, jobPostings } from "@copilot/db";
+import {
+  currentPreferences,
+  getJobDetail,
+  type Job,
+  jobPostings,
+  latestListingSource,
+} from "@copilot/db";
 import {
   assessmentSummary,
   DISCOVERY_SOURCE_LABELS,
@@ -30,6 +36,7 @@ import { ChipEvidence, JobChips } from "@/components/job-chips";
 import { JobNotes } from "@/components/job-notes";
 import { JobStatusMenu } from "@/components/job-status-menu";
 import { AssessButton } from "@/components/keep-buttons";
+import { ListingDocument } from "@/components/listing-document";
 import { MarkSeen } from "@/components/mark-seen";
 import { PageHeader } from "@/components/page-header";
 import { ResearchJobButtons } from "@/components/research-job-buttons";
@@ -85,9 +92,10 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
   const db = await appDb();
   const detail = await getJobDetail(db, jobId);
   if (!detail) notFound();
-  const [postings, preferences] = await Promise.all([
+  const [postings, preferences, listing] = await Promise.all([
     jobPostings(db, jobId),
     currentPreferences(db),
+    latestListingSource(db, jobId),
   ]);
   const { job, sources, draft, history, profileVersion, profileStale, claims, posted } = detail;
   const links = listingLinks(
@@ -339,6 +347,8 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
           })}
         </ul>
       </section>
+
+      {listing && <ListingDocument source={listing} label={SOURCE_LABELS[listing.kind]} />}
     </div>
   );
 }
