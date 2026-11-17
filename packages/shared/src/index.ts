@@ -28,6 +28,7 @@ export * from "./location-block";
 export * from "./posted-date";
 export * from "./posting";
 export * from "./profile";
+export * from "./remote-scope";
 export * from "./screening";
 export * from "./search-settings";
 export * from "./sentry";
