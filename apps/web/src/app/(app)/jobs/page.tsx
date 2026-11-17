@@ -293,13 +293,11 @@ async function ScreenedOut({ params }: { params: JobListParams }) {
                   <span className="text-muted-foreground">
                     {[job.company, job.location].filter(Boolean).join(" · ")}
                   </span>
-                  {(job.screenReasons ?? job.locationBlock ?? job.triageReason) && (
+                  {(job.screenReasons ?? hiddenByLocation(job) ?? job.triageReason) && (
                     <span className="block text-xs text-muted-foreground">
                       {job.screenReasons
                         ? `Screened out: ${job.screenReasons.join("; ")}`
-                        : job.locationBlock
-                          ? `Excluded: ${locationBlockReason(job.locationBlock)}`
-                          : job.triageReason}
+                        : (hiddenByLocation(job) ?? job.triageReason)}
                     </span>
                   )}
                 </span>
@@ -639,6 +637,21 @@ function AgePill({
       <TooltipContent>{tooltip}</TooltipContent>
     </Tooltip>
   );
+}
+
+/** Why the list hides a job for its location, with the listing's words (null: it doesn't). */
+function hiddenByLocation(job: JobOverview): string | null {
+  const quote = (q: string | null) =>
+    q ? `: “${q.length > 120 ? `${q.slice(0, 119)}…` : q}”` : "";
+  if (job.eligibility === "closed")
+    return `Not open from where you live${quote(job.eligibilityQuote)}`;
+  if (job.eligibility === "likely_closed") {
+    return `Probably not open from where you live${quote(job.eligibilityQuote)}`;
+  }
+  if (job.eligibility === null && job.locationBlock) {
+    return `Excluded: ${locationBlockReason(job.locationBlock)}`;
+  }
+  return null;
 }
 
 /** Only states that need attention: a changed profile. */

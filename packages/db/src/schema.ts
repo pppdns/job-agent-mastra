@@ -1,6 +1,7 @@
 import type {
   Assessment,
   EvidenceClass,
+  ListingFacts,
   Preferences,
   ProfileFactKind,
   ResearchTopic,
@@ -8,6 +9,7 @@ import type {
 } from "@copilot/shared";
 import {
   DISCOVERY_SOURCES,
+  ELIGIBILITY,
   JOB_STATUSES,
   POSTED_BASES,
   PROFILE_FACT_KINDS,
@@ -60,6 +62,17 @@ export const jobs = sqliteTable(
      * triage or the latest assessment; hides a discovered job the user hasn't acted on or kept.
      */
     locationBlock: text("location_block", { mode: "json" }).$type<StoredLocationBlock>(),
+    /** Verified listing facts (`ListingFacts`) and the extractor version; null = not extracted. */
+    facts: text("facts", { mode: "json" }).$type<ListingFacts>(),
+    factsVersion: integer("facts_version"),
+    extractedAt: integer("extracted_at", { mode: "timestamp_ms" }),
+    /**
+     * Whether the person may work on the job from home, decided by code from `facts` and the
+     * home preference (`decideEligibility`); null = no facts or no home yet. closed and
+     * likely_closed hide a discovered job the user hasn't acted on or kept.
+     */
+    eligibility: text("eligibility", { enum: ELIGIBILITY }),
+    eligibilityQuote: text("eligibility_quote"),
     /** The user kept a job the screen or triage would hide. */
     keptAt: integer("kept_at", { mode: "timestamp_ms" }),
     /** When the user first opened a discovered job (null = unseen). */
@@ -71,6 +84,7 @@ export const jobs = sqliteTable(
     index("app_jobs_dedupe_key_idx").on(t.dedupeKey),
     index("app_jobs_archived_status_idx").on(t.archivedAt, t.status),
     index("app_jobs_company_key_idx").on(t.companyKey),
+    index("app_jobs_eligibility_idx").on(t.eligibility),
   ],
 );
 
@@ -270,8 +284,11 @@ export const searchSettings = sqliteTable("app_search_settings", {
 });
 
 export const DISCOVERY_RUN_STATUSES = ["running", "completed", "failed", "interrupted"] as const;
-/** `triage` and `assess` are manual runs that skip fetching (from /discovery). */
-export const DISCOVERY_TRIGGERS = ["schedule", "manual", "triage", "assess"] as const;
+/**
+ * `triage`, `assess` and `extract` are manual runs that skip fetching (from /discovery);
+ * `extract` only extracts listing facts (the backfill).
+ */
+export const DISCOVERY_TRIGGERS = ["schedule", "manual", "triage", "assess", "extract"] as const;
 export const SOURCE_RUN_STATUSES = ["ok", "partial", "failed", "skipped"] as const;
 
 /** What one source did in one run (stored as JSON on the run). */
@@ -332,6 +349,11 @@ export type RawItem = typeof rawItems.$inferSelect;
 
 /** What a run did after fetching: triage, full assessments of the best matches, the digest. */
 export type FunnelResult = {
+  /** Jobs whose listing facts this run extracted, failed, and still waiting (older runs: absent). */
+  extracted?: number;
+  extractFailed?: number;
+  extractPending?: number;
+  extractErrors?: string[];
   /** Jobs triaged in this run (new ones and ones left over from earlier runs). */
   triaged: number;
   triageFailed: number;
@@ -362,7 +384,7 @@ export type FunnelResult = {
   };
 };
 
-export const DISCOVERY_STEPS = ["fetch", "triage", "assess", "report"] as const;
+export const DISCOVERY_STEPS = ["fetch", "extract", "triage", "assess", "report"] as const;
 export type DiscoveryStep = (typeof DISCOVERY_STEPS)[number];
 
 /** Where a running discovery run is right now (cleared when it ends). Dates are ISO strings. */

@@ -1,11 +1,20 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DEFAULT_SEARCH_SETTINGS, type PostingInput, screenPosting } from "@copilot/shared";
+import {
+  DEFAULT_SEARCH_SETTINGS,
+  type Eligibility,
+  type EligibilityDecision,
+  FACTS_VERSION,
+  type ListingFacts,
+  type PostingInput,
+  screenPosting,
+} from "@copilot/shared";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { listJobs, saveDraft } from "./assessments";
 import {
+  countAwaitingTriage,
   digestMatches,
   jobsAwaitingTriage,
   jobsToAssess,
@@ -15,6 +24,12 @@ import {
   startDiscoveryRun,
   unseenMatchCount,
 } from "./discovery";
+import {
+  countAwaitingExtraction,
+  jobsAwaitingExtraction,
+  rederiveEligibility,
+  saveFacts,
+} from "./facts";
 import { createDb, type Db, migrateDb } from "./index";
 import {
   assessedJobCounts,
@@ -31,7 +46,7 @@ import {
 } from "./job-list";
 import { addSource, setJobStatus, upsertJob } from "./jobs";
 import { decideApproval, proposeProfileChange } from "./profile";
-import { jobs, postings, sources } from "./schema";
+import { jobs, postings } from "./schema";
 
 let db: Db;
 let runId: string;
@@ -235,119 +250,84 @@ describe("subqueries in select fields", () => {
   });
 });
 
-describe("location blocks", () => {
+describe("location eligibility", () => {
   const US_ONLY = "US-only: you must reside in the United States.";
-  const block = { places: ["United States"], quote: "you must reside in the United States" };
-
-  async function assess(jobId: string, over: Record<string, unknown> = {}) {
-    const [source] = await db.select().from(sources).where(eq(sources.jobId, jobId));
-    return saveDraft(db, {
-      jobId,
-      assessment: {
-        overview: "Remote role, US residents only.",
-        fitBasis: "role_only",
-        hardConflicts: [
-          { text: "US residents only", evidence: "official", sourceIds: [source?.id ?? ""] },
-        ],
-        recommendation: { verdict: "pass", rationale: "Excludes where you live." },
-        locationBlock: block,
-        ...over,
-      },
-    });
-  }
-
-  it("hides a discovered job an assessment blocks, until it is kept or a new draft clears it", async () => {
-    const id = await discovered("a", 80, { description: US_ONLY });
-    await assess(id);
-    expect(await listJobs(db)).toEqual([]);
-    const below = await belowThresholdJobs(db, { limit: 10 });
-    expect(below.jobs.map((j) => [j.id, j.locationBlock?.from])).toEqual([[id, "assessment"]]);
-    expect((await jobTabCounts(db, {})).active).toBe(0);
-
-    await assess(id, {
-      locationBlock: null,
-      recommendation: { verdict: "consider", rationale: "ok" },
-    });
-    expect((await listJobs(db)).map((j) => j.id)).toEqual([id]);
-
-    await assess(id);
-    await keepJob(db, id);
-    expect((await listJobs(db)).map((j) => j.id)).toEqual([id]);
+  const facts = (): ListingFacts => ({
+    workMode: "remote",
+    workModeQuote: null,
+    remoteScope: "restricted",
+    scopeQuote: null,
+    places: [],
+    signals: [],
+    openSignals: [],
+    officeDays: null,
+    salary: null,
+    level: null,
+    languages: [],
+    roleFocus: [],
+    travel: null,
+    employmentType: null,
+    timezone: null,
+    headerPlaces: [],
+    levelFrom: null,
   });
+  const decide = (eligibility: Eligibility, quote: string | null = US_ONLY) =>
+    ({ eligibility, quote }) satisfies EligibilityDecision;
+  const setEligibility = (jobId: string, eligibility: Eligibility | null) =>
+    saveFacts(db, jobId, {
+      facts: facts(),
+      version: FACTS_VERSION,
+      decision: eligibility ? decide(eligibility) : null,
+    });
 
-  it("rejects a block whose quote isn't in the listing or that isn't a hard pass", async () => {
-    const id = await discovered("a", 80, { description: US_ONLY });
-    await expect(
-      assess(id, { locationBlock: { places: ["United Kingdom"], quote: "UK residents only" } }),
-    ).rejects.toThrow(/not in this job's listing/);
-    await expect(
-      assess(id, { recommendation: { verdict: "investigate_further", rationale: "?" } }),
-    ).rejects.toThrow(/verdict pass/);
-    await expect(assess(id, { hardConflicts: [] })).rejects.toThrow(/hard conflict/);
+  it("hides closed and likely closed discovered jobs until kept, and lists why", async () => {
+    const closed = await discovered("a", 80, { description: US_ONLY });
+    const likely = await discovered("b", 80);
+    const open = await discovered("c", 80);
+    await setEligibility(closed, "closed");
+    await setEligibility(likely, "likely_closed");
+    await setEligibility(open, "unclear");
+    expect((await listJobs(db)).map((j) => j.id)).toEqual([open]);
+    expect((await jobTabCounts(db, {})).active).toBe(1);
+    const below = await belowThresholdJobs(db, { limit: 10 });
+    expect(below.jobs.map((j) => [j.id, j.eligibility, j.eligibilityQuote]).sort()).toEqual(
+      [
+        [closed, "closed", US_ONLY],
+        [likely, "likely_closed", US_ONLY],
+      ].sort(),
+    );
+    await keepJob(db, closed);
+    expect((await listJobs(db)).map((j) => j.id).sort()).toEqual([closed, open].sort());
   });
 
   it("keeps chat jobs and jobs the user acted on visible", async () => {
     const { job } = await upsertJob(db, { company: "Contoso", title: "SRE" });
     await addSource(db, { jobId: job.id, kind: "pasted", provider: "user", content: US_ONLY });
-    await assess(job.id);
-    const acted = await discovered("b", 80, { description: US_ONLY });
-    await assess(acted);
+    await setEligibility(job.id, "closed");
+    const acted = await discovered("b", 80);
+    await setEligibility(acted, "closed");
     await setJobStatus(db, acted, "shortlisted");
     expect((await listJobs(db)).map((j) => j.id).sort()).toEqual([job.id, acted].sort());
   });
 
-  it("re-triage clears a triage block but keeps an assessment's", async () => {
-    const fromTriage = await discovered("a", null, { description: US_ONLY });
-    await saveTriage(db, fromTriage, {
-      score: 39,
-      reason: "r",
-      profileVersion: 0,
-      locationBlock: block,
-    });
-    const fromDraft = await discovered("b", 80, { description: US_ONLY });
-    await assess(fromDraft);
-    await saveTriage(db, fromDraft, { score: 80, reason: "r", profileVersion: 0 });
-    const blocks = async () =>
-      Object.fromEntries(
-        (await db.select({ id: jobs.id, b: jobs.locationBlock }).from(jobs)).map((r) => [
-          r.id,
-          r.b?.from ?? null,
-        ]),
-      );
-    expect(await blocks()).toEqual({ [fromTriage]: "triage", [fromDraft]: "assessment" });
-    const { approval } = await proposeProfileChange(db, {
-      threadId: "t",
-      proposal: {
-        changes: [{ op: "add", kind: "background", text: "Lives in Hungary" }],
-        reason: "test profile",
-      },
-    });
-    await decideApproval(db, {
-      approvalId: approval.id,
-      threadId: "t",
-      decision: "approve",
-      payloadHash: approval.payloadHash,
-    });
-    await resetStaleTriage(db);
-    expect(await blocks()).toEqual({ [fromTriage]: null, [fromDraft]: "assessment" });
-  });
-
-  it("ignores research pages when checking the quote", async () => {
+  it("falls back to an older location block only until the job has a decision", async () => {
     const id = await discovered("a", 80);
-    await addSource(db, {
-      jobId: id,
-      kind: "web",
-      provider: "tavily",
-      url: "https://example.com/about",
-      content: US_ONLY,
-    });
-    await expect(assess(id)).rejects.toThrow(/not in this job's listing/);
+    const block = { places: ["United States"], quote: "US-only", from: "triage" as const };
+    await db.update(jobs).set({ locationBlock: block }).where(eq(jobs.id, id));
+    expect(await listJobs(db)).toEqual([]);
+    await setEligibility(id, "open");
+    expect((await listJobs(db)).map((j) => j.id)).toEqual([id]);
   });
 
-  it("leaves blocked jobs out of matches to assess, email and count", async () => {
+  it("leaves hidden jobs out of triage, matches to assess, email and count", async () => {
     const since = new Date(Date.now() - 60_000);
-    const id = await discovered("a", 80, { description: US_ONLY });
-    await saveTriage(db, id, { score: 80, reason: "r", profileVersion: 0, locationBlock: block });
+    const waiting = await discovered("w", null);
+    await setEligibility(waiting, "likely_closed");
+    expect(await countAwaitingTriage(db)).toBe(0);
+    expect(await jobsAwaitingTriage(db, 10)).toEqual([]);
+
+    const id = await discovered("a", 80);
+    await setEligibility(id, "closed");
     const args = { since, threshold: 0, limit: 10 };
     expect(await jobsToAssess(db, args)).toEqual([]);
     expect(await digestMatches(db, args)).toEqual([]);
@@ -356,28 +336,26 @@ describe("location blocks", () => {
     expect((await digestMatches(db, args)).map((m) => m.id)).toEqual([id]);
   });
 
-  it("never lets triage change an assessed job's block", async () => {
-    const cleared = await discovered("a", 80, { description: US_ONLY });
-    await assess(cleared, {
-      locationBlock: null,
-      recommendation: { verdict: "consider", rationale: "ok" },
-    });
-    await saveTriage(db, cleared, {
-      score: 39,
-      reason: "r",
-      profileVersion: 0,
-      locationBlock: block,
-    });
-    const blocked = await discovered("b", 80, { description: US_ONLY });
-    await assess(blocked);
-    await saveTriage(db, blocked, {
-      score: 39,
-      reason: "r",
-      profileVersion: 0,
-      locationBlock: block,
-    });
-    const rows = await db.select({ id: jobs.id, b: jobs.locationBlock }).from(jobs);
-    const byId = Object.fromEntries(rows.map((r) => [r.id, r.b?.from ?? null]));
-    expect(byId).toEqual({ [cleared]: null, [blocked]: "assessment" });
+  it("queues jobs for extraction: acted-on first, outdated versions again, screened out never", async () => {
+    const plain = await discovered("a", 80);
+    const acted = await discovered("b", 80);
+    await setJobStatus(db, acted, "shortlisted");
+    await discovered("c", 80, { title: "Software Engineering Intern" }); // fails the screen
+    const queue = await jobsAwaitingExtraction(db, { version: FACTS_VERSION, limit: 10 });
+    expect(queue.map((j) => j.id)).toEqual([acted, plain]);
+    await setEligibility(plain, "open");
+    expect(await countAwaitingExtraction(db, FACTS_VERSION)).toBe(1);
+    expect(await countAwaitingExtraction(db, FACTS_VERSION + 1)).toBe(2);
+  });
+
+  it("re-derives eligibility from stored facts without a model", async () => {
+    const id = await discovered("a", 80);
+    await setEligibility(id, "unclear");
+    expect(await rederiveEligibility(db, () => decide("closed", "Remote (US)"))).toBe(1);
+    expect(await rederiveEligibility(db, () => decide("closed", "Remote (US)"))).toBe(0);
+    const [row] = await db.select().from(jobs).where(eq(jobs.id, id));
+    expect([row?.eligibility, row?.eligibilityQuote]).toEqual(["closed", "Remote (US)"]);
+    await rederiveEligibility(db, () => null);
+    expect((await listJobs(db)).map((j) => j.id)).toEqual([id]);
   });
 });

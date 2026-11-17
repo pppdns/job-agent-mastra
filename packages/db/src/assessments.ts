@@ -4,10 +4,11 @@ import {
   allPoints,
   assessmentSchema,
   assessmentSummary,
+  type Eligibility,
   type JobStatus,
+  type ListingFacts,
   moneyAmounts,
   type PostedBasis,
-  quoteInSources,
   SOURCED_EVIDENCE_CLASSES,
   type StoredLocationBlock,
   salaryFiguresMissing,
@@ -75,25 +76,6 @@ async function saveDraftUnlocked(db: Db, input: DraftInput): Promise<JobDraft> {
       );
     }
   }
-  // A location block hides the job, so it must quote the listing and be a hard pass.
-  const block = assessment.locationBlock ?? null;
-  if (block) {
-    if (
-      !quoteInSources(
-        block.quote,
-        jobSources.filter((s) => isListingSource(s, job.canonicalUrl)).map((s) => s.content),
-      )
-    ) {
-      throw new AssessmentError(
-        `locationBlock quote "${block.quote.slice(0, 60)}" is not in this job's listing; copy the listing's words exactly, or set locationBlock to null`,
-      );
-    }
-    if (assessment.recommendation.verdict !== "pass" || assessment.hardConflicts.length === 0) {
-      throw new AssessmentError(
-        "a locationBlock needs verdict pass and the restriction as a hard conflict; or set locationBlock to null if the restriction isn't explicit",
-      );
-    }
-  }
   // Fit points (comparisons with the profile) are the model's judgement: deterministic labels.
   // Models cite handles (f7, maybe as "fact:f7"); store the full ids of current facts.
   const currentFacts = (await currentProfile(db)).facts;
@@ -158,14 +140,7 @@ async function saveDraftUnlocked(db: Db, input: DraftInput): Promise<JobDraft> {
         threadId: input.threadId ?? null,
       })
       .returning();
-    // The latest assessment decides the location block (it replaces triage's).
-    await tx
-      .update(jobs)
-      .set({
-        updatedAt: new Date(),
-        locationBlock: block ? { ...block, from: "assessment" } : null,
-      })
-      .where(eq(jobs.id, job.id));
+    await tx.update(jobs).set({ updatedAt: new Date() }).where(eq(jobs.id, job.id));
     await reindexJob(tx, job.id);
     if (!draft) throw new Error("draft insert returned no row");
     return draft;
@@ -205,8 +180,14 @@ export type JobOverview = {
   companyKey: string | null;
   triageScore: number | null;
   triageReason: string | null;
-  /** The listing excludes where the person lives (hides a discovered job; see `visibleJobs`). */
+  /** An older location block (only decides while `eligibility` is null; see `locationOpen`). */
   locationBlock: StoredLocationBlock | null;
+  /** Verified listing facts (null until extracted). */
+  facts: ListingFacts | null;
+  /** Whether the person may work on it from home (null: no facts or no home yet). */
+  eligibility: Eligibility | null;
+  /** The listing's words the eligibility rests on. */
+  eligibilityQuote: string | null;
   /** When the user first opened a discovered job (null = a new, unseen match). */
   seenAt: Date | null;
 };
@@ -266,6 +247,9 @@ export const overviewColumns = {
   triageScore: jobs.triageScore,
   triageReason: jobs.triageReason,
   locationBlock: jobs.locationBlock,
+  facts: jobs.facts,
+  eligibility: jobs.eligibility,
+  eligibilityQuote: jobs.eligibilityQuote,
   seenAt: jobs.seenAt,
   draftVersion: sql<
     number | null

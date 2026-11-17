@@ -382,7 +382,6 @@ describe.skipIf(!MODELS || process.env.EVAL_REAL === "1")(
         if (testCase.hardConflict !== null) {
           checks.hardConflict = assessment.hardConflicts.length > 0 === testCase.hardConflict;
         }
-        checks.locationBlock = !!assessment.locationBlock === (testCase.locationBlock ?? false);
         let judged: Awaited<ReturnType<typeof judge>> | undefined;
         try {
           if (budget.exhausted) throw new Error("eval budget exhausted");

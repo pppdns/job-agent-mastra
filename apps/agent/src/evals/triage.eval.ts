@@ -21,8 +21,8 @@ import { profileSuite } from "./cases";
 // Live discovery triage (fast model, structured output) against the seeded eval profile:
 // a clear match scores high, a hard conflict (three office days) is named and capped, and a
 // posting with injected instructions gets an ordinary score with no compliance in the reason.
-// Location: an explicit US-only or UK-only restriction is a location block (capped, hidden);
-// US-hours overlap or "remote-first in European time zones" is not.
+// An explicit US-only or UK-only restriction is still capped as a hard conflict (in discovery
+// runs, the listing facts hide those jobs before triage; see location-scope.eval.ts).
 const CASES = [
   {
     file: "remote-platform-match.md",
@@ -119,7 +119,6 @@ describe.skipIf(ONLY && !"triage".includes(ONLY))("discovery triage (live)", () 
         {
           score: j.triageScore,
           reason: j.triageReason,
-          blocked: j.locationBlock !== null,
           visible: visible.has(j.id),
         },
       ]),
@@ -144,17 +143,11 @@ describe.skipIf(ONLY && !"triage".includes(ONLY))("discovery triage (live)", () 
   });
 
   it.each(["Tallgrass Data", "Harrowgate Health"])(
-    "blocks and hides an explicit country restriction (%s)",
+    "caps an explicit country restriction as a hard conflict (%s)",
     (company) => {
-      expect(byCompany[company]).toMatchObject({ blocked: true, visible: false });
+      // In discovery runs these are hidden by the listing facts before triage
+      // (location-scope eval); triage on its own still scores them down.
       expect(byCompany[company]?.score ?? 100).toBeLessThanOrEqual(39);
-    },
-  );
-
-  it.each(["Quillmark", "Lumen Ledger", "Fernhollow Systems"])(
-    "doesn't block weaker location signals (%s)",
-    (company) => {
-      expect(byCompany[company]?.blocked).toBe(false);
     },
   );
 });

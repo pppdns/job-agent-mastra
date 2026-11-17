@@ -1,19 +1,8 @@
 import { type DiscoverySource, JOB_STATUSES, type JobStatus } from "@copilot/shared";
-import {
-  and,
-  count,
-  desc,
-  eq,
-  gte,
-  inArray,
-  isNotNull,
-  isNull,
-  lt,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 import { type JobOverview, latestAssessmentSql, overviewColumns, toOverview } from "./assessments";
 import { getSearchSettings, visibleJobs } from "./discovery";
+import { locationOpen } from "./facts";
 import type { Db } from "./index";
 import { setJobStatus } from "./jobs";
 import { currentProfileVersion } from "./profile";
@@ -213,7 +202,7 @@ export async function setJobsStatus(db: Db, jobIds: string[], status: JobStatus)
 
 /**
  * Discovered jobs the list hides, still untouched and not kept: scored under the triage
- * threshold, excluded by their listing's location (`locationBlock`), or with every posting now
+ * threshold, ruled out by their listing's location (`locationOpen`), or with every posting now
  * failing the screen (after a settings change). Best score
  * first; `screenReasons` says why the screen fails them. The "Screened out" tab, where the user
  * can keep one anyway.
@@ -234,7 +223,7 @@ export async function belowThresholdJobs(
     eq(jobs.status, "new"),
     isNull(jobs.archivedAt),
     isNull(jobs.keptAt),
-    sql`(not ${passing} or ${jobs.triageScore} < ${settings.triageThreshold} or ${jobs.locationBlock} is not null)`,
+    sql`(not ${passing} or ${jobs.triageScore} < ${settings.triageThreshold} or not ${locationOpen})`,
   );
   const [rows, [totals]] = await Promise.all([
     db
@@ -338,7 +327,6 @@ export function resetStaleTriage(db: Db): Promise<number> {
         triageReason: null,
         triageProfileVersion: null,
         triagedAt: null,
-        locationBlock: sql`(case when json_extract(${jobs.locationBlock}, '$.from') = 'assessment' then ${jobs.locationBlock} end)`,
       })
       .where(staleTriage(version))
       .returning({ id: jobs.id });

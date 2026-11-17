@@ -17,6 +17,7 @@ import {
   keepPosting,
   listJobs,
   markJobSeen,
+  rederiveEligibility,
   rescreenPostings,
   resetStaleTriage,
   saveSearchSettings,
@@ -28,6 +29,7 @@ import {
   ASSESS_BATCH_SIZES,
   DISCOVERY_SOURCES,
   type DiscoverySource,
+  decideEligibility,
   JOB_STATUSES,
   RESCORE_BATCH_SIZES,
   RESEARCH_TOPICS,
@@ -135,6 +137,7 @@ export async function editPreferencesAction(
   const version = z.number().int().min(0).safeParse(baseVersion);
   if (!version.success) return { error: "Invalid profile version." };
   const db = await appDb();
+  const before = (await currentPreferences(db)).home;
   try {
     await editPreferences(db, {
       threadId: PROFILE_PAGE_THREAD,
@@ -145,9 +148,17 @@ export async function editPreferencesAction(
     if (error instanceof AssessmentError) return { error: error.message };
     throw error;
   }
+  const { home } = await currentPreferences(db);
+  // Home decides location eligibility: re-decide it for every job from its stored facts.
+  const moved =
+    JSON.stringify(home) !== JSON.stringify(before)
+      ? await rederiveEligibility(db, (facts) => (home ? decideEligibility(facts, home) : null))
+      : 0;
   const message = await rescreenRecent(db);
   refresh();
-  return { message: `Saved. ${message}` };
+  return {
+    message: `Saved. ${message}${moved ? ` Location re-checked: ${moved} job${moved === 1 ? "" : "s"} changed.` : ""}`,
+  };
 }
 
 // "use server" files may only export async functions.
@@ -224,6 +235,10 @@ const DISCOVERY_RUNS = {
   },
   triage: { body: { mode: "triage" }, started: "Triaging the next batch of waiting jobs." },
   assess: { body: { mode: "assess" }, started: "Assessing more matches." },
+  extract: {
+    body: { mode: "extract" },
+    started: "Reading listing facts for every job without them.",
+  },
 } as const;
 
 /**
@@ -236,7 +251,7 @@ export async function startDiscoveryAction(
   formData: FormData,
 ): Promise<DiscoveryActionState> {
   const kind = z
-    .enum(["now", "backfill-7", "backfill-30", "triage", "assess"])
+    .enum(["now", "backfill-7", "backfill-30", "triage", "assess", "extract"])
     .catch("now")
     .parse(formData.get("run") ?? "now");
   // Server actions take any payload: only the offered batch sizes, else the smallest.

@@ -317,12 +317,12 @@ Details: [apps/agent/src/rescore/AGENTS.md](../apps/agent/src/rescore/AGENTS.md)
 
 ## Job discovery
 
-A Mastra workflow (`discover-jobs`) fetches new postings from job boards twice a day, plus "Run now" and backfills from `/discovery`. Postings failing a deliberately permissive deterministic screen stay postings; passing ones are deduped into jobs. Each new job then gets a fast-model triage score (0–100 + reason; under the threshold it's hidden), the run's best matches get a full assessment, and the matches are emailed (Resend). Details: [apps/agent/src/discovery/AGENTS.md](../apps/agent/src/discovery/AGENTS.md).
+A Mastra workflow (`discover-jobs`) fetches new postings from job boards twice a day, plus "Run now" and backfills from `/discovery`. Postings failing a deliberately permissive deterministic screen stay postings; passing ones are deduped into jobs. Each new job first gets its listing facts (fast model, every item quoted; app code checks the quotes and decides whether the job is open from home, hiding closed ones), then a fast-model triage score (0–100 + reason; under the threshold it's hidden), the run's best matches get a full assessment, and the matches are emailed (Resend). Details: [apps/agent/src/discovery/AGENTS.md](../apps/agent/src/discovery/AGENTS.md).
 
 ```mermaid
 flowchart LR
   CRON["schedule 07:00/16:00<br/>(main checkout only)"] --> WF
-  RUN["/discovery: Run now · Backfill ·<br/>Triage next batch · Assess more · Stop"] -->|POST /discovery/run, /stop| WF
+  RUN["/discovery: Run now · Backfill ·<br/>Triage next batch · Assess more ·<br/>Read listing facts · Stop"] -->|POST /discovery/run, /stop| WF
   subgraph WF[discover-jobs workflow]
     C[claim-run<br/>one at a time] --> F[fetch-sources] --> X[finish-run]
   end
@@ -331,13 +331,13 @@ flowchart LR
   F --> SCR{screenPosting<br/>clear misfits only}
   SCR -->|fails, with reasons| PO[(app_postings)]
   SCR -->|passes| DD[dedupe: ATS key, apply URL or<br/>company key + title] --> J[(app_jobs + board snapshot)]
-  J --> TRI[triage<br/>fast model, budgeted] --> ASS[assess best N<br/>main model] --> MAIL[email digest<br/>Resend]
+  J --> FAC[listing facts<br/>fast model + code checks] --> TRI[triage<br/>fast model, budgeted] --> ASS[assess best N<br/>main model] --> MAIL[email digest<br/>Resend]
   SET["/settings/search"] -->|save → rescreenPostings| PO
 ```
 
 - **Sources:** free official feeds are read directly. Boards without one use pay-per-event Apify actors, which include their proxies.
 - **Cost control:** runs are started by our code, with per-run caps and a 30-day budget check. Spend is recorded per source and run.
-- **Hidden jobs:** discovered jobs hidden by the screen, the triage threshold, or a location block (the listing explicitly excludes where the person lives: a quote app code finds in the listing, from triage or the latest assessment) are filtered by `visibleJobs` in `listJobs`; they show under "Screened out" with "Keep anyway". Chat tools and re-score therefore only see jobs worth showing.
+- **Hidden jobs:** discovered jobs hidden by the screen, the triage threshold, or their location (eligibility closed or likely closed: decided by code from the listing facts' verified quotes and the home preference) are filtered by `visibleJobs` in `listJobs`; they show under "Screened out" with "Keep anyway". Chat tools and re-score therefore only see jobs worth showing.
 
 ## Durable runs: refresh, reconnect, stop
 

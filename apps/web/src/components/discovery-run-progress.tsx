@@ -19,6 +19,7 @@ import {
 
 const STEP_LABEL: Record<DiscoveryStep, string> = {
   fetch: "Fetch sources",
+  extract: "Read listing facts",
   triage: "Triage",
   assess: "Assess best",
   report: "Email",
@@ -29,6 +30,7 @@ const RUN_TITLE: Record<DiscoveryRun["trigger"], string> = {
   manual: "Manual run",
   triage: "Triage-only run",
   assess: "Assess-only run",
+  extract: "Facts-only run",
 };
 
 export function RunProgress({
