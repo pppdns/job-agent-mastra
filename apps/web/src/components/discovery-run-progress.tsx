@@ -13,9 +13,10 @@ import {
   STATUS_TEXT,
   StatusIcon,
 } from "@/components/discovery-status";
+import { estimateRemainingMs, formatRemaining } from "@/lib/run-eta";
 
 // The running run, live: which step it is on, each source (done, running, waiting) and the
-// work count of the current step. Rendered on the server; the page refreshes every few seconds.
+// work count of the current step with an estimate of its time left. Rendered on the server; the page refreshes every few seconds.
 
 const STEP_LABEL: Record<DiscoveryStep, string> = {
   fetch: "Fetch sources",
@@ -23,6 +24,14 @@ const STEP_LABEL: Record<DiscoveryStep, string> = {
   triage: "Triage",
   assess: "Assess best",
   report: "Email",
+};
+
+const WORK_VERB: Record<DiscoveryStep, string> = {
+  fetch: "fetched",
+  extract: "read",
+  triage: "triaged",
+  assess: "assessed",
+  report: "reported",
 };
 
 const RUN_TITLE: Record<DiscoveryRun["trigger"], string> = {
@@ -68,6 +77,9 @@ export function RunProgress({
       : work
         ? work.done / work.total
         : null;
+  const remaining = work
+    ? estimateRemainingMs({ ...work, startedAt: progress?.stepStartedAt, now })
+    : null;
   const updated = progress ? now - new Date(progress.updatedAt).getTime() : null;
 
   return (
@@ -120,7 +132,9 @@ export function RunProgress({
             {step === "fetch"
               ? `${finished} of ${sources.length} sources done`
               : work
-                ? `${work.done} of ${work.total} jobs ${step === "triage" ? "triaged" : "assessed"}`
+                ? `${work.done} of ${work.total} jobs ${WORK_VERB[step]}${
+                    remaining !== null ? ` · about ${formatRemaining(remaining)} left` : ""
+                  }`
                 : step === "report"
                   ? "Sending the digest"
                   : "Starting"}
