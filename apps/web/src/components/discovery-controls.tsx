@@ -6,7 +6,7 @@ import { ASSESS_BATCH_SIZES } from "@copilot/shared";
 const FACTS_USD_PER_JOB = 0.0015;
 
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useState, useSyncExternalStore, useTransition } from "react";
 import {
   type DiscoveryActionState,
   startDiscoveryAction,
@@ -121,13 +121,28 @@ export function DiscoveryControls({
   );
 }
 
-/** Refreshes the page every few seconds while a run is going, so results appear as they land. */
+/**
+ * Refreshes the page while a run is going, so results appear as they land: 3 s after the previous
+ * refresh finished (never overlapping, so a slow server isn't buried under renders), and only
+ * while the tab is visible.
+ */
 export function RefreshWhileRunning({ running }: { running: boolean }) {
   const router = useRouter();
+  const [refreshing, startRefresh] = useTransition();
+  const visible = useSyncExternalStore(
+    subscribeToVisibility,
+    () => document.visibilityState === "visible",
+    () => true,
+  );
   useEffect(() => {
-    if (!running) return;
-    const timer = setInterval(() => router.refresh(), 3_000);
-    return () => clearInterval(timer);
-  }, [running, router]);
+    if (!running || !visible || refreshing) return;
+    const timer = setTimeout(() => startRefresh(() => router.refresh()), 3_000);
+    return () => clearTimeout(timer);
+  }, [running, visible, refreshing, router]);
   return null;
+}
+
+function subscribeToVisibility(onChange: () => void) {
+  document.addEventListener("visibilitychange", onChange);
+  return () => document.removeEventListener("visibilitychange", onChange);
 }
