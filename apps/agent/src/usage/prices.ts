@@ -2,13 +2,22 @@
 // ESTIMATE and labelled as such in the UI. LLM list prices: Anthropic as of 2026-10-06, OpenAI
 // (AI Gateway catalog) as of 2026-11-11. Add a model here before using it (RESCORE_MODEL).
 
-/** USD per million tokens. Cache reads bill at 10% of input, 5-minute cache writes at 125%. */
-export const LLM_PRICES_PER_MTOK: Record<string, { input: number; output: number }> = {
-  "anthropic/claude-sonnet-5.5": { input: 2, output: 10 },
+/**
+ * USD per million tokens. Cache reads bill at `cacheRead` (default 10% of input), 5-minute
+ * cache writes at 125% of input.
+ */
+export const LLM_PRICES_PER_MTOK: Record<
+  string,
+  { input: number; output: number; cacheRead?: number }
+> = {
+  "anthropic/claude-sonnet-5.5": { input: 2, output: 10, cacheRead: 0.1 },
   "anthropic/claude-haiku-5.5": { input: 0.1, output: 0.5 },
   "openai/gpt-6-luna": { input: 0.1, output: 0.5 },
 };
-const UNKNOWN_MODEL = { input: 2, output: 10 };
+const UNKNOWN_MODEL: { input: number; output: number; cacheRead?: number } = {
+  input: 2,
+  output: 10,
+};
 const CACHE_READ_FACTOR = 0.1;
 const CACHE_WRITE_FACTOR = 1.25;
 
@@ -28,7 +37,7 @@ export function estimateLlmUsd(modelId: string, usage: TokenUsage): number {
   const plain = Math.max(0, (usage.inputTokens ?? 0) - cached - written);
   return (
     (plain * price.input +
-      cached * price.input * CACHE_READ_FACTOR +
+      cached * (price.cacheRead ?? price.input * CACHE_READ_FACTOR) +
       written * price.input * CACHE_WRITE_FACTOR +
       (usage.outputTokens ?? 0) * price.output) /
     1e6

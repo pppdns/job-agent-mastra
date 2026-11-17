@@ -70,9 +70,9 @@ describe("RunRecorder", () => {
       toolCalls: 1,
       compactions: 1,
     });
-    // 200 plain × $2 + 800 cached × $0.20 + 150 out × $10, per million; then 1200 × $2 + 50 × $10
+    // 200 plain × $2 + 800 cached × $0.10 + 150 out × $10, per million; then 1200 × $2 + 50 × $10
     expect(totals.estimatedLlmUsd).toBeCloseTo(
-      (200 * 2 + 800 * 0.2 + 100 * 10 + 1200 * 2 + 50 * 10) / 1e6,
+      (200 * 2 + 800 * 0.1 + 100 * 10 + 1200 * 2 + 50 * 10) / 1e6,
       8,
     );
     expect(recorder.firstTextAt).not.toBeNull();
