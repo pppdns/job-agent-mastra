@@ -5,6 +5,7 @@ import type { TracingContext } from "@mastra/core/observability";
 import { env } from "../env";
 import type { Resolver } from "../ingest/url-guard";
 import { researcherAgent } from "../mastra/agents/researcher";
+import { GATEWAY_AUTO_CACHE } from "../mastra/models";
 import type { RunRecorder } from "../usage/recorder";
 import type { WebProviders } from "../web/providers";
 import { type BudgetLimits, DEFAULT_LIMITS, ResearchBudget } from "./budget";
@@ -74,6 +75,7 @@ export async function runResearch(
     const result = await researcherAgent.generate(prompt, {
       toolsets: { research: tools },
       maxSteps: limits.maxToolCalls + 4,
+      providerOptions: GATEWAY_AUTO_CACHE,
       abortSignal: budget.signal,
       tracingContext: deps.tracingContext,
       onStepFinish: ({ usage }) => {

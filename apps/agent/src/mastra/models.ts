@@ -1,7 +1,11 @@
 import { gateway } from "@ai-sdk/gateway";
-import type { LanguageModelV4, LanguageModelV4Prompt } from "@ai-sdk/provider";
+import type {
+  LanguageModelV4,
+  LanguageModelV4Prompt,
+  SharedV4ProviderOptions,
+} from "@ai-sdk/provider";
 import { EXTRACT_MARKER, RESEARCH_TOPIC_LABELS, RESEARCH_TOPICS } from "@copilot/shared";
-import { simulateReadableStream, wrapLanguageModel } from "ai";
+import { type ModelMessage, simulateReadableStream, wrapLanguageModel } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { env, type ReasoningLevel } from "../env";
 
@@ -33,6 +37,44 @@ export function gatewayModel(modelId: string, reasoning?: ReasoningLevel): Langu
       }),
     },
   });
+}
+
+/**
+ * Anthropic prompt-cache breakpoint (5-minute TTL). Anthropic caches only up to an explicit
+ * marker and AI Gateway adds none by default; other providers ignore it (OpenAI caches
+ * implicitly).
+ */
+export const CACHE_BREAKPOINT = {
+  anthropic: { cacheControl: { type: "ephemeral" } },
+} satisfies SharedV4ProviderOptions;
+
+/**
+ * For agent loops (copilot, researcher): AI Gateway marks the last message and the one before
+ * the last user message, so each step reads what the previous step wrote.
+ */
+export const GATEWAY_AUTO_CACHE = {
+  gateway: { caching: "auto" },
+} satisfies SharedV4ProviderOptions;
+
+/** A batch prompt: `prefix` is identical for every job in the batch (profile, criteria). */
+export type CachedPrompt = { prefix: string; rest: string };
+
+/**
+ * One user message with a cache breakpoint after the shared prefix, so every call in a batch
+ * after the first reads system prompt + prefix from cache and pays full price only for the job.
+ * (Not GATEWAY_AUTO_CACHE: its last-message marker would write each job's unique tail to the
+ * cache at 1.25× input price, never to be read.)
+ */
+export function cachedUserMessage({ prefix, rest }: CachedPrompt): ModelMessage[] {
+  return [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: prefix, providerOptions: CACHE_BREAKPOINT },
+        { type: "text", text: rest },
+      ],
+    },
+  ];
 }
 
 /** Model for batch re-scoring and discovery's full assessments (RESCORE_MODEL, default main). */
