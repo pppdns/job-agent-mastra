@@ -193,4 +193,21 @@ describe("decideEligibility", () => {
       }).eligibility,
     ).toBe("unclear");
   });
+
+  it("reads a region from the title and a time-zone range as hours, not places", () => {
+    const listing = "Location: Italy. Remote: yes.";
+    const facts = verifyFacts(
+      { ...NONE, places: [{ place: "Italy", basis: "listed", quote: "Location: Italy" }] },
+      listing,
+      "Staff Software Engineer, Product Engineering - EU",
+    );
+    expect(decideEligibility(facts, HOME).eligibility).toBe("likely_open");
+    const range = "It can be executed from anywhere between the US East Coast and India.";
+    expect(
+      decide(range, {
+        workMode: "remote",
+        places: [{ place: "US East Coast to India", basis: "residence", quote: range }],
+      }).eligibility,
+    ).not.toMatch(/closed/);
+  });
 });

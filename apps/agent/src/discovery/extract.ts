@@ -7,7 +7,7 @@ import {
   saveFacts,
 } from "@copilot/db";
 import {
-  decideEligibility,
+  eligibilityFor,
   extractPrompt,
   FACTS_VERSION,
   type ListingFactsInput,
@@ -61,7 +61,7 @@ export async function extractJobFacts(
   await saveFacts(deps.db, job.id, {
     facts,
     version: FACTS_VERSION,
-    decision: preferences.home ? decideEligibility(facts, preferences.home) : null,
+    decision: eligibilityFor(facts, preferences),
   });
   return true;
 }

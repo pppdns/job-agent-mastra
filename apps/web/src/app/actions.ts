@@ -27,9 +27,10 @@ import {
 } from "@copilot/db";
 import {
   ASSESS_BATCH_SIZES,
+  acceptedOfficePlaces,
   DISCOVERY_SOURCES,
   type DiscoverySource,
-  decideEligibility,
+  eligibilityFor,
   JOB_STATUSES,
   RESCORE_BATCH_SIZES,
   RESEARCH_TOPICS,
@@ -137,7 +138,8 @@ export async function editPreferencesAction(
   const version = z.number().int().min(0).safeParse(baseVersion);
   if (!version.success) return { error: "Invalid profile version." };
   const db = await appDb();
-  const before = (await currentPreferences(db)).home;
+  const old = await currentPreferences(db);
+  const before = [old.home, acceptedOfficePlaces(old)];
   try {
     await editPreferences(db, {
       threadId: PROFILE_PAGE_THREAD,
@@ -148,11 +150,11 @@ export async function editPreferencesAction(
     if (error instanceof AssessmentError) return { error: error.message };
     throw error;
   }
-  const { home } = await currentPreferences(db);
-  // Home decides location eligibility: re-decide it for every job from its stored facts.
+  const now = await currentPreferences(db);
+  // Home and office places decide location eligibility: re-decide it from the stored facts.
   const moved =
-    JSON.stringify(home) !== JSON.stringify(before)
-      ? await rederiveEligibility(db, (facts) => (home ? decideEligibility(facts, home) : null))
+    JSON.stringify([now.home, acceptedOfficePlaces(now)]) !== JSON.stringify(before)
+      ? await rederiveEligibility(db, (facts) => eligibilityFor(facts, now))
       : 0;
   const message = await rescreenRecent(db);
   refresh();
