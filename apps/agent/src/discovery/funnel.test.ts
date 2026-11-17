@@ -580,7 +580,7 @@ describe("funnel steps (mock model)", () => {
     expect(funnel).toMatchObject({ assessed: 2, assessFailed: 0 });
   });
 
-  it("lifts the triage cap and spend cap to cover a re-triage batch", async () => {
+  it("lifts the triage, facts and spend caps to cover a re-triage batch", async () => {
     const runId = await discovered(
       ["a", "Founding Engineer"],
       ["b", "Platform Engineer"],
@@ -592,7 +592,8 @@ describe("funnel steps (mock model)", () => {
       settings({ maxTriagePerRun: 1, maxLlmUsdPerRun: 0.003, maxAssessmentsPerRun: 0 }),
     );
     const funnel = await triageStep(db, runId, { triageLimit: 3 });
-    expect(funnel).toMatchObject({ triaged: 3, triagePending: 0 });
+    // Every job in the batch gets its facts read first, not just the per-run triage cap.
+    expect(funnel).toMatchObject({ extracted: 3, extractPending: 0, triaged: 3, triagePending: 0 });
     expect(funnel.stoppedBy).toBeUndefined();
   });
 });

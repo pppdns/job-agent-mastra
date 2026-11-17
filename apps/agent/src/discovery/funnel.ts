@@ -84,7 +84,8 @@ async function stateOf(
     budget: new DiscoveryBudget({
       maxUsd,
       maxTriage: limits.triageLimit ?? settings.maxTriagePerRun,
-      maxExtract: limits.extractLimit ?? settings.maxTriagePerRun,
+      // A re-triage batch reads facts for every job it triages, not just the per-run cap.
+      maxExtract: limits.extractLimit ?? limits.triageLimit ?? settings.maxTriagePerRun,
       keepForAssessUsd,
     }),
   };
