@@ -48,5 +48,6 @@ kill_timeout = "30s"
     grace_period = "60s"
 
 [[vm]]
-  size = "shared-cpu-2x"
+  # Dedicated core: shared vCPUs were throttled to their 6.25% baseline during batch runs.
+  size = "performance-1x"
   memory = "2gb"
