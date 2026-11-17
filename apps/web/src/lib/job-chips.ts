@@ -8,6 +8,7 @@ import {
   matchPlace,
   type PreferenceLevel,
   type Preferences,
+  parsePayText,
   ROLE_FOCUS_LABELS,
   TRAVEL_LIMIT_LABELS,
   TRAVEL_LIMITS,
@@ -55,6 +56,9 @@ export const LEVEL_TONE: Record<PreferenceLevel, ChipTone> = {
 
 /** Levels worth attention whatever the preference. */
 const EXTREME_LEVELS: readonly JobLevel[] = ["staff", "principal", "lead", "head", "founding"];
+
+/** The pay chip's label when nothing is stated (shown without the money icon). */
+export const NO_SALARY = "No salary";
 
 /** Most chips on the second line; the rest collapse into "+N". */
 export const MAX_SECONDARY = 5;
@@ -174,17 +178,27 @@ function workModeChip(job: JobChipInput, prefs: Preferences): Chip {
 }
 
 function salaryChip(job: JobChipInput, prefs: Preferences): Chip {
-  const pay = job.facts?.salary;
+  const facts = job.facts?.salary;
+  // Without verified facts, the figures in the assessment's pay text.
+  const parsed = !facts && job.salaryText ? parsePayText(job.salaryText) : null;
+  const pay = facts ?? parsed;
   if (!pay) {
     if (job.salaryText) {
       return {
         key: "pay",
         label: short(job.salaryText, 26),
         tone: "muted",
+        dashed: true,
         hint: `Pay as the assessment states it: ${job.salaryText}`,
       };
     }
-    return { key: "pay", label: "No salary", tone: "muted", hint: "The listing states no pay." };
+    return {
+      key: "pay",
+      label: NO_SALARY,
+      tone: "muted",
+      dashed: true,
+      hint: "The listing states no pay.",
+    };
   }
   const { floor, high, currency } = prefs.salary;
   const top = pay.max ?? pay.min;
@@ -195,13 +209,25 @@ function salaryChip(job: JobChipInput, prefs: Preferences): Chip {
       : ` About ${Math.round(annual).toLocaleString("en-US")} ${currency} a year at most.`;
   const below = annual !== null && floor !== null && annual < floor;
   const great = annual !== null && high !== null && annual >= high;
+  const verdict = below
+    ? "Under your floor."
+    : great
+      ? "At or above your great mark."
+      : "Stated pay.";
+  const guessed =
+    parsed && !parsed.periodStated
+      ? ` Period not stated; read as ${parsed.period === "month" ? "monthly" : "yearly"}.`
+      : "";
   return {
     key: "pay",
     label: formatPay(pay),
     tone: below ? "destructive" : great ? "success" : "muted",
     filled: great,
-    hint: `${below ? "Under your floor." : great ? "At or above your great mark." : "Stated pay."}${approx}`,
-    quote: pay.quote,
+    dashed: !!parsed && !parsed.periodStated,
+    hint: parsed
+      ? `Pay as the assessment states it: ${job.salaryText}. ${verdict}${guessed}${approx}`
+      : `${verdict}${approx}`,
+    quote: facts?.quote,
   };
 }
 

@@ -1,7 +1,7 @@
 import { BanknoteIcon } from "lucide-react";
 import { TONE_FILL, TONES } from "@/components/assessment-visuals";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { type Chip, MAX_SECONDARY } from "@/lib/job-chips";
+import { type Chip, MAX_SECONDARY, NO_SALARY } from "@/lib/job-chips";
 import { cn } from "@/lib/utils";
 
 /**
@@ -24,7 +24,9 @@ function ChipPill({ chip, compact }: { chip: Chip; compact?: boolean }) {
             chip.dashed && "border-dashed",
           )}
         >
-          {chip.key === "pay" && <BanknoteIcon aria-hidden className="size-3" />}
+          {chip.key === "pay" && chip.label !== NO_SALARY && (
+            <BanknoteIcon aria-hidden className="size-3" />
+          )}
           {chip.label}
           <span className="sr-only">. {chip.hint}</span>
         </button>

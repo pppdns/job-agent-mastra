@@ -1,3 +1,4 @@
+import { moneyAmounts } from "./assessment";
 import type { SalaryPeriod } from "./posting";
 
 // Pay in one comparable unit: yearly, in a chosen currency. The rates are rough and set by hand
@@ -61,14 +62,16 @@ export function toAnnual(
 }
 
 const compact = (n: number) => {
-  if (n >= 1_000_000)
-    return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1).replace(/\.0$/, "")}M`;
-  if (n >= 10_000) return `${Math.round(n / 1000)}k`;
-  if (n >= 1_000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
+  if (n >= 1_000_000) {
+    const m = n / 1_000_000;
+    return `${(m >= 10 ? Math.round(m) : Number(m.toFixed(1))).toString()}M`;
+  }
+  if (n >= 100_000) return `${Math.round(n / 1000)}k`;
+  if (n >= 1_000) return `${Number((n / 1000).toFixed(1)).toString()}k`;
   return String(Math.round(n));
 };
 
-/** "€120–150k", "$140k", "HUF 1.4–1.8M/mo": the listing's own figures, compact. */
+/** "HUF 14M – 24M", "€6.5k – 9k/mo", "$140k": the listing's own figures, compact. */
 export function formatPay(salary: {
   min: number | null;
   max: number | null;
@@ -80,14 +83,58 @@ export function formatPay(salary: {
   const { min, max } = salary;
   const lo = min ?? max ?? 0;
   const hi = max ?? min ?? 0;
-  let figures: string;
-  if (lo === hi) figures = compact(lo);
-  else {
-    // "120–150k": one unit suffix when both ends share it.
-    const a = compact(lo);
-    const b = compact(hi);
-    const unit = (s: string) => s.match(/[kM]$/)?.[0] ?? "";
-    figures = unit(a) && unit(a) === unit(b) ? `${a.slice(0, -1)}–${b}` : `${a}–${b}`;
-  }
+  const figures = lo === hi ? compact(lo) : `${compact(lo)} – ${compact(hi)}`;
   return `${symbol ?? `${code} `}${figures}${PERIOD_SUFFIX[salary.period]}`;
+}
+
+export type ParsedPay = {
+  min: number;
+  max: number;
+  currency: string;
+  period: SalaryPeriod;
+  /** False when the text names no period and it was guessed from the size of the figures. */
+  periodStated: boolean;
+};
+
+const CURRENCY_WORDS: [RegExp, string][] = [
+  [/€/, "EUR"],
+  [/£/, "GBP"],
+  [/\$/, "USD"],
+  [/\b(?:ft|forint|huf)\b/i, "HUF"],
+];
+const PERIOD_WORDS: [RegExp, SalaryPeriod][] = [
+  [/\/\s?(?:mo|month)\b|\b(?:monthly|per month|a month|month|havi)\b/i, "month"],
+  [/\/\s?(?:h|hr|hour)\b|\b(?:hourly|per hour|an hour|hour)\b/i, "hour"],
+  [/\/\s?day\b|\b(?:daily|per day|a day|day rate)\b/i, "day"],
+  [/\/\s?(?:wk|week)\b|\b(?:weekly|per week)\b/i, "week"],
+  [
+    /\/\s?(?:yr|year)\b|\b(?:yearly|annual|annually|per year|a year|year|p\.?a\.?)(?![\p{L}])/iu,
+    "year",
+  ],
+];
+/** A yearly pay under this (in EUR) is implausible: the figures are monthly. */
+const MIN_PLAUSIBLE_YEARLY_EUR = 20_000;
+
+/**
+ * Figures, currency and period from pay as free text ("14,000,000 - 24,000,000 HUF",
+ * "€6,500 to €9,000 gross + equity"); null when it has no figure or no currency. Text after a
+ * "+" (equity, bonus) is ignored. An unstated period is yearly unless that would be implausibly
+ * low, then monthly.
+ */
+export function parsePayText(text: string): ParsedPay | null {
+  const main = text.split("+")[0] ?? "";
+  const amounts = moneyAmounts(main).filter((a) => a.value > 0);
+  const first = amounts[0];
+  if (!first) return null;
+  const second = amounts[1];
+  const code = main.match(/\b[A-Z]{3}\b/g)?.find((c) => c in EUR_PER_UNIT);
+  const currency = code ?? CURRENCY_WORDS.find(([re]) => re.test(main))?.[1];
+  if (!currency) return null;
+  const min = Math.min(first.value, second?.value ?? first.value);
+  const max = Math.max(first.value, second?.value ?? first.value);
+  const stated = PERIOD_WORDS.find(([re]) => re.test(main))?.[1];
+  if (stated) return { min, max, currency, period: stated, periodStated: true };
+  const yearlyEur = toAnnual(max, { currency, period: "year" }, "EUR");
+  const period = yearlyEur !== null && yearlyEur < MIN_PLAUSIBLE_YEARLY_EUR ? "month" : "year";
+  return { min, max, currency, period, periodStated: false };
 }
