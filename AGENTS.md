@@ -56,6 +56,7 @@ Simple, polished, functional: shadcn/ui (Radix Nova preset) defaults. Clear visu
 | `pnpm ngrok` | ngrok tunnel to the web app (basic auth required; login in `apps/web/.env.local` as `NGROK_BASIC_AUTH`, optional `NGROK_DOMAIN`). Run next to `pnpm dev` |
 | `pnpm e2e` | Playwright on an isolated mock stack; stop `pnpm dev` first |
 | `pnpm eval` | Live eval suite (real copilot + LLM judge, web fixtures, own `data/eval.db`); costs money. Report in `data/eval-report.md` |
+| `pnpm listings:live` | Re-check the hand-verified closed/open listings live (`apps/agent/src/listings/corpus.json`); run when a site's rule may have changed |
 | `pnpm eval:studio` | Studio on the eval DB to browse experiments and scores; stop `pnpm dev` first |
 | `pnpm agent:api …` | `mastra api` against the local agent with auth, e.g. `agent run copilot '{"messages":"hi"}'`, `trace list` |
 

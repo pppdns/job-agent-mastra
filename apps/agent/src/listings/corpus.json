@@ -1,0 +1,149 @@
+{
+  "about": "Real listing URLs from the production database (backup of 2026-11-15), checked live on 2026-11-17 and opened in a browser where noted. `closed` ones should stay closed; `open` controls close over time, so the live script reports those instead of failing.",
+  "listings": [
+    {
+      "url": "https://www.linkedin.com/jobs/view/4490749570/",
+      "expect": "closed",
+      "note": "No longer accepting applications (was shortlisted; browser-confirmed)"
+    },
+    {
+      "url": "https://www.linkedin.com/jobs/view/4487239345/",
+      "expect": "closed",
+      "note": "No longer accepting applications (browser-confirmed)"
+    },
+    {
+      "url": "https://www.linkedin.com/jobs/view/4491057455/",
+      "expect": "closed",
+      "note": "No longer accepting applications"
+    },
+    {
+      "url": "https://www.linkedin.com/jobs/view/4489370066/",
+      "expect": "closed",
+      "note": "No longer accepting applications"
+    },
+    {
+      "url": "https://www.linkedin.com/jobs/view/4481958339/",
+      "expect": "closed",
+      "note": "No longer accepting applications"
+    },
+    {
+      "url": "https://www.linkedin.com/jobs/view/4459305315/",
+      "expect": "closed",
+      "note": "deleted: guest 404, view page redirects to search with trk=missing_jd_redirect (browser-confirmed)"
+    },
+    {
+      "url": "https://www.linkedin.com/jobs/view/4489345506/",
+      "expect": "closed",
+      "note": "deleted: guest 404"
+    },
+    {
+      "url": "https://www.linkedin.com/jobs/view/4478322811/",
+      "expect": "closed",
+      "note": "No longer accepting applications on the guest page; the view page redirects with trk=expired_jd_redirect (browser-confirmed)"
+    },
+    {
+      "url": "https://www.linkedin.com/jobs/view/4490725331/",
+      "expect": "open",
+      "note": "trap: no Apply button on the logged-out page; LinkedIn still lists it although the employer's Ashby job below is gone (browser-confirmed)"
+    },
+    {
+      "url": "https://www.linkedin.com/jobs/view/4491056601/",
+      "expect": "open",
+      "note": "trap: no Apply button but live"
+    },
+    {
+      "url": "https://www.linkedin.com/jobs/view/4489340753/",
+      "expect": "open"
+    },
+    {
+      "url": "https://job-boards.greenhouse.io/bloomerang/jobs/4748844005",
+      "expect": "closed",
+      "note": "API 404; page redirects to the board with ?error=true (browser-confirmed)"
+    },
+    {
+      "url": "https://job-boards.greenhouse.io/coderoad/jobs/4375543009",
+      "expect": "closed",
+      "note": "API 404"
+    },
+    {
+      "url": "https://boards.greenhouse.io/aloyoga/jobs/5726560004?gh_jid=5726560004",
+      "expect": "open"
+    },
+    {
+      "url": "https://jobs.lever.co/ciandt/439684e2-2efd-4c48-aa24-5d54c633fd9f",
+      "expect": "closed",
+      "note": "API and page 404: 'might have closed, or it has been removed' (browser-confirmed)"
+    },
+    {
+      "url": "https://jobs.lever.co/Clearer/b4fde148-be5a-45bb-ad28-b12c0c60a5db",
+      "expect": "open",
+      "note": "trap: Lever's API is case-sensitive; with the company lowercased it 404s although the job is live (browser-confirmed)"
+    },
+    {
+      "url": "https://jobs.lever.co/bluesight/0367870c-ecd0-4b5f-a498-2625664ce859",
+      "expect": "open"
+    },
+    {
+      "url": "https://jobs.ashbyhq.com/1password/e9f8842c-3ed3-4b89-bd55-f59cff9773cb",
+      "expect": "closed",
+      "note": "page 404 'Job not found' (browser-confirmed)"
+    },
+    {
+      "url": "https://jobs.ashbyhq.com/Centralize/fdfc7439-4e87-4e4d-afc9-37ac29d9700f",
+      "expect": "closed",
+      "note": "page 404"
+    },
+    {
+      "url": "https://jobs.ashbyhq.com/elevenlabs/5f83c6ff-bc79-4199-ba59-6abab6d69567",
+      "expect": "closed",
+      "note": "page 404 and gone from the ElevenLabs board, while its LinkedIn copy (4490725331) still shows: the employer closes first"
+    },
+    {
+      "url": "https://jobs.ashbyhq.com/bjakcareer/136b1e8e-e7cf-4157-8c8f-bb21ab88790b",
+      "expect": "open",
+      "note": "trap: missing from the company's board API (unlisted) but the page is live (browser-confirmed)"
+    },
+    {
+      "url": "https://jobs.ashbyhq.com/1password/15658971-e4f4-490b-97fe-5e716ddab770",
+      "expect": "open"
+    },
+    {
+      "url": "https://jobs.workable.com/view/8WC5qCLvwaUSHdFMRt81Zd/remote-senior-full-stack-engineer-in-czechia-at-seez",
+      "expect": "closed",
+      "note": "410 'This job is not available anymore' (browser-confirmed)"
+    },
+    {
+      "url": "https://jobs.workable.com/view/1LZL1iLHp4ktrNLcooPc5m/remote-supply-engineering-team-lead-in-early-branch-at-c",
+      "expect": "open"
+    },
+    {
+      "url": "https://www.dice.com/job-detail/2b9ba774-840f-4fef-a1bf-e647c003406b",
+      "expect": "closed",
+      "note": "410 'Sorry this job is no longer available' (browser-confirmed)"
+    },
+    {
+      "url": "https://www.dice.com/job-detail/3e032a00-a106-4c70-8e2e-e4275dfa844b",
+      "expect": "open"
+    },
+    {
+      "url": "https://jobgether.com/offer/6af265d11b1a9ee7d65a8698-solutions-engineer",
+      "expect": "closed",
+      "note": "410 'This job has expired on Jobgether'"
+    },
+    {
+      "url": "https://jobgether.com/offer/6af265d11b1a9ee7d65a8662-account-manager---uk-commercial-defense-tech",
+      "expect": "open",
+      "note": "trap: report menu says 'The offer is expired'"
+    },
+    {
+      "url": "https://nodesk.co/remote-jobs/metabase-analytics-engineer-2/",
+      "expect": "closed",
+      "note": "red banner 'career opportunity is no longer available' (browser-confirmed)"
+    },
+    {
+      "url": "https://nodesk.co/remote-jobs/temporal-director-of-engineering-compute/",
+      "expect": "open",
+      "note": "trap: report menu says 'The job is expired'"
+    }
+  ]
+}

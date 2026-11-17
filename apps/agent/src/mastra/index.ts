@@ -13,6 +13,7 @@ import { chatResumeRoute, chatRoute, chatStopRoute } from "./routes/chat";
 import { assessJobRoute, discoveryRunRoute, discoveryStopRoute } from "./routes/discovery";
 import { threadMessagesRoute } from "./routes/thread-messages";
 import { createStorage } from "./storage";
+import { CHECK_LISTINGS_SCHEDULE_ID, checkListingsWorkflow } from "./workflows/check-listings";
 import {
   DISCOVER_JOBS_SCHEDULE_ID,
   discoverJobsWorkflow,
@@ -51,7 +52,7 @@ const { storage, pruneObservability } = createStorage();
 
 export const mastra = new Mastra({
   agents: { copilotAgent, researcherAgent },
-  workflows: { discoverJobsWorkflow },
+  workflows: { discoverJobsWorkflow, checkListingsWorkflow },
   scorers: allScorers,
   storage,
   logger,
@@ -94,15 +95,17 @@ export const mastra = new Mastra({
   },
 });
 
-// Worktrees copy the main checkout's database, schedule row included: drop it where the
-// schedule is off, so only the main checkout's dev server ever fires discovery.
+// Worktrees copy the main checkout's database, schedule rows included: drop them where the
+// schedule is off, so only the main checkout's dev server ever fires discovery or listing checks.
 if (!discoveryScheduleEnabled()) {
-  mastra.schedules
-    .get(DISCOVER_JOBS_SCHEDULE_ID)
-    .then((schedule) => (schedule ? mastra.schedules.delete(DISCOVER_JOBS_SCHEDULE_ID) : undefined))
-    .catch((error) =>
-      logger.warn("could not check the discovery schedule", { error: String(error) }),
-    );
+  for (const id of [DISCOVER_JOBS_SCHEDULE_ID, CHECK_LISTINGS_SCHEDULE_ID]) {
+    mastra.schedules
+      .get(id)
+      .then((schedule) => (schedule ? mastra.schedules.delete(id) : undefined))
+      .catch((error) =>
+        logger.warn(`could not check the ${id} schedule`, { error: String(error) }),
+      );
+  }
 }
 
 // Traces, logs and metrics are kept for OBSERVABILITY_MAX_AGE: the DuckDB file otherwise grows

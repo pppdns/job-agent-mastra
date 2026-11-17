@@ -17,6 +17,7 @@
     "check": "biome check . && turbo run typecheck test --output-logs=errors-only",
     "e2e": "scripts/ports.sh pnpm --filter @copilot/web e2e",
     "eval": "pnpm --filter @copilot/agent eval",
+    "listings:live": "pnpm --filter @copilot/agent listings:live",
     "eval:studio": "scripts/ports.sh pnpm --filter @copilot/agent eval:studio",
     "db:migrate": "pnpm --filter @copilot/db migrate",
     "agent:api": "scripts/ports.sh scripts/agent-api.sh",

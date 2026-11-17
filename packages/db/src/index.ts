@@ -15,6 +15,7 @@ export * from "./facts";
 export { AssessmentError, hashPayload } from "./hash";
 export * from "./job-list";
 export * from "./jobs";
+export * from "./listings";
 export { findWorkspaceRoot, resolveDatabaseUrl, resolveObservabilityPath } from "./paths";
 export * from "./profile";
 export * from "./raw-items";
@@ -31,6 +32,7 @@ export type {
   Job,
   JobDraft,
   JobOrigin,
+  ListingClosed,
   NewRunEvent,
   Posting,
   ProfileChangePayload,

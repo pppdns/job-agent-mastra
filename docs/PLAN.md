@@ -250,6 +250,15 @@ Goal: see what's in progress and where to follow up. All of it is data the user 
 - [x] Job page: progress strip with the round tracker, notes card (Edit → Save, ⌘/Ctrl+Enter, Esc asks before discarding, leave-page warning). List rows: round tracker and note marker.
 - [x] Verified: db and `job-age` unit tests, e2e `board.spec.ts`, browser check on desktop and 375 px.
 
+### M22 — Closed listings cleanup (agreed 2026-11-17)
+
+Goal: stop opening dead listings. Detection is deterministic per site, built only from listings in the production data confirmed closed or open in a browser (`apps/agent/src/listings/corpus.json`).
+
+- [x] Per-site rules (LinkedIn, Greenhouse, Lever, Ashby, Workable, Dice, Jobgether, NoDesk); unknown never dismisses; Cloudflare boards skipped
+- [x] Daily `check-listings` workflow: shortlisted + new jobs ≥ digest threshold, dismiss only `new`/`shortlisted`, evidence on the job page, separate email
+- [x] Verified on a copy of the production database (2026-11-15 backup): 43 jobs, 51 checks in 60 s, 7 closed (2 shortlisted), 0 unknown
+- [ ] Verified live on Fly: first scheduled run and its email
+
 ## Simplifications chosen (tell me if any is unacceptable)
 
 1. **Reconnect across agent-server restarts** would need Redis (shared event cache). Plan: in-process cache — browser refresh/reconnect works; after a server restart the run is marked interrupted with partial results kept, and you re-ask. Redis can be added later without redesign.

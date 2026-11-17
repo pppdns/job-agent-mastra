@@ -12,6 +12,7 @@ import {
   suggestedResearchTopics,
 } from "@copilot/shared";
 import {
+  BanIcon,
   BriefcaseIcon,
   Building2Icon,
   CalendarIcon,
@@ -139,6 +140,17 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
               </li>
             ))}
           </ul>
+        )}
+        {job.listingClosedAt && job.listingClosed && (
+          <p className="flex items-start gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm">
+            <BanIcon className="mt-0.5 size-4 shrink-0 text-destructive" />
+            <span>
+              Listing closed ({job.listingClosed.signal}), found {formatDate(job.listingClosedAt)}
+              {job.status === "dismissed"
+                ? `. Dismissed automatically (was ${job.listingClosed.previousStatus}); change the status to bring it back.`
+                : "."}
+            </span>
+          </p>
         )}
         <p className="flex flex-wrap gap-x-4 text-sm text-muted-foreground">
           {job.company && (
