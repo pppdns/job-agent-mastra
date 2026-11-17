@@ -30,6 +30,15 @@ export const users = sqliteTable("app_users", {
 
 export const JOB_ORIGINS = ["chat", "discovery"] as const;
 
+/** Why the listing check dismissed a job: the closed link, its site and the signal seen. */
+export type ListingClosed = {
+  url: string;
+  site: string;
+  signal: string;
+  /** The status the job had before (`new` or `shortlisted`). */
+  previousStatus: string;
+};
+
 /** A job listing, deduplicated by LinkedIn id, canonical URL, or normalized company + title. */
 export const jobs = sqliteTable(
   "app_jobs",
@@ -83,6 +92,14 @@ export const jobs = sqliteTable(
     eligibilityQuote: text("eligibility_quote"),
     /** The user kept a job the screen or triage would hide. */
     keptAt: integer("kept_at", { mode: "timestamp_ms" }),
+    /** When the daily listing check last looked at this job's links (null = never). */
+    listingCheckedAt: integer("listing_checked_at", { mode: "timestamp_ms" }),
+    /**
+     * When the listing check found one of the job's links closed and dismissed the job, with
+     * the evidence. Kept if the user restores the job, so it is never dismissed again.
+     */
+    listingClosedAt: integer("listing_closed_at", { mode: "timestamp_ms" }),
+    listingClosed: text("listing_closed", { mode: "json" }).$type<ListingClosed>(),
     /** When the user first opened a discovered job (null = unseen). */
     seenAt: integer("seen_at", { mode: "timestamp_ms" }),
     createdAt: createdAt(),
