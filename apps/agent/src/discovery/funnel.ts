@@ -18,7 +18,14 @@ import type { TracingContext } from "@mastra/core/observability";
 import { env } from "../env";
 import { RunRecorder } from "../usage/recorder";
 import { assessTopMatches } from "./assess";
-import { ASSESS_RESERVE_USD, assessmentShare, DiscoveryBudget, TRIAGE_RESERVE_USD } from "./budget";
+import {
+  ASSESS_RESERVE_USD,
+  assessmentShare,
+  DiscoveryBudget,
+  EXTRACT_RESERVE_USD,
+  TRIAGE_RESERVE_USD,
+} from "./budget";
+import { extractJobs } from "./extract";
 import { createProgress } from "./progress";
 import { ALERT_REPEAT_MS, runProblems, sendDigest } from "./report";
 import { httpJson } from "./sources/http";
@@ -38,6 +45,8 @@ type StepContext = {
   assessLimit?: number;
   /** Triage-only runs: how many waiting jobs to triage (overrides `maxTriagePerRun`). */
   triageLimit?: number;
+  /** Facts-only runs (the backfill): how many jobs to extract facts for; nothing else runs. */
+  extractLimit?: number;
 };
 
 /** One recorder and budget per run, shared by its steps (they run in this process, in order). */
@@ -51,7 +60,7 @@ const runState = new Map<string, { recorder: RunRecorder; budget: DiscoveryBudge
 async function stateOf(
   db: Db,
   runId: string,
-  limits: { assessLimit?: number; triageLimit?: number } = {},
+  limits: { assessLimit?: number; triageLimit?: number; extractLimit?: number } = {},
 ) {
   const existing = runState.get(runId);
   if (existing) return existing;
@@ -60,7 +69,11 @@ async function stateOf(
   const maxUsd = Math.max(
     settings.maxLlmUsdPerRun,
     (limits.assessLimit ?? 0) * ASSESS_RESERVE_USD,
-    limits.triageLimit ? limits.triageLimit * TRIAGE_RESERVE_USD + keepForAssessUsd : 0,
+    // A triage batch reads each job's facts first.
+    limits.triageLimit
+      ? limits.triageLimit * (TRIAGE_RESERVE_USD + EXTRACT_RESERVE_USD) + keepForAssessUsd
+      : 0,
+    limits.extractLimit ? limits.extractLimit * EXTRACT_RESERVE_USD + keepForAssessUsd : 0,
   );
   // The usage run row; it may exist already when a step is retried.
   await startRun(db, { id: runId, threadId: discoveryThreadId(runId) }).catch(() => undefined);
@@ -71,6 +84,7 @@ async function stateOf(
     budget: new DiscoveryBudget({
       maxUsd,
       maxTriage: limits.triageLimit ?? settings.maxTriagePerRun,
+      maxExtract: limits.extractLimit ?? settings.maxTriagePerRun,
       keepForAssessUsd,
     }),
   };
@@ -128,9 +142,45 @@ export function reportStep(db: Db, runId: string, funnel: FunnelResult) {
   return guarded(db, runId, funnel, "report", () => report(db, runId, funnel));
 }
 
-async function triage(db: Db, runId: string, { triageLimit, ...context }: StepContext) {
-  const { recorder, budget } = await stateOf(db, runId, { triageLimit });
+/**
+ * Listing facts first (they decide which jobs are hidden, so triage skips those), then triage.
+ * A facts-only run (`extractLimit`) stops after the facts.
+ */
+async function triage(
+  db: Db,
+  runId: string,
+  { triageLimit, extractLimit, ...context }: StepContext,
+) {
+  const { recorder, budget } = await stateOf(db, runId, { triageLimit, extractLimit });
   const progress = createProgress(db, runId);
+  progress.step("extract");
+  const facts = await extractJobs({
+    db,
+    budget,
+    recorder,
+    ...context,
+    limit: extractLimit ?? budget.limits.maxExtract ?? budget.limits.maxTriage,
+    // Scheduled and triage runs read facts for what they triage; the backfill reads the rest.
+    untriagedOnly: extractLimit === undefined,
+    onProgress: (done, total) => progress.work(done, total),
+  });
+  await progress.flush();
+  const factsFunnel = {
+    extracted: facts.extracted,
+    extractFailed: facts.failed,
+    extractPending: facts.pending,
+    ...(facts.errors.length > 0 ? { extractErrors: facts.errors } : {}),
+  };
+  if (extractLimit !== undefined) {
+    const funnel: FunnelResult = {
+      ...EMPTY_FUNNEL,
+      ...factsFunnel,
+      llmUsd: await llmUsd(db, runId, recorder),
+      ...(budget.stoppedBy ? { stoppedBy: budget.stoppedBy } : {}),
+    };
+    await recordFunnel(db, runId, funnel);
+    return funnel;
+  }
   progress.step("triage");
   const outcome = await triageJobs({
     db,
@@ -143,6 +193,7 @@ async function triage(db: Db, runId: string, { triageLimit, ...context }: StepCo
   await progress.flush();
   const funnel: FunnelResult = {
     ...EMPTY_FUNNEL,
+    ...factsFunnel,
     triaged: outcome.triaged,
     triageFailed: outcome.failed,
     triagePending: outcome.pending,

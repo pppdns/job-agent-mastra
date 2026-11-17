@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { locationBlockSchema } from "./location-block";
 
 // The cheap first look a discovered job gets: how well it fits the profile (0–100) and why,
 // in one line. Full assessments (assessment.ts) are kept for the best matches.
@@ -16,8 +15,6 @@ export const triageSchema = z.object({
   reason: z.string().min(1).max(MAX_MODEL_REASON_CHARS),
   /** A hard requirement of the profile the job clearly breaks, if any (shortened when stored). */
   hardConflict: z.string().max(MAX_MODEL_REASON_CHARS).nullable(),
-  /** The posting explicitly excludes where the person lives (verified against the posting). */
-  locationBlock: locationBlockSchema.default(null),
 });
 
 export type Triage = z.infer<typeof triageSchema>;

@@ -8,6 +8,8 @@ import { estimateLlmUsd, type TokenUsage } from "../usage/prices";
 
 /** Reserved per triage call (a fast-model call over a ~2–4k token prompt costs far less). */
 export const TRIAGE_RESERVE_USD = 0.002;
+/** Reserved per listing-facts extraction (fast model, ~4–6k tokens in, ~1k out). */
+export const EXTRACT_RESERVE_USD = 0.0015;
 /** Reserved per full assessment (main model, ~8–12k tokens in, ~2k out). */
 export const ASSESS_RESERVE_USD = 0.08;
 
@@ -18,9 +20,18 @@ export const assessmentShare = (maxUsd: number, maxAssessments: number) =>
 export class DiscoveryBudget {
   private spentUsd = 0;
   private triageCalls = 0;
+  private extractCalls = 0;
   stoppedBy: string | undefined;
 
-  constructor(readonly limits: { maxUsd: number; maxTriage: number; keepForAssessUsd?: number }) {}
+  constructor(
+    readonly limits: {
+      maxUsd: number;
+      maxTriage: number;
+      /** Most extractions per run (default: `maxTriage`). */
+      maxExtract?: number;
+      keepForAssessUsd?: number;
+    },
+  ) {}
 
   get spent() {
     return this.spentUsd;
@@ -46,6 +57,22 @@ export class DiscoveryBudget {
   /** Replaces a triage reservation with what the call really used. */
   settleTriage(modelId: string, usage: TokenUsage) {
     this.spentUsd += estimateLlmUsd(modelId, usage) - TRIAGE_RESERVE_USD;
+  }
+
+  /** Reserves one extraction call (same spend rule as triage), or refuses. */
+  reserveExtract(): boolean {
+    const cap = this.limits.maxExtract ?? this.limits.maxTriage;
+    if (this.extractCalls >= cap) return this.refuse(`per-run extraction cap (${cap}) reached`);
+    const keep = this.limits.keepForAssessUsd ?? 0;
+    if (this.spentUsd + EXTRACT_RESERVE_USD > this.limits.maxUsd - keep) return this.refuseSpend();
+    this.extractCalls += 1;
+    this.spentUsd += EXTRACT_RESERVE_USD;
+    return true;
+  }
+
+  /** Replaces an extraction reservation with what the call really used. */
+  settleExtract(modelId: string, usage: TokenUsage) {
+    this.spentUsd += estimateLlmUsd(modelId, usage) - EXTRACT_RESERVE_USD;
   }
 
   reserveAssessment(): boolean {

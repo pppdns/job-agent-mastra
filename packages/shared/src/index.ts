@@ -24,6 +24,7 @@ export type RescoreLimit = number | "all";
 
 export * from "./assessment";
 export * from "./job-status";
+export * from "./listing-facts";
 export * from "./location-block";
 export * from "./posted-date";
 export * from "./posting";

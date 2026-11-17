@@ -11,6 +11,7 @@ export * from "./assessments";
 export * from "./ats";
 export * from "./claims";
 export * from "./discovery";
+export * from "./facts";
 export { AssessmentError, hashPayload } from "./hash";
 export * from "./job-list";
 export * from "./jobs";

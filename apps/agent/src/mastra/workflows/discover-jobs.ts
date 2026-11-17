@@ -1,4 +1,5 @@
 import { countAwaitingTriage } from "@copilot/db";
+import { RETRIAGE_MAX_JOBS } from "@copilot/shared";
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 import {
@@ -49,7 +50,7 @@ export function discoveryScheduleEnabled(
 }
 
 const triggerSchema = z.object({
-  trigger: z.enum(["schedule", "manual", "triage", "assess"]).default("schedule"),
+  trigger: z.enum(["schedule", "manual", "triage", "assess", "extract"]).default("schedule"),
   lookbackDays: z
     .number()
     .int()
@@ -59,6 +60,8 @@ const triggerSchema = z.object({
   assessLimit: z.number().int().positive().nullish(),
   /** Triage-only runs: how many waiting jobs to triage (unset: the `maxTriagePerRun` setting). */
   triageLimit: z.number().int().positive().nullish(),
+  /** Facts-only runs (the backfill): how many jobs to read listing facts for. */
+  extractLimit: z.number().int().positive().nullish(),
 });
 
 const sourceResultSchema = z.object({
@@ -118,6 +121,10 @@ const fetchSources = createStep({
 });
 
 const funnelSchema = z.object({
+  extracted: z.number().optional(),
+  extractFailed: z.number().optional(),
+  extractPending: z.number().optional(),
+  extractErrors: z.array(z.string()).optional(),
   triaged: z.number(),
   triageFailed: z.number(),
   triagePending: z.number(),
@@ -154,11 +161,13 @@ const triage = createStep({
         funnel: { ...EMPTY_FUNNEL, triagePending: await countAwaitingTriage(db) },
       };
     }
-    const { triageLimit } = triggerSchema.parse(getInitData());
+    const { trigger, triageLimit, extractLimit } = triggerSchema.parse(getInitData());
     const funnel = await triageStep(db, inputData.runId, {
       tracingContext,
       signal: abortSignal,
       triageLimit: triageLimit ?? undefined,
+      // A facts-only run reads facts and stops; without a limit it takes every waiting job.
+      extractLimit: trigger === "extract" ? (extractLimit ?? RETRIAGE_MAX_JOBS) : undefined,
     });
     return { ...inputData, funnel };
   },
@@ -171,8 +180,9 @@ const assess = createStep({
   outputSchema: funnelled,
   execute: async ({ inputData, getInitData, tracingContext, abortSignal }) => {
     if (!inputData.runId) return inputData;
+    const { assessLimit, trigger } = triggerSchema.parse(getInitData());
+    if (trigger === "extract") return inputData;
     const db = await getAppDb();
-    const { assessLimit } = triggerSchema.parse(getInitData());
     const funnel = await assessStep(db, inputData.runId, inputData.funnel, {
       tracingContext,
       signal: abortSignal,
@@ -187,8 +197,10 @@ const report = createStep({
   description: "Emails the run's new matches (when configured and there are any)",
   inputSchema: funnelled,
   outputSchema: funnelled,
-  execute: async ({ inputData }) => {
+  execute: async ({ inputData, getInitData }) => {
     if (!inputData.runId) return inputData;
+    // A facts-only run has no matches to email.
+    if (triggerSchema.parse(getInitData()).trigger === "extract") return inputData;
     const db = await getAppDb();
     return { ...inputData, funnel: await reportStep(db, inputData.runId, inputData.funnel) };
   },

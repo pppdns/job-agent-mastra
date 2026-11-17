@@ -1,6 +1,10 @@
 "use client";
 
 import { ASSESS_BATCH_SIZES } from "@copilot/shared";
+
+/** What reading one listing's facts costs on average (fast model; measured in the eval). */
+const FACTS_USD_PER_JOB = 0.0008;
+
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 import {
@@ -19,10 +23,13 @@ export function DiscoveryControls({
   running,
   maxBackfillUsd,
   awaitingTriage,
+  awaitingFacts,
 }: {
   running: boolean;
   maxBackfillUsd: number | null;
   awaitingTriage: number;
+  /** Jobs whose listing facts are missing or outdated (the facts backfill reads them). */
+  awaitingFacts: number;
 }) {
   // The smallest batch by default: a known, low cost per click.
   const [assessLimit, setAssessLimit] = useState<number>(ASSESS_BATCH_SIZES[0]);
@@ -55,6 +62,12 @@ export function DiscoveryControls({
         >
           Triage next batch · {awaitingTriage.toLocaleString("en-US")} waiting
         </Button>
+        {awaitingFacts > 0 && (
+          <Button type="submit" name="run" value="extract" variant="outline" disabled={busy}>
+            Read listing facts · {awaitingFacts.toLocaleString("en-US")} jobs · about $
+            {(awaitingFacts * FACTS_USD_PER_JOB).toFixed(2)}
+          </Button>
+        )}
         <span className="flex flex-wrap items-center gap-1">
           <input type="hidden" name="assessLimit" value={assessLimit} />
           <Button type="submit" name="run" value="assess" variant="outline" disabled={busy}>

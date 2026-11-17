@@ -8,7 +8,6 @@ import {
   saveTriage,
 } from "@copilot/db";
 import {
-  quoteInSources,
   type SearchSettings,
   shortReason,
   type Triage,
@@ -58,21 +57,11 @@ export function triagePrompt(
   ].join("\n\n");
 }
 
-/**
- * Applies the app's rules on top of the model's answer: a location block counts only when its
- * quote is in the posting, and a hard conflict or location block caps the score.
- */
-export function settleScore(triage: TriageInput, posting: string): Triage {
-  const block =
-    triage.locationBlock && quoteInSources(triage.locationBlock.quote, [posting])
-      ? triage.locationBlock
-      : null;
-  if (triage.locationBlock && !block) console.warn("triage: location block quote not in posting");
-  const capped = triage.hardConflict || block;
+/** Applies the app's rule on top of the model's answer: a hard conflict caps the score. */
+export function settleScore(triage: TriageInput): Triage {
   return {
     ...triage,
-    locationBlock: block,
-    score: capped ? Math.min(triage.score, HARD_CONFLICT_MAX_SCORE) : triage.score,
+    score: triage.hardConflict ? Math.min(triage.score, HARD_CONFLICT_MAX_SCORE) : triage.score,
   };
 }
 
@@ -118,14 +107,13 @@ export async function triageJobs(deps: TriageDeps): Promise<TriageOutcome> {
         const source = await latestListingSource(db, job.id);
         if (!source) throw new Error("no stored posting");
         const prompt = triagePrompt(profile, settings, job, source.content);
-        const triage = settleScore(await call(prompt, deps), source.content);
+        const triage = settleScore(await call(prompt, deps));
         await saveTriage(db, job.id, {
           score: triage.score,
           reason: triage.hardConflict
             ? `${shortReason(triage.reason, 200)} (conflict: ${shortReason(triage.hardConflict, 150)})`
             : shortReason(triage.reason),
           profileVersion: profile.version,
-          locationBlock: triage.locationBlock,
         });
         triaged += 1;
         if (triage.score >= settings.triageThreshold) matched += 1;

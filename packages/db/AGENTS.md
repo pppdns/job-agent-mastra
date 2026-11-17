@@ -22,8 +22,8 @@ Drizzle schema (`src/schema.ts`, `app_*` tables), migrations in `drizzle/` (gene
   - **Dedupe:** the ATS key of the apply URL (below), a shared off-board apply URL (ATS or company site) as `canonical_url`, else `dedupe_key` = `companyKey(company)|normalized title`. Board URLs are never `canonical_url`: `compatible()` would block the cross-board match.
 - **Visibility:** `visibleJobs(threshold)` is used by `listJobs` unless `{ includeHidden }`, so `/jobs`, `find_saved_jobs` and re-score all see only these. A job is visible when:
   - it came from chat, was kept (`kept_at`), or has any status but `new`; or
-  - one of its postings passes, its triage score (once set) reaches the threshold, and it has no `location_block`.
-- **Location block** (`app_jobs.location_block`, `@copilot/shared` `location-block.ts`): the listing explicitly limits hiring to places that exclude where the person lives. Set by triage (`saveTriage`, only while the job has no assessment) or the latest assessment (`saveDraft`; a draft without one clears it). `saveDraft` rejects a block whose quote isn't in the job's listing sources (`quoteInSources`, research pages don't count) or that isn't verdict `pass` with a hard conflict. `resetStaleTriage` clears triage blocks only. Blocked jobs show under "Screened out" (`belowThresholdJobs`) with "Keep anyway", and are left out of `jobsToAssess`, `digestMatches` and `unseenMatchCount` unless kept.
+  - one of its postings passes, its triage score (once set) reaches the threshold, and its listing doesn't rule out home (`locationOpen` in `facts.ts`).
+- **Listing facts and eligibility** (`facts.ts`; shapes and rules in `@copilot/shared` `listing-facts.ts`): `app_jobs.facts` holds the verified facts (`FACTS_VERSION` in `facts_version`), `eligibility` / `eligibility_quote` what code decided from them and home (`saveFacts`). `jobsAwaitingExtraction` / `countAwaitingExtraction`: non-archived jobs with a stored listing that a user could see, missing or outdated facts, acted-on first (`untriagedOnly` limits it to jobs before triage, for routine runs). `rederiveEligibility` re-decides every job in code after home changes. `locationOpen`: eligibility not `closed` / `likely_closed`; while a job has no eligibility yet, the old `location_block` column decides (nothing writes it any more; it only bridges until the facts backfill). Hidden jobs show under "Screened out" (`belowThresholdJobs`, with `eligibility` and the quote) with "Keep anyway", are skipped by triage (`jobsAwaitingTriage`), and are left out of `jobsToAssess`, `digestMatches` and `unseenMatchCount` unless kept.
 - **`rescreenPostings`**: run after a settings change.
   - Age is judged as of arrival, with the backfill window of the run that brought the posting (`first_run_id` → `lookback_days`).
   - Newly passing postings are promoted. Discovered jobs whose postings all fail now hide.
@@ -36,7 +36,7 @@ Drizzle schema (`src/schema.ts`, `app_*` tables), migrations in `drizzle/` (gene
   - `sourceSpendSince` gives the Apify budget
 - **Triage and matches:**
   - `jobsAwaitingTriage` / `countAwaitingTriage`: untouched discovered jobs (`new`, not archived, a passing posting) without a score.
-  - `saveTriage` stores score, reason, the profile version and a verified location block (or clears a triage one).
+  - `saveTriage` stores score, reason and the profile version.
   - `jobsToAssess`: triaged since the run started, at or above the threshold, without a draft, best first.
   - `digestMatches`: the run's matches for the email.
   - `markJobSeen` / `unseenMatchCount`: the "new matches" badge.

@@ -3,7 +3,6 @@ import {
   companyKey,
   DISCOVERY_SOURCE_LABELS,
   type DiscoverySource,
-  type LocationBlock,
   type PostingInput,
   parseSearchSettings,
   postingSnapshot,
@@ -11,6 +10,7 @@ import {
   type SearchSettings,
 } from "@copilot/shared";
 import { and, desc, eq, gte, inArray, isNotNull, isNull, notExists, sql } from "drizzle-orm";
+import { locationOpen } from "./facts";
 import type { Db } from "./index";
 import { addSourceUnlocked, upsertJobUnlocked } from "./jobs";
 import { DISCOVERY_THREAD_PREFIX } from "./runs";
@@ -224,7 +224,8 @@ export type ModelSpend = { triageUsd: number; assessUsd: number };
 const spendOf = (rows: { actor: string | null; usd: number | null }[]): ModelSpend => {
   const spend = { triageUsd: 0, assessUsd: 0 };
   for (const r of rows) {
-    if (r.actor === "triager") spend.triageUsd += r.usd ?? 0;
+    // Listing facts are part of the cheap first look: counted with triage.
+    if (r.actor === "triager" || r.actor === "extractor") spend.triageUsd += r.usd ?? 0;
     else spend.assessUsd += r.usd ?? 0;
   }
   return spend;
@@ -524,13 +525,13 @@ export function rescreenPostings(
 /**
  * Jobs worth showing: chat jobs and jobs the user acted on or kept always; a discovered job
  * still `new` only while one of its postings passes the screen, its triage score (once it has
- * one) reaches the threshold, and its listing doesn't exclude where the person lives.
+ * one) reaches the threshold, and its listing doesn't rule out home (`locationOpen`).
  */
 export const visibleJobs = (triageThreshold: number) => sql`(
   ${jobs.origin} = 'chat' OR ${jobs.keptAt} IS NOT NULL OR ${jobs.status} != 'new' OR (
     EXISTS (SELECT 1 FROM app_postings p WHERE p.job_id = "app_jobs"."id" AND p.screen_reasons IS NULL)
     AND (${jobs.triageScore} IS NULL OR ${jobs.triageScore} >= ${triageThreshold})
-    AND ${jobs.locationBlock} IS NULL
+    AND ${locationOpen}
   )
 )`;
 
@@ -588,8 +589,8 @@ const openDiscovered = sql`${jobs.origin} = 'discovery' AND ${jobs.status} = 'ne
   AND ${jobs.archivedAt} IS NULL
   AND (${jobs.keptAt} IS NOT NULL OR EXISTS (SELECT 1 FROM app_postings p WHERE p.job_id = "app_jobs"."id" AND p.screen_reasons IS NULL))`;
 
-/** Not hidden by a location block (or kept anyway): matches to assess, email and count. */
-const notLocationBlocked = sql`(${jobs.keptAt} IS NOT NULL OR ${jobs.locationBlock} IS NULL)`;
+/** Not hidden by its location (or kept anyway): jobs to triage, assess, email and count. */
+const notLocationBlocked = sql`(${jobs.keptAt} IS NOT NULL OR ${locationOpen})`;
 
 export type TriageCandidate = { id: string; title: string | null; company: string | null };
 
@@ -598,7 +599,7 @@ export async function jobsAwaitingTriage(db: Db, limit: number): Promise<TriageC
   return db
     .select({ id: jobs.id, title: jobs.title, company: jobs.company })
     .from(jobs)
-    .where(and(openDiscovered, isNull(jobs.triageScore)))
+    .where(and(openDiscovered, notLocationBlocked, isNull(jobs.triageScore)))
     .orderBy(desc(jobs.createdAt))
     .limit(limit);
 }
@@ -607,7 +608,7 @@ export async function countAwaitingTriage(db: Db): Promise<number> {
   const [row] = await db
     .select({ n: sql<number>`count(*)` })
     .from(jobs)
-    .where(and(openDiscovered, isNull(jobs.triageScore)));
+    .where(and(openDiscovered, notLocationBlocked, isNull(jobs.triageScore)));
   return row?.n ?? 0;
 }
 
@@ -619,9 +620,6 @@ export function saveTriage(
     score: number;
     reason: string;
     profileVersion: number;
-    /** A verified location block (see `settleScore`); null clears an earlier triage's. Once
-     * the job has an assessment, triage never changes it: the assessment's decision stands. */
-    locationBlock?: LocationBlock | null;
   },
 ): Promise<void> {
   return serializeWrites(db, async () => {
@@ -632,9 +630,6 @@ export function saveTriage(
         triageReason: triage.reason,
         triageProfileVersion: triage.profileVersion,
         triagedAt: new Date(),
-        locationBlock: sql`(case when exists (select 1 from app_job_drafts d where d.job_id = "app_jobs"."id") then ${jobs.locationBlock} else ${
-          triage.locationBlock ? JSON.stringify({ ...triage.locationBlock, from: "triage" }) : null
-        } end)`,
       })
       .where(eq(jobs.id, jobId));
   });

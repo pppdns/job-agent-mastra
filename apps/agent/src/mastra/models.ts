@@ -1,6 +1,6 @@
 import { gateway } from "@ai-sdk/gateway";
 import type { LanguageModelV4, LanguageModelV4Prompt } from "@ai-sdk/provider";
-import { RESEARCH_TOPIC_LABELS, RESEARCH_TOPICS } from "@copilot/shared";
+import { EXTRACT_MARKER, RESEARCH_TOPIC_LABELS, RESEARCH_TOPICS } from "@copilot/shared";
 import { simulateReadableStream, wrapLanguageModel } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { env, type ReasoningLevel } from "../env";
@@ -154,6 +154,50 @@ function toolResultValue(part: unknown): ToolResultValue {
 /** Pay copied from a pasted listing ("EUR 70,000 – 80,000"), like a real model would. */
 const mockSalary = (text: string) => text.match(/EUR \d[\d,]*(?: – \d[\d,]*)?/)?.[0];
 
+/** Listing facts the mock extractor finds: work mode, location line, EUR/USD pay, languages. */
+function mockFacts(prompt: string) {
+  const listing = prompt.split("\n\n").slice(3).join("\n\n");
+  const line = (re: RegExp) =>
+    listing
+      .split("\n")
+      .find((l) => re.test(l))
+      ?.trim() ?? null;
+  const remote = line(/\bremote\b/i);
+  const hybrid = line(/\bhybrid\b/i);
+  const location = listing.match(/^Location: (.+)$/m);
+  const pay = listing.match(/(EUR|USD) ([\d,]+) – ([\d,]+)/);
+  const amount = (s: string | undefined) => Number((s ?? "").replaceAll(",", ""));
+  return {
+    workMode: hybrid ? "hybrid" : remote ? "remote" : "unclear",
+    workModeQuote: hybrid ?? remote,
+    remoteScope: /\banywhere\b|\bworldwide\b/i.test(remote ?? "") ? "worldwide" : "unspecified",
+    scopeQuote: /\banywhere\b|\bworldwide\b/i.test(remote ?? "") ? remote : null,
+    places: location
+      ? [{ place: location[1], basis: hybrid ? "office" : "listed", quote: location[0] }]
+      : [],
+    signals: [],
+    openSignals: [],
+    officeDays: null,
+    salary: pay
+      ? {
+          min: amount(pay[2]),
+          max: amount(pay[3]),
+          currency: pay[1],
+          period: "year",
+          quote: pay[0],
+        }
+      : null,
+    level: null,
+    languages: ["TypeScript", "Python", "Go"]
+      .filter((name) => new RegExp(`\\b${name}\\b`).test(listing))
+      .map((name) => ({ name, required: true, quote: name })),
+    roleFocus: [],
+    travel: null,
+    employmentType: null,
+    timezone: null,
+  };
+}
+
 const MOCK_ASSESSMENT = (sourceId: string, salary?: string) => ({
   headline: "Mock headline: listing read, pay unknown",
   overview: "Mock assessment of the pasted listing.",
@@ -186,6 +230,11 @@ function mockTurn({
     toolCallId: `mock-${toolName}-${prompt.length}`,
   });
 
+  // Extractor (structured output): facts read from the listing's own lines.
+  if (responseFormat?.type === "json" && lastUserText(prompt).includes(EXTRACT_MARKER)) {
+    return { kind: "text", text: JSON.stringify(mockFacts(lastUserText(prompt))) };
+  }
+
   // Triager (structured output): a deterministic score from the posting's title.
   if (responseFormat?.type === "json" && lastUserText(prompt).includes(TRIAGE_MARKER)) {
     const title = lastUserText(prompt).match(/^Title: (.+)$/m)?.[1] ?? "";
@@ -196,7 +245,6 @@ function mockTurn({
         score,
         reason: `Mock triage of ${title}.`,
         hardConflict: null,
-        locationBlock: null,
       }),
     };
   }

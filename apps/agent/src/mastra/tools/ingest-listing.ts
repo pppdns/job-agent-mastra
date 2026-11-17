@@ -1,6 +1,8 @@
+import { currentPreferences } from "@copilot/db";
 import type { MastraDBMessage } from "@mastra/core/agent/message-list";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { extractJobFacts } from "../../discovery/extract";
 import { type IngestResult, ingestText, ingestUrl } from "../../ingest/ingest";
 import { MAX_URL_LENGTH } from "../../ingest/url-guard";
 import { meterWeb, recorderFor } from "../../usage/recorder";
@@ -63,6 +65,24 @@ export const ingestListingTool = createTool({
     } else {
       return { status: "blocked", reason: "pass either url or fromLatestUserMessage" };
     }
-    return result.status === "saved" ? { ...result, notice: UNTRUSTED_NOTICE } : result;
+    if (result.status !== "saved") return result;
+    // Listing facts (chips, eligibility) right away; a failure leaves them for the next run.
+    const { jobId, listing } = result;
+    await currentPreferences(db)
+      .then((preferences) =>
+        extractJobFacts(
+          { db, recorder: recorderFor(threadId), signal: context?.abortSignal },
+          { id: jobId, title: listing.title ?? null, company: listing.company ?? null },
+          preferences,
+        ),
+      )
+      .catch((error) =>
+        console.error(
+          "listing facts failed",
+          jobId,
+          error instanceof Error ? error.message : error,
+        ),
+      );
+    return { ...result, notice: UNTRUSTED_NOTICE };
   },
 });

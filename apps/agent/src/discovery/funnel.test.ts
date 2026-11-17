@@ -6,6 +6,7 @@ import {
   type Db,
   type DigestMatch,
   type DiscoveryRun,
+  editPreferences,
   getJobDetail,
   latestRunStatuses,
   listJobs,
@@ -20,6 +21,7 @@ import {
 import {
   DEFAULT_PREFERENCES,
   DEFAULT_SEARCH_SETTINGS,
+  type ListingFactsInput,
   type PostingInput,
   type SearchSettings,
   screenPosting,
@@ -28,6 +30,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { assessTopMatches } from "./assess";
 import { ASSESS_RESERVE_USD, assessmentShare, DiscoveryBudget, TRIAGE_RESERVE_USD } from "./budget";
 import { MAX_ERRORS, noteError } from "./errors";
+import { extractJobs } from "./extract";
 import {
   assessStep,
   closeUsage,
@@ -85,6 +88,24 @@ async function discovered(...items: [string, string][]) {
   return run?.id ?? "";
 }
 
+const NO_FACTS: ListingFactsInput = {
+  workMode: "unclear",
+  workModeQuote: null,
+  remoteScope: "unspecified",
+  scopeQuote: null,
+  places: [],
+  signals: [],
+  openSignals: [],
+  officeDays: null,
+  salary: null,
+  level: null,
+  languages: [],
+  roleFocus: [],
+  travel: null,
+  employmentType: null,
+  timezone: null,
+};
+
 describe("triage", () => {
   it("puts the stable parts first and the untrusted posting last", () => {
     const prompt = triagePrompt(
@@ -100,50 +121,64 @@ describe("triage", () => {
   });
 
   it("caps the score when there is a hard conflict", () => {
-    expect(
-      settleScore({ score: 85, reason: "x", hardConflict: "on-site in Munich" }, "").score,
-    ).toBe(39);
-    expect(settleScore({ score: 85, reason: "x", hardConflict: null }, "").score).toBe(85);
-  });
-
-  it("caps the score for a location block only when its quote is in the posting", () => {
-    const posting =
-      "# AI Engineer\n\nRemote: yes (United States)\n\nUS-only, must reside in the US.";
-    const block = { places: ["United States"], quote: "US-only, must reside in the US" };
-    const kept = settleScore(
-      { score: 85, reason: "x", hardConflict: null, locationBlock: block },
-      posting,
+    expect(settleScore({ score: 85, reason: "x", hardConflict: "on-site in Munich" }).score).toBe(
+      39,
     );
-    expect(kept).toMatchObject({ score: 39, locationBlock: block });
-    const header = { places: ["United States"], quote: "Remote: yes (United States)" };
-    expect(
-      settleScore({ score: 85, reason: "x", hardConflict: null, locationBlock: header }, posting)
-        .score,
-    ).toBe(39);
-    const invented = { places: ["United Kingdom"], quote: "UK residents only" };
-    expect(
-      settleScore({ score: 85, reason: "x", hardConflict: null, locationBlock: invented }, posting),
-    ).toMatchObject({ score: 85, locationBlock: null });
+    expect(settleScore({ score: 85, reason: "x", hardConflict: null }).score).toBe(85);
   });
 
-  it("hides a triaged job with a location block until it is kept", async () => {
-    await discovered(["a", "Founding Engineer"]);
+  it("reads listing facts first, hides jobs whose listing rules out home, skips their triage", async () => {
+    await editPreferences(db, {
+      threadId: "profile-page",
+      baseVersion: 0,
+      preferences: { home: { city: "Budapest", country: "Hungary" } },
+    });
+    await discovered(["a", "Founding Engineer"], ["b", "AI Engineer"]);
+    const facts = (place: string, quote: string): ListingFactsInput => ({
+      ...NO_FACTS,
+      workMode: "remote",
+      places: [{ place, basis: "residence", quote }],
+    });
+    const extracted = await extractJobs({
+      db,
+      budget: new DiscoveryBudget({ maxUsd: 1, maxTriage: 10 }),
+      limit: 10,
+      // Each posting's description is "Work on <title>."; only real quotes count.
+      extract: async (prompt) =>
+        prompt.includes("Founding")
+          ? facts("United States", "Work on Founding Engineer.")
+          : facts("United States", "an invented quote"),
+    });
+    expect(extracted).toMatchObject({ extracted: 2, failed: 0, pending: 0 });
+    const all = await listJobs(db, undefined, { includeHidden: true });
+    const byTitle = Object.fromEntries(all.map((j) => [j.title, j]));
+    expect(byTitle["Founding Engineer"]).toMatchObject({
+      eligibility: "closed",
+      eligibilityQuote: "Work on Founding Engineer.",
+    });
+    // The unverified quote is dropped, so nothing decides: unclear, still shown.
+    expect(byTitle["AI Engineer"]).toMatchObject({ eligibility: "unclear" });
+    expect((await listJobs(db)).map((j) => j.title)).toEqual(["AI Engineer"]);
+
+    const triaged: string[] = [];
     await triageJobs({
       db,
       budget: new DiscoveryBudget({ maxUsd: 1, maxTriage: 10 }),
-      triage: async () => ({
-        score: 90,
-        reason: "ok",
-        hardConflict: null,
-        locationBlock: { places: ["United States"], quote: "Founding Engineer" },
-      }),
+      triage: async (prompt) => {
+        triaged.push(prompt);
+        return { score: 70, reason: "ok", hardConflict: null };
+      },
     });
-    const all = await listJobs(db, undefined, { includeHidden: true });
-    expect(all[0]).toMatchObject({
-      triageScore: 39,
-      locationBlock: { from: "triage", places: ["United States"] },
-    });
-    expect(await listJobs(db)).toEqual([]);
+    expect(triaged).toHaveLength(1);
+    expect(triaged[0]).toContain("AI Engineer");
+  });
+
+  it("stops extracting at the per-run cap; the rest waits", async () => {
+    await discovered(["a", "Founding Engineer"], ["b", "AI Engineer"]);
+    const budget = new DiscoveryBudget({ maxUsd: 1, maxTriage: 10, maxExtract: 1 });
+    const outcome = await extractJobs({ db, budget, limit: 10, extract: async () => NO_FACTS });
+    expect(outcome).toMatchObject({ extracted: 1, pending: 1 });
+    expect(budget.stoppedBy).toMatch(/extraction cap/);
   });
 
   it("triages waiting jobs, counts failures, leaves the rest for the next run at the cap", async () => {

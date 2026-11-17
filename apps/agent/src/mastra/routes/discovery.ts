@@ -19,12 +19,25 @@ import { RunRecorder } from "../../usage/recorder";
 import { getAppDb } from "../app-db";
 import { DISCOVER_JOBS_WORKFLOW_ID } from "../workflows/discover-jobs";
 
-const MODE_TRIGGER = { fetch: "manual", triage: "triage", assess: "assess" } as const;
-const MODE_LABEL = { fetch: "manual", triage: "triage only", assess: "assess only" } as const;
+const MODE_TRIGGER = {
+  fetch: "manual",
+  triage: "triage",
+  assess: "assess",
+  extract: "extract",
+} as const;
+const MODE_LABEL = {
+  fetch: "manual",
+  triage: "triage only",
+  assess: "assess only",
+  extract: "facts only",
+} as const;
 
 const bodySchema = z.object({
-  /** fetch: the normal run; triage: triage the next batch of waiting jobs; assess: assess more matches. */
-  mode: z.enum(["fetch", "triage", "assess"]).default("fetch"),
+  /**
+   * fetch: the normal run; triage: triage the next batch of waiting jobs; assess: assess more
+   * matches; extract: read listing facts for every job without them (the backfill).
+   */
+  mode: z.enum(["fetch", "triage", "assess", "extract"]).default("fetch"),
   lookbackDays: z
     .number()
     .int()
@@ -41,6 +54,8 @@ const bodySchema = z.object({
    * default: the `maxTriagePerRun` setting). The run's spend cap grows to fit.
    */
   triageLimit: z.number().int().positive().max(RETRIAGE_MAX_JOBS).nullish(),
+  /** extract only: how many jobs (default: every job waiting for facts, up to RETRIAGE_MAX_JOBS). */
+  extractLimit: z.number().int().positive().max(RETRIAGE_MAX_JOBS).nullish(),
 });
 
 /**
@@ -56,7 +71,7 @@ export const discoveryRunRoute = registerApiRoute("/discovery/run", {
     if (!parsed.success) {
       return c.json(
         {
-          error: `mode must be fetch, triage or assess; lookbackDays 7 or 30; assessLimit ${ASSESS_BATCH_SIZES.join(", ")}; triageLimit 1–${RETRIAGE_MAX_JOBS}`,
+          error: `mode must be fetch, triage, assess or extract; lookbackDays 7 or 30; assessLimit ${ASSESS_BATCH_SIZES.join(", ")}; triageLimit 1–${RETRIAGE_MAX_JOBS}`,
         },
         400,
       );
@@ -65,13 +80,20 @@ export const discoveryRunRoute = registerApiRoute("/discovery/run", {
     const lookbackDays = mode === "fetch" ? (parsed.data.lookbackDays ?? null) : null;
     const assessLimit = mode === "assess" ? (parsed.data.assessLimit ?? null) : null;
     const triageLimit = mode === "triage" ? (parsed.data.triageLimit ?? null) : null;
+    const extractLimit = mode === "extract" ? (parsed.data.extractLimit ?? null) : null;
     const db = await getAppDb();
     const [latest] = await listDiscoveryRuns(db, 1);
     if (latest?.status === "running") return c.json({ error: "A discovery run is running" }, 409);
     const workflow = c.get("mastra").getWorkflow("discoverJobsWorkflow");
     const run = await workflow.createRun();
     const { runId } = await run.startAsync({
-      inputData: { trigger: MODE_TRIGGER[mode], lookbackDays, assessLimit, triageLimit },
+      inputData: {
+        trigger: MODE_TRIGGER[mode],
+        lookbackDays,
+        assessLimit,
+        triageLimit,
+        extractLimit,
+      },
       tracingOptions: {
         rootSpanName: `discover-jobs (${MODE_LABEL[mode]}${lookbackDays ? `, ${lookbackDays}-day backfill` : ""}${assessLimit ? `, up to ${assessLimit}` : ""}${triageLimit ? `, up to ${triageLimit}` : ""})`,
       },

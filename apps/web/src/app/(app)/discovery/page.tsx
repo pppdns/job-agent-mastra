@@ -1,4 +1,5 @@
 import {
+  countAwaitingExtraction,
   countAwaitingTriage,
   type DiscoveryRun,
   type FunnelResult,
@@ -19,6 +20,7 @@ import {
   DISCOVERY_SOURCE_LABELS,
   DISCOVERY_SOURCE_SITES,
   DISCOVERY_SOURCES,
+  FACTS_VERSION,
   PAID_DISCOVERY_SOURCES,
 } from "@copilot/shared";
 import { cn } from "cn";
@@ -84,12 +86,13 @@ async function Discovery() {
   const db = await appDb();
   const now = Date.now();
   const monthAgo = new Date(now - 30 * DAY_MS);
-  const [runs, settings, spent, screenedOut, awaitingTriage] = await Promise.all([
+  const [runs, settings, spent, screenedOut, awaitingTriage, awaitingFacts] = await Promise.all([
     listDiscoveryRuns(db, 20),
     getSearchSettings(db),
     sourceSpendSince(db, PAID_DISCOVERY_SOURCES, monthAgo),
     screenedOutSince(db, new Date(now - 7 * DAY_MS)),
     countAwaitingTriage(db),
+    countAwaitingExtraction(db, FACTS_VERSION),
   ]);
   const [modelSpend, spendByRun] = await Promise.all([
     modelSpendSince(db, monthAgo),
@@ -119,6 +122,7 @@ async function Discovery() {
           running={running}
           maxBackfillUsd={maxBackfillUsd}
           awaitingTriage={awaitingTriage}
+          awaitingFacts={awaitingFacts}
         />
       </section>
 
@@ -358,6 +362,7 @@ const TRIGGER_LABEL: Record<DiscoveryRun["trigger"], string> = {
   manual: "Manual",
   triage: "Triage only",
   assess: "Assess only",
+  extract: "Facts only",
 };
 
 /** The latest finished run in one glance: did it work, what it brought, what needs a look. */
@@ -369,6 +374,7 @@ function LastRun({ run, spend }: { run: DiscoveryRun; spend: ModelSpend | undefi
   const duration = run.endedAt && formatDuration(run.endedAt.getTime() - run.startedAt.getTime());
   const facts = [
     `${newJobs} new jobs`,
+    run.funnel?.extracted && `${run.funnel.extracted} listings read`,
     run.funnel && `${run.funnel.triaged} triaged`,
     run.funnel && `${run.funnel.matched} matches`,
     run.funnel && `${run.funnel.assessed} assessed`,
@@ -506,6 +512,9 @@ const DIGEST_LABEL = { sent: "email sent", skipped: "no email", failed: "email f
 
 function FunnelLine({ funnel }: { funnel: FunnelResult }) {
   const parts = [
+    funnel.extracted && `${funnel.extracted} listings read`,
+    funnel.extractFailed && `${funnel.extractFailed} not read`,
+    funnel.extractPending && `${funnel.extractPending} waiting to be read`,
     `${funnel.triaged} triaged`,
     funnel.triageFailed && `${funnel.triageFailed} failed`,
     funnel.triagePending && `${funnel.triagePending} waiting`,
