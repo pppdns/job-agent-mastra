@@ -137,6 +137,7 @@ function Points({ kind, points }: { kind: PointKey; points: AssessmentPoint[] })
             <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", TONE_FILL[tone])} />
             <div className="flex min-w-0 flex-col gap-1">
               <p className="leading-snug text-foreground">
+                {p.label && <span className="font-medium">{p.label}: </span>}
                 {p.text} <EvidenceBadge evidence={p.evidence} />
               </p>
               {p.quote && (

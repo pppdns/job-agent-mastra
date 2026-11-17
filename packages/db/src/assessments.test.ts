@@ -62,6 +62,35 @@ const fitPoint = (factId: string) => ({
 });
 
 describe("saveDraft", () => {
+  it("keeps a point's quote only when the job's sources contain it", async () => {
+    const draft = await saveDraft(db, {
+      jobId,
+      assessment: {
+        ...assessment(),
+        strengths: [
+          {
+            label: "Real",
+            text: "Quoted",
+            evidence: "official",
+            sourceIds: [sourceId],
+            quote: "listing text",
+          },
+          {
+            label: "Invented",
+            text: "Made up",
+            evidence: "official",
+            sourceIds: [sourceId],
+            quote: "free lunch",
+          },
+        ],
+      },
+    });
+    expect(draft.assessment.strengths.map((p) => [p.label, p.quote])).toEqual([
+      ["Real", "listing text"],
+      ["Invented", undefined],
+    ]);
+  });
+
   it("adds a new version on every save", async () => {
     const v1 = await saveDraft(db, { jobId, assessment: assessment() });
     const v2 = await saveDraft(db, { jobId, assessment: assessment("Revised") });

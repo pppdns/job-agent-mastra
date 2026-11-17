@@ -238,7 +238,7 @@ Goal: judge a job from the list at first glance. Chips must be trustworthy: each
 - [x] PR 1 — Structured preferences on `/profile` (home, work mode per place, salary bands, languages, role focus, levels, travel; 4 levels preferred / ok / disliked / no), versioned with the profile, rendered into every prompt; the screen reads them (search settings lose regions, office places and the salary floor; pay is never screened)
 - [x] PR 2 — Listing facts extraction + eligibility (replaces the triage location block; closed and likely closed are hidden with the quote), discovery `extract` step, chat ingestion, backfill run
 - [x] PR 3 — Chips on the job list, job page ("At a glance"), company pages and the chat card
-- [ ] PR 4 — Short labels on assessment points; hard conflicts and verified strengths / weaknesses as chips
+- [x] PR 4 — Short labels on assessment points; hard conflicts and verified strengths / weaknesses as chips
 
 ## Simplifications chosen (tell me if any is unacceptable)
 

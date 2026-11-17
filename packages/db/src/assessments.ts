@@ -9,6 +9,7 @@ import {
   type ListingFacts,
   moneyAmounts,
   type PostedBasis,
+  quoteInSources,
   SOURCED_EVIDENCE_CLASSES,
   type StoredLocationBlock,
   salaryFiguresMissing,
@@ -98,6 +99,11 @@ async function saveDraftUnlocked(db: Db, input: DraftInput): Promise<JobDraft> {
     throw new AssessmentError(
       "with_profile drafts need at least one point that cites the profile facts it compares against (profileFactIds)",
     );
+  }
+  // Quotes become chip tooltips: one the job's sources don't contain is dropped, not trusted.
+  const sourceTexts = jobSources.map((s) => s.content);
+  for (const point of allPoints(assessment)) {
+    if (point.quote && !quoteInSources(point.quote, sourceTexts)) point.quote = undefined;
   }
   // A comparison with the profile is the model's judgement, whatever label it chose: relabelled,
   // not rejected (models mislabel these often, and a retry didn't always fix it).

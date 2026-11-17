@@ -33,6 +33,14 @@ const text = (max: number) => z.string().trim().min(1).max(max);
 const SALARY_MAX = 300;
 
 export const assessmentPointSchema = z.object({
+  /** 2–4 words naming the point, shown as a chip (optional: drafts before labels parse). */
+  label: z
+    .string()
+    .trim()
+    .min(2)
+    .max(60)
+    .optional()
+    .describe("2–4 plain words naming the point, e.g. 'Agent platform work', 'No salary stated'"),
   text: text(600),
   evidence: z.enum(EVIDENCE_CLASSES),
   sourceIds: z.array(z.string().max(64)).max(5).default([]),
@@ -257,6 +265,28 @@ export const allPoints = (a: Assessment): AssessmentPoint[] => [
 ];
 
 /** At-a-glance numbers for lists and cards. */
+/** Most fit chips per kind on a list row. */
+const FIT_CHIPS = { conflict: 3, strength: 2, weakness: 2 } as const;
+
+export type FitChip = { kind: keyof typeof FIT_CHIPS; label: string; quote: string | null };
+
+/**
+ * Labelled points worth a chip: hard conflicts (always), and strengths / weaknesses that quote
+ * the listing (`saveDraft` drops quotes it can't find, so a quote here is verified).
+ */
+function fitChips(a: Assessment): FitChip[] {
+  const pick = (points: AssessmentPoint[], kind: FitChip["kind"], needQuote: boolean) =>
+    points
+      .filter((p) => p.label && (!needQuote || p.quote))
+      .slice(0, FIT_CHIPS[kind])
+      .map((p) => ({ kind, label: p.label ?? "", quote: p.quote ?? null }));
+  return [
+    ...pick(a.hardConflicts, "conflict", false),
+    ...pick(a.strengths, "strength", true),
+    ...pick(a.weaknesses, "weakness", true),
+  ];
+}
+
 export function assessmentSummary(a: Assessment) {
   return {
     headline: a.headline ?? firstSentence(a.overview),
@@ -271,6 +301,7 @@ export function assessmentSummary(a: Assessment) {
       strengths: a.strengths.length,
       unknowns: a.unknowns.length,
     },
+    fitChips: fitChips(a),
   };
 }
 export type AssessmentSummary = ReturnType<typeof assessmentSummary>;

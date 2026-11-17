@@ -1,5 +1,6 @@
 import { currentPreferences, getJobDetail, jobPostings } from "@copilot/db";
 import {
+  assessmentSummary,
   DISCOVERY_SOURCE_LABELS,
   JOB_STATUS_LABELS,
   suggestedResearchTopics,
@@ -182,6 +183,7 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
             eligibilityQuote: job.eligibilityQuote,
             salaryText: draft?.assessment.salary,
             hardConflicts: draft?.assessment.hardConflicts.length,
+            fitChips: draft ? assessmentSummary(draft.assessment).fitChips : undefined,
           },
           preferences,
         )}
