@@ -79,7 +79,7 @@ describe("jobChips", () => {
     );
     expect(primary.map((c) => [c.label, c.tone, !!c.filled, !!c.dashed])).toEqual([
       ["Remote · EU", "success", false, false],
-      ["€120–150k", "success", true, false],
+      ["€120k – 150k", "success", true, false],
       ["Staff", "success", true, false],
     ]);
     expect(primary[0]?.quote).toBe("anywhere in the EU");
@@ -117,11 +117,36 @@ describe("jobChips", () => {
     const low = facts({
       salary: { min: 50_000, max: 60_000, currency: "USD", period: "year", quote: "$50–60k" },
     });
-    expect(chips(low, "open").primary[1]).toMatchObject({ label: "$50–60k", tone: "destructive" });
+    expect(chips(low, "open").primary[1]).toMatchObject({
+      label: "$50k – 60k",
+      tone: "destructive",
+    });
     const monthly = facts({
       salary: { min: 6_000, max: 8_000, currency: "EUR", period: "month", quote: "€6–8k/mo" },
     });
-    expect(chips(monthly, "open").primary[1]).toMatchObject({ label: "€6–8k/mo", tone: "muted" });
+    expect(chips(monthly, "open").primary[1]).toMatchObject({
+      label: "€6k – 8k/mo",
+      tone: "muted",
+    });
+  });
+
+  it("reads and colors pay from the assessment's text when the facts have none", () => {
+    const fromText = (salaryText: string) =>
+      jobChips({ facts: null, eligibility: null, eligibilityQuote: null, salaryText }, prefs)
+        .primary[1];
+    expect(fromText("14,000,000 - 24,000,000 HUF")).toMatchObject({
+      label: "HUF 14M – 24M",
+      tone: "destructive",
+      dashed: true,
+    });
+    expect(fromText("€12,500 – €15,000 / month + equity")).toMatchObject({
+      label: "€12.5k – 15k/mo",
+      tone: "success",
+      filled: true,
+      dashed: false,
+    });
+    expect(fromText("Competitive, with bonus")).toMatchObject({ tone: "muted", dashed: true });
+    expect(chips(null, null).primary[1]).toMatchObject({ label: "No salary", dashed: true });
   });
 
   it("colors languages, focus and travel by preference, deal-breakers first", () => {
