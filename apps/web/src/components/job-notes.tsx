@@ -92,7 +92,7 @@ export function JobNotes({
   }
 
   return (
-    <Card aria-label="Notes" size="sm">
+    <Card role="region" aria-label="Notes" size="sm">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <NotebookTextIcon className="size-4 text-muted-foreground" />

@@ -156,7 +156,7 @@ Each milestone adds its own deterministic tests and eval fixtures; M9 completes 
 - [x] `set_job_status` tool (no approval, only on the user's request; the injection eval forbids it); `find_saved_jobs` filters by status.
 - [x] While the profile is thin (no hard requirement or < 6 facts), the copilot ends each assessment with 1–2 preference questions that decide that job; answers become profile proposals.
 - [x] Verified: db/tool/list unit tests, e2e `jobs.spec.ts` (status, archive, tabs, search, unarchive, job page), browser check on the worktree DB.
-- Later if needed: paging (fine at a few hundred rows), bulk actions, notes and dates per job.
+- Later if needed: paging (fine at a few hundred rows), bulk actions, notes and dates per job (all done since: paging and bulk actions in M14–M15, notes and progress dates in M21).
 
 ### M11 — Research suggestions in the UI
 - [x] Assessments name 1–3 `researchTopics` (defaults for older drafts); the chat card and the job page show them as "Research next" buttons. Chat buttons send the request in the same chat; job-page buttons start a new chat (`startResearchAction`, company from the DB) and the copilot loads the job with `get_job`.
@@ -239,6 +239,16 @@ Goal: judge a job from the list at first glance. Chips must be trustworthy: each
 - [x] PR 2 — Listing facts extraction + eligibility (replaces the triage location block; closed and likely closed are hidden with the quote), discovery `extract` step, chat ingestion, backfill run
 - [x] PR 3 — Chips on the job list, job page ("At a glance"), company pages and the chat card
 - [x] PR 4 — Short labels on assessment points; hard conflicts and verified strengths / weaknesses as chips
+
+### M21 — Pipeline board, interview rounds, notes (agreed 2026-11-17)
+
+Goal: see what's in progress and where to follow up. All of it is data the user sets; no model involved, and the copilot doesn't see it yet.
+
+- [x] `app_jobs.interview_round` / `interview_rounds` (1–12, total may be unknown), `progressed_at` (status change or new round; a new total alone isn't progress), `notes` + `notes_updated_at` (conflict token: a note saved elsewhere is never overwritten).
+- [x] Attention rule (`progressAge`): under 7 days without progress needs nothing (grey), 7–13 days amber "follow up", 14+ red "stuck"; same on the board, the list's "In stage" column and the job page.
+- [x] `/jobs/board` (List | Board toggle): Shortlisted, Applied, Interviewing, Offer columns, stalest first; status menu moves cards (no drag and drop); swipeable columns with jump chips on narrow screens (container query); round tracker with "Round N done", next round and total.
+- [x] Job page: progress strip with the round tracker, notes card (Edit → Save, ⌘/Ctrl+Enter, Esc asks before discarding, leave-page warning). List rows: round tracker and note marker.
+- [x] Verified: db and `job-age` unit tests, e2e `board.spec.ts`, browser check on desktop and 375 px.
 
 ## Simplifications chosen (tell me if any is unacceptable)
 
