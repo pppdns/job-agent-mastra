@@ -124,6 +124,8 @@ export function dismissClosedListing(
       .set({
         status: "dismissed",
         statusChangedAt: at,
+        // A status change, like setJobStatus: the pipeline's "in stage" age restarts.
+        progressedAt: at,
         archivedAt: job.archivedAt ?? at,
         listingCheckedAt: at,
         listingClosedAt: at,

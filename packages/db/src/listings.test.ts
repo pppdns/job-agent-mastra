@@ -112,7 +112,12 @@ describe("dismissClosedListing", () => {
     const id = await discovered(1, 80);
     await setJobStatus(db, id, "shortlisted");
     const job = await dismissClosedListing(db, id, evidence, now);
-    expect(job).toMatchObject({ status: "dismissed", archivedAt: now, listingClosedAt: now });
+    expect(job).toMatchObject({
+      status: "dismissed",
+      archivedAt: now,
+      progressedAt: now,
+      listingClosedAt: now,
+    });
     expect(job?.listingClosed).toEqual({ ...evidence, previousStatus: "shortlisted" });
   });
 
