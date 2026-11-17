@@ -93,7 +93,7 @@ sequenceDiagram
   A->>DB: endRun
 ```
 
-The system prompt is rebuilt every turn from the database: fixed rules, the **approved profile** (with version and short fact handles like `f7`), this chat's **pending approvals**, and today's date last so the cached prefix stays stable (`buildInstructions` in [copilot.ts](../apps/agent/src/mastra/agents/copilot.ts)).
+The system prompt is rebuilt every turn from the database: fixed rules, the **approved profile** (with version and short fact handles like `f7`), this chat's **pending approvals**, and today's date last so the cached prefix stays stable (`buildInstructions` in [copilot.ts](../apps/agent/src/mastra/agents/copilot.ts)). Chat and research runs ask AI Gateway to add Anthropic cache markers (`GATEWAY_AUTO_CACHE`); batch calls (re-score, triage, extraction) mark the prefix the whole batch shares, so only the job's own text is billed at full price (see [apps/agent/AGENTS.md](../apps/agent/AGENTS.md)).
 
 ## The copilot agent
 

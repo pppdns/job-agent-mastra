@@ -19,7 +19,7 @@ import type { Agent } from "@mastra/core/agent";
 import type { TracingContext } from "@mastra/core/observability";
 import { parseStoredListing } from "../ingest/listing";
 import { rescorerAgent } from "../mastra/agents/rescorer";
-import { rescoreModelId } from "../mastra/models";
+import { cachedUserMessage, rescoreModelId } from "../mastra/models";
 import { formatProfile } from "../mastra/profile-context";
 import type { RunRecorder } from "../usage/recorder";
 
@@ -157,8 +157,9 @@ export async function assessJob(jobId: string, profile: Profile, deps: AssessDep
   if (!source) throw new AssessmentError("no stored listing; share the listing again");
   const listing = parseStoredListing(source.kind, source.content);
 
-  const prompt = [
-    formatProfile(profile),
+  // The profile is the same for every job in a batch: the cached prefix (after the system prompt).
+  const prefix = formatProfile(profile);
+  const rest = [
     `Job: ${[job.title, job.company, job.location].filter(Boolean).join(" · ")}`,
     `Listing (source id ${source.id}${source.truncated ? ", truncated" : ""}):`,
     Object.entries(listing.criteria)
@@ -183,7 +184,7 @@ export async function assessJob(jobId: string, profile: Profile, deps: AssessDep
   };
   const generate = async (text: string) => {
     const started = Date.now();
-    const generated = await agent.generate(text, {
+    const generated = await agent.generate(cachedUserMessage({ prefix, rest: text }), {
       structuredOutput: { schema: modelAssessmentSchema },
       // OpenAI's strict JSON mode rejects schemas with optional fields (quote, salary, …).
       providerOptions: { openai: { strictJsonSchema: false } },
@@ -206,12 +207,12 @@ export async function assessJob(jobId: string, profile: Profile, deps: AssessDep
 
   const finish = finishOf(identity, detail.draft?.assessment);
   const retry = (reason: string) =>
-    `${prompt}\n\nYour previous assessment was rejected: ${reason}\nFix that and return the full assessment again.`;
+    `${rest}\n\nYour previous assessment was rejected: ${reason}\nFix that and return the full assessment again.`;
   // One retry for either kind of rejection: the output schema (e.g. a headline over its length
   // limit) or a saveDraft rule (like the copilot's tool loop); then the job fails.
   let assessment: Assessment;
   try {
-    assessment = await generate(prompt);
+    assessment = await generate(rest);
   } catch (error) {
     if (!isSchemaRejection(error) || deps.signal?.aborted) throw error;
     assessment = await generate(retry((error as Error).message));

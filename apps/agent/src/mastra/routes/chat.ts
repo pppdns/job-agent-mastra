@@ -13,6 +13,7 @@ import { RunRecorder, registerRecorder, releaseRecorder } from "../../usage/reco
 import { THREAD_CONTEXT_KEY } from "../agents/copilot";
 import { getAppDb } from "../app-db";
 import { toClientErrorText } from "../errors";
+import { GATEWAY_AUTO_CACHE } from "../models";
 
 /** The only body the web proxy sends (see apps/web/src/server/chat-body.ts). */
 const chatBodySchema = z.object({
@@ -162,6 +163,7 @@ export const chatRoute = registerApiRoute("/chat", {
       requestContext,
       maxSteps: 12,
       modelSettings: { maxOutputTokens: 16_000 },
+      providerOptions: GATEWAY_AUTO_CACHE,
       onChunk: (chunk) => recordChunk(recorder, chunk),
       // No abort on client disconnect: the run continues and can be observed again.
       onFinish: () => ended("completed"),

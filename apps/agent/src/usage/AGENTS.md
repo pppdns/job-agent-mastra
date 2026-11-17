@@ -13,6 +13,6 @@ One `app_run_events` row per model call and per provider call; totals are sums o
 | Tool calls, retries, compaction, errors | chunks / research progress | — |
 
 - `RunRecorder` buffers events until the durable run id exists, then writes in order; tools find it with `recorderFor(threadId)`. Background calls (OM, title) attach to the chat's active or latest run.
-- Costs: `prices.ts` static table (cache reads 10%, 5-minute cache writes 125% of input); always shown as estimates.
+- Costs: `prices.ts` static table (cache reads at the model's `cacheRead` price or 10% of input, 5-minute cache writes 125% of input); always shown as estimates.
 - Event details pass through `sanitizeForEvent` (secret-looking keys redacted, page text omitted, bounded size). Traces use `SensitiveDataFilter` with `TRACE_SENSITIVE_FIELDS` (`src/mastra/index.ts`).
 - Check against Studio: `pnpm agent:api trace get <traceId> --verbose` — each `model_step` span should have exactly one `llm` event with equal tokens (span queries aren't supported by the libSQL store).
