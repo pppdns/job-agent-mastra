@@ -13,8 +13,11 @@ export const RESCORE_BATCH_SIZES = [25, 100, 1000] as const;
 /** Batch sizes "Assess more matches" on /discovery offers (one main-model call per job). */
 export const ASSESS_BATCH_SIZES = [15, 50, 200] as const;
 
-/** Most jobs one "Re-triage now" run may triage (fast model, ~$0.002 a job): a runaway guard. */
-export const RETRIAGE_MAX_JOBS = 10_000;
+/**
+ * Most jobs one "Re-triage now" or "Read listing facts" run may take (fast model, ~$0.0035 a job
+ * for facts + triage): a runaway guard, set above the whole backlog so one run covers it.
+ */
+export const RETRIAGE_MAX_JOBS = 25_000;
 
 /** Jobs one re-score batch covers when no limit is given. */
 export const DEFAULT_RESCORE_LIMIT = 25;
