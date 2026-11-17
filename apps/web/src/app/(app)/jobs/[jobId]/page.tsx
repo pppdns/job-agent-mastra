@@ -1,4 +1,4 @@
-import { currentPreferences, getJobDetail, jobPostings } from "@copilot/db";
+import { currentPreferences, getJobDetail, type Job, jobPostings } from "@copilot/db";
 import {
   assessmentSummary,
   DISCOVERY_SOURCE_LABELS,
@@ -21,10 +21,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { ProgressPill } from "@/components/age-pill";
 import { AssessmentView } from "@/components/assessment-view";
 import { VerdictBadge } from "@/components/assessment-visuals";
 import { EvidenceList } from "@/components/evidence-list";
+import { InterviewRounds } from "@/components/interview-rounds";
 import { ChipEvidence, JobChips } from "@/components/job-chips";
+import { JobNotes } from "@/components/job-notes";
 import { JobStatusMenu } from "@/components/job-status-menu";
 import { AssessButton } from "@/components/keep-buttons";
 import { MarkSeen } from "@/components/mark-seen";
@@ -35,7 +38,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { APPROXIMATE_HINT, formatDay, isApproximate, postedVerb } from "@/lib/job-age";
+import { APPROXIMATE_HINT, formatDay, isApproximate, postedVerb, progressAge } from "@/lib/job-age";
 import { jobChips } from "@/lib/job-chips";
 import { listingLinks } from "@/lib/listing-links";
 import { appDb } from "@/server/db";
@@ -174,6 +177,15 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
         </p>
         {job.origin === "discovery" && job.seenAt === null && <MarkSeen jobId={job.id} />}
       </div>
+
+      <Progress job={job} />
+
+      <JobNotes
+        jobId={job.id}
+        notes={job.notes}
+        updatedAtMs={job.notesUpdatedAt?.getTime() ?? null}
+        editedLabel={job.notesUpdatedAt ? `Edited ${formatDay(job.notesUpdatedAt)}` : null}
+      />
 
       <AtAGlance
         chips={jobChips(
@@ -352,6 +364,33 @@ function AtAGlance({ chips, read }: { chips: ReturnType<typeof jobChips>; read: 
         <p className="text-xs text-muted-foreground">
           The listing's facts haven't been read yet; the next discovery run reads them.
         </p>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Where a job in progress stands: time since its last progress (colored only when it needs a
+ * follow-up) and, while interviewing, the editable round tracker.
+ */
+function Progress({ job }: { job: Job }) {
+  const age = progressAge(job, new Date());
+  if (!age) return null;
+  const title = job.title ?? "Untitled job";
+  return (
+    <section
+      aria-label="Progress"
+      className="-mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border px-3 py-2"
+    >
+      <ProgressPill age={age} long />
+      {job.status === "interviewing" && (
+        <InterviewRounds
+          jobId={job.id}
+          title={title}
+          round={job.interviewRound}
+          total={job.interviewRounds}
+          className="min-w-48 flex-1 sm:max-w-xs"
+        />
       )}
     </section>
   );

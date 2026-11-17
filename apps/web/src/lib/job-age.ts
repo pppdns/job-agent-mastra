@@ -87,14 +87,7 @@ export type ProgressAge = Age & { attention: Attention | null };
 
 type ProgressJob = Pick<
   JobOverview,
-  | "postedAt"
-  | "postedBasis"
-  | "createdAt"
-  | "status"
-  | "statusChangedAt"
-  | "progressedAt"
-  | "interviewRound"
-  | "archivedAt"
+  "status" | "statusChangedAt" | "progressedAt" | "interviewRound" | "archivedAt"
 >;
 
 /** Per in-progress status: what the date marks, and what to do when it gets old. */
@@ -161,7 +154,10 @@ const STAGE_AGE_STATUSES: readonly JobStatus[] = ["applied", "interviewing", "of
  * employer: `progressAge` plus the listing's dates in the tooltip. Falls back to the listing age
  * for other statuses, archived jobs, or without a change time.
  */
-export function stageAge(job: ProgressJob, now: Date): Age {
+export function stageAge(
+  job: ProgressJob & Pick<JobOverview, "postedAt" | "postedBasis" | "createdAt">,
+  now: Date,
+): Age {
   const listing = jobAge(job, now);
   const progress = STAGE_AGE_STATUSES.includes(job.status) ? progressAge(job, now) : null;
   if (!progress) return listing;

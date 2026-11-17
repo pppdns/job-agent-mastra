@@ -37,7 +37,11 @@ export function PipelineCard({ job, age }: { job: JobOverview; age: ProgressAge 
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         {age && <ProgressPill age={age} />}
         {job.hasNotes && (
-          <NotebookTextIcon className="size-3.5 text-muted-foreground" aria-label="Has a note" />
+          <NotebookTextIcon
+            className="size-3.5 text-muted-foreground"
+            role="img"
+            aria-label="Has a note"
+          />
         )}
         {summary && job.status === "shortlisted" && (
           <FitMeter

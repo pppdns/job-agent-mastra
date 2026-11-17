@@ -18,12 +18,13 @@ import {
   type Preferences,
 } from "@copilot/shared";
 import { cn } from "cn";
-import { RadarIcon, SearchIcon } from "lucide-react";
+import { NotebookTextIcon, RadarIcon, SearchIcon } from "lucide-react";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { AgePill } from "@/components/age-pill";
 import { FIT_TONE, FitMeter, TONE_FILL, VerdictIcon } from "@/components/assessment-visuals";
+import { InterviewRounds } from "@/components/interview-rounds";
 import { JobChips } from "@/components/job-chips";
 import { JobFilters } from "@/components/job-filters";
 import { BulkBar, JobSelection, RowCheckbox, SelectAllCheckbox } from "@/components/job-selection";
@@ -552,6 +553,18 @@ function JobRow({
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           {meta && <span className="truncate">{meta}</span>}
           <AgePill age={age} compact className="sm:hidden" />
+          {job.status === "interviewing" && !job.archivedAt && (
+            <InterviewRounds
+              jobId={job.id}
+              title={title}
+              round={job.interviewRound}
+              total={job.interviewRounds}
+              compact
+            />
+          )}
+          {job.hasNotes && (
+            <NotebookTextIcon className="size-3.5" role="img" aria-label="Has a note" />
+          )}
           <JobFlags job={job} />
           {job.origin === "discovery" && job.seenAt === null && job.triageScore !== null && (
             <Badge className="h-4 px-1.5 text-[11px]">New</Badge>
