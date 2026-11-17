@@ -48,6 +48,14 @@ export const jobs = sqliteTable(
     statusChangedAt: integer("status_changed_at", { mode: "timestamp_ms" }),
     /** Set when archived (closing statuses archive automatically); hidden from the active list. */
     archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
+    /** Current / next interview round (1-based) and the total when known; set by the user. */
+    interviewRound: integer("interview_round"),
+    interviewRounds: integer("interview_rounds"),
+    /** Last progress in the pipeline: a status change or a new interview round. */
+    progressedAt: integer("progressed_at", { mode: "timestamp_ms" }),
+    /** The user's free-text note; `notes_updated_at` is also the editor's conflict token. */
+    notes: text("notes"),
+    notesUpdatedAt: integer("notes_updated_at", { mode: "timestamp_ms" }),
     /** How the job got here: shared in a chat, or found by a discovery run. */
     origin: text("origin", { enum: JOB_ORIGINS }).notNull().default("chat"),
     /** `companyKey(company)`: matches the same company across boards. */
