@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { compactAge, formatDay, jobAge, stageAge } from "./job-age";
+import {
+  compactAge,
+  FOLLOW_UP_DAYS,
+  formatDay,
+  jobAge,
+  progressAge,
+  STUCK_DAYS,
+  stageAge,
+} from "./job-age";
 
 const DAY = 86_400_000;
 const now = new Date("2026-11-09T12:00:00Z");
@@ -80,25 +88,98 @@ describe("jobAge", () => {
   });
 });
 
-describe("stageAge", () => {
-  const listing = { postedAt: null, postedBasis: null, createdAt: ago(40), archivedAt: null };
+describe("progressAge", () => {
+  const base = {
+    postedAt: null,
+    postedBasis: null,
+    createdAt: ago(40),
+    archivedAt: null,
+    interviewRound: null,
+    progressedAt: null,
+  };
 
-  it("counts from the status change and flags applications to follow up", () => {
+  it("needs nothing within a week, then asks for a follow-up, then flags it stuck", () => {
     const applied = (days: number) =>
-      stageAge({ ...listing, status: "applied", statusChangedAt: ago(days) }, now);
-    expect(applied(3)).toMatchObject({ label: "Applied 3d ago", short: "3d", tone: "muted" });
-    expect(applied(15)).toMatchObject({ label: "Applied 2w ago", tone: "warning" });
-    expect(applied(15).tooltip).toContain("consider following up");
-    expect(applied(15).tooltip).toContain(`Added ${formatDay(ago(40))}`);
-    const interviewing = stageAge(
-      { ...listing, status: "interviewing", statusChangedAt: ago(20) },
+      progressAge({ ...base, status: "applied", statusChangedAt: ago(days) }, now);
+    expect(applied(3)).toMatchObject({
+      label: "Applied 3d ago",
+      short: "3d",
+      tone: "muted",
+      attention: null,
+    });
+    expect(applied(3)?.tooltip).toBe(`Applied ${formatDay(ago(3))}`);
+    expect(applied(FOLLOW_UP_DAYS)).toMatchObject({ tone: "warning", attention: "follow_up" });
+    expect(applied(FOLLOW_UP_DAYS)?.tooltip).toContain("follow");
+    expect(applied(STUCK_DAYS)).toMatchObject({ tone: "destructive", attention: "stuck" });
+  });
+
+  it("counts from the latest round and names it", () => {
+    const age = progressAge(
+      {
+        ...base,
+        status: "interviewing",
+        statusChangedAt: ago(20),
+        progressedAt: ago(2),
+        interviewRound: 3,
+      },
       now,
     );
-    expect(interviewing).toMatchObject({ label: "Interviews began 2w ago", tone: "muted" });
+    expect(age).toMatchObject({ label: "Moved to round 3 2d ago", attention: null });
+    const first = progressAge(
+      {
+        ...base,
+        status: "interviewing",
+        statusChangedAt: ago(8),
+        progressedAt: ago(8),
+        interviewRound: 1,
+      },
+      now,
+    );
+    expect(first).toMatchObject({ label: "Interviews began 1w ago", attention: "follow_up" });
+  });
+
+  it("says what to do per status", () => {
+    const at = (status: "shortlisted" | "offer") =>
+      progressAge({ ...base, status, statusChangedAt: ago(9) }, now)?.tooltip;
+    expect(at("shortlisted")).toContain("apply or drop it");
+    expect(at("offer")).toContain("decide");
+  });
+
+  it("is null for other statuses, archived jobs and unknown times", () => {
+    expect(progressAge({ ...base, status: "new", statusChangedAt: ago(20) }, now)).toBeNull();
+    expect(
+      progressAge(
+        { ...base, status: "applied", statusChangedAt: ago(20), archivedAt: ago(1) },
+        now,
+      ),
+    ).toBeNull();
+    expect(progressAge({ ...base, status: "applied", statusChangedAt: null }, now)).toBeNull();
+  });
+});
+
+describe("stageAge", () => {
+  const listing = {
+    postedAt: null,
+    postedBasis: null,
+    createdAt: ago(40),
+    archivedAt: null,
+    interviewRound: null,
+    progressedAt: null,
+  };
+
+  it("uses the progress age and adds the listing dates", () => {
+    const applied = stageAge({ ...listing, status: "applied", statusChangedAt: ago(15) }, now);
+    expect(applied).toMatchObject({ label: "Applied 2w ago", tone: "destructive" });
+    expect(applied.tooltip).toContain(`Added ${formatDay(ago(40))}`);
   });
 
   it("falls back to the listing age without a stage", () => {
     const fallback = stageAge({ ...listing, status: "new", statusChangedAt: null }, now);
     expect(fallback.label).toBe("Added 1mo ago");
+    const shortlisted = stageAge(
+      { ...listing, status: "shortlisted", statusChangedAt: ago(2) },
+      now,
+    );
+    expect(shortlisted.label).toBe("Added 1mo ago");
   });
 });
