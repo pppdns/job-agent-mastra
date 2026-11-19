@@ -11,9 +11,11 @@ import {
 import {
   type Assessment,
   DEFAULT_RESCORE_LIMIT,
+  type ListingFacts,
   modelAssessmentSchema,
   normalizeModelAssessment,
   type RescoreLimit,
+  recruiterPost,
 } from "@copilot/shared";
 import type { Agent } from "@mastra/core/agent";
 import type { TracingContext } from "@mastra/core/observability";
@@ -160,7 +162,7 @@ export async function assessJob(jobId: string, profile: Profile, deps: AssessDep
   // The profile is the same for every job in a batch: the cached prefix (after the system prompt).
   const prefix = formatProfile(profile);
   const rest = [
-    `Job: ${[job.title, job.company, job.location].filter(Boolean).join(" · ")}`,
+    `Job: ${[job.title, assessedCompany(job.company, job.facts), job.location].filter(Boolean).join(" · ")}`,
     `Listing (source id ${source.id}${source.truncated ? ", truncated" : ""}):`,
     Object.entries(listing.criteria)
       .map(([k, v]) => `${k}: ${v}`)
@@ -227,6 +229,14 @@ export async function assessJob(jobId: string, profile: Profile, deps: AssessDep
     draft = await save(assessment);
   }
   return finish(assessment, draft);
+}
+
+/** The company for the prompt; a recruiter post names the agency apart from the employer. */
+function assessedCompany(company: string | null, facts: ListingFacts | null) {
+  const post = recruiterPost(company, facts);
+  if (!post) return company;
+  const by = post.recruiter ? `posted by the recruiter ${post.recruiter}` : "posted by a recruiter";
+  return `${post.employer ?? "employer not named"} (${by})`;
 }
 
 /** The model's structured output failed the schema (Mastra's validation error). */

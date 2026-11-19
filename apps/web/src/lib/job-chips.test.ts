@@ -36,6 +36,7 @@ const facts = (over: Partial<ListingFacts> = {}): ListingFacts => ({
   travel: null,
   employmentType: null,
   timezone: null,
+  recruiter: null,
   headerPlaces: [],
   levelFrom: null,
   ...over,

@@ -9,6 +9,7 @@ import {
   assessmentSummary,
   DISCOVERY_SOURCE_LABELS,
   JOB_STATUS_LABELS,
+  recruiterPost,
   suggestedResearchTopics,
 } from "@copilot/shared";
 import {
@@ -99,6 +100,8 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
     latestListingSource(db, jobId),
   ]);
   const { job, sources, draft, history, profileVersion, profileStale, claims, posted } = detail;
+  // A recruiter post: the board's company is the agency, not the employer.
+  const post = recruiterPost(job.company, job.facts);
   const links = listingLinks(
     job.canonicalUrl,
     sources,
@@ -153,9 +156,13 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
           </p>
         )}
         <p className="flex flex-wrap gap-x-4 text-sm text-muted-foreground">
-          {job.company && (
+          {(job.company || post) && (
             <span className="inline-flex items-center gap-1.5">
               <Building2Icon className="size-4" />
+              {post && (
+                <span className="text-foreground">{post.employer ?? "Employer not named"}</span>
+              )}
+              {post && job.company && "· via"}
               {job.companyKey ? (
                 <Link
                   href={`/companies/${encodeURIComponent(job.companyKey)}`}
@@ -166,6 +173,7 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
               ) : (
                 job.company
               )}
+              {post && job.company && " (recruiter)"}
             </span>
           )}
           {job.location && (
@@ -252,7 +260,17 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
               Saved {formatDate(draft.createdAt)} using profile v{draft.profileVersion}
               {profileStale ? ` (current profile is v${profileVersion})` : ""}.
             </CardDescription>
-            <ResearchJobButtons jobId={job.id} topics={suggestedResearchTopics(draft.assessment)} />
+            {post && !post.employer ? (
+              <p className="text-sm text-muted-foreground">
+                No company research yet: a recruiter posted this job and the listing doesn't name
+                the employer. Ask the recruiter who it is.
+              </p>
+            ) : (
+              <ResearchJobButtons
+                jobId={job.id}
+                topics={suggestedResearchTopics(draft.assessment)}
+              />
+            )}
           </CardHeader>
           <CardContent>
             <AssessmentView assessment={draft.assessment} />

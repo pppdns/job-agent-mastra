@@ -11,6 +11,7 @@ import {
 import {
   type Assessment,
   allPoints,
+  companyLine,
   JOB_STATUSES,
   type JobStatus,
   profileProposalSchema,
@@ -78,7 +79,7 @@ export async function findSavedJobs(
     matches: matches.slice(0, limit).map((j) => ({
       jobId: j.id,
       title: j.title,
-      company: j.company,
+      company: companyLine(j.company, j.facts),
       location: j.location,
       status: j.status,
       archived: j.archivedAt !== null,
@@ -141,7 +142,7 @@ export const getJobTool = createTool({
       job: {
         jobId: detail.job.id,
         title: detail.job.title,
-        company: detail.job.company,
+        company: companyLine(detail.job.company, detail.job.facts),
         location: detail.job.location,
         status: detail.job.status,
         archived: detail.job.archivedAt !== null,
