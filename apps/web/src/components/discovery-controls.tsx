@@ -6,13 +6,36 @@ import { ASSESS_BATCH_SIZES } from "@copilot/shared";
 const FACTS_USD_PER_JOB = 0.0015;
 
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState, useSyncExternalStore, useTransition } from "react";
+import {
+  type ReactNode,
+  useActionState,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  useTransition,
+} from "react";
 import {
   type DiscoveryActionState,
   startDiscoveryAction,
   stopDiscoveryAction,
 } from "@/app/actions";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+
+/**
+ * A button's help on hover or focus: what it runs, whether a model is involved, what it costs.
+ * The trigger is a wrapper span, so the tooltip still shows while the button is disabled.
+ */
+function Hint({ text, children }: { text: string; children: ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex">{children}</span>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs">{text}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 /**
  * "Run now", the occasional backfill, and runs that skip fetching: triage the next batch of
@@ -44,35 +67,47 @@ export function DiscoveryControls({
   return (
     <div className="flex flex-col gap-2">
       <form action={action} className="flex flex-wrap items-center gap-2">
-        <Button type="submit" name="run" value="now" disabled={busy}>
-          {running ? "Running…" : "Run now"}
-        </Button>
-        <Button type="submit" name="run" value="backfill-7" variant="outline" disabled={busy}>
-          Backfill 7 days{cost}
-        </Button>
-        <Button type="submit" name="run" value="backfill-30" variant="outline" disabled={busy}>
-          Backfill 30 days{cost}
-        </Button>
-        <Button
-          type="submit"
-          name="run"
-          value="triage"
-          variant="outline"
-          disabled={busy || awaitingTriage === 0}
-        >
-          Triage next batch · {awaitingTriage.toLocaleString("en-US")} waiting
-        </Button>
-        {awaitingFacts > 0 && (
-          <Button type="submit" name="run" value="extract" variant="outline" disabled={busy}>
-            Read listing facts · {awaitingFacts.toLocaleString("en-US")} jobs · about $
-            {(awaitingFacts * FACTS_USD_PER_JOB).toFixed(2)}
+        <Hint text="Fetches new postings from every due source (free feeds; paid Apify boards cost per result), screens them in code, then reads listing facts and triages the new jobs (fast model, cents), fully assesses the best matches (main model, about $0.04 each) and emails them.">
+          <Button type="submit" name="run" value="now" disabled={busy}>
+            {running ? "Running…" : "Run now"}
           </Button>
+        </Hint>
+        <Hint text="Like Run now, but asks every source for the last 7 days and ignores each source's hours between runs. Paid boards return more results, so it costs more; the shown amount is the cap.">
+          <Button type="submit" name="run" value="backfill-7" variant="outline" disabled={busy}>
+            Backfill 7 days{cost}
+          </Button>
+        </Hint>
+        <Hint text="Like Run now, but asks every source for the last 30 days and ignores each source's hours between runs. The most expensive run (many paid results); the shown amount is the cap.">
+          <Button type="submit" name="run" value="backfill-30" variant="outline" disabled={busy}>
+            Backfill 30 days{cost}
+          </Button>
+        </Hint>
+        <Hint text="Fetches nothing. Scores the jobs still waiting for triage against your profile (fast model, 0–100 with a reason; cheap, about $0.002 a job), hides low scores, then assesses and emails the new matches.">
+          <Button
+            type="submit"
+            name="run"
+            value="triage"
+            variant="outline"
+            disabled={busy || awaitingTriage === 0}
+          >
+            Triage next batch · {awaitingTriage.toLocaleString("en-US")} waiting
+          </Button>
+        </Hint>
+        {awaitingFacts > 0 && (
+          <Hint text="Fetches nothing, triages nothing. For jobs whose facts are missing or outdated, a fast model (cheap, under $0.002 a job) quotes work mode, places, pay, level, languages and focus from the listing; code then checks every quote and decides whether the job is open from where you live, hiding closed ones. Fills the job chips.">
+            <Button type="submit" name="run" value="extract" variant="outline" disabled={busy}>
+              Read listing facts · {awaitingFacts.toLocaleString("en-US")} jobs · about $
+              {(awaitingFacts * FACTS_USD_PER_JOB).toFixed(2)}
+            </Button>
+          </Hint>
         )}
         <span className="flex flex-wrap items-center gap-1">
           <input type="hidden" name="assessLimit" value={assessLimit} />
-          <Button type="submit" name="run" value="assess" variant="outline" disabled={busy}>
-            Assess more matches · up to {assessLimit}
-          </Button>
+          <Hint text="Fetches and triages nothing. Writes full assessments for the best triaged matches that have none yet (main model, the expensive step: about $0.04 a job), up to the batch size picked next to it.">
+            <Button type="submit" name="run" value="assess" variant="outline" disabled={busy}>
+              Assess more matches · up to {assessLimit}
+            </Button>
+          </Hint>
           <fieldset className="flex items-center gap-1">
             <legend className="sr-only">Assessment batch size</legend>
             {ASSESS_BATCH_SIZES.map((n) => (
