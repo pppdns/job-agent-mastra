@@ -1,5 +1,5 @@
 import { AssessmentError, listJobs, saveDraft } from "@copilot/db";
-import { assessmentSchema } from "@copilot/shared";
+import { assessmentSchema, companyLine, recruiterPost } from "@copilot/shared";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { getAppDb } from "../app-db";
@@ -31,14 +31,17 @@ export const saveJobDraftTool = createTool({
       const db = await getAppDb();
       const draft = await saveDraft(db, { jobId, assessment, threadId: context?.agent?.threadId });
       const [job] = await listJobs(db, [jobId]);
-      // title/company label the chat's assessment card
+      // title/company label the chat's assessment card; research is pointless (and refused)
+      // while a recruiter post doesn't name the employer.
+      const post = job ? recruiterPost(job.company, job.facts) : null;
       return {
         ok: true as const,
         jobId,
         draftId: draft.id,
         version: draft.version,
         title: job?.title ?? null,
-        company: job?.company ?? null,
+        company: job ? companyLine(job.company, job.facts) : null,
+        researchable: !(post && !post.employer),
       };
     }),
 });

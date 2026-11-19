@@ -2,6 +2,8 @@
 
 `research_company` (`src/mastra/tools/research-company.ts`) → `runResearch` (`run.ts`). Started by the user: in words, or with the "Research next" buttons the UI builds from the draft's `researchTopics` (message from `researchRequestText`: only the job id and topic labels, never listing fields such as the company, since a user message counts as the user's own request).
 
+Recruiter posts (listing facts `recruiter`, `recruiterPost` in `@copilot/shared`): the board's company is then the agency, so `runResearch` researches the client the listing names, or returns `unavailable` while it names none. The job page and the chat card hide the research buttons in that case (`save_job_draft` returns `researchable: false`).
+
 ```mermaid
 flowchart LR
   C[copilot] -->|research_company jobId, topics| R[runResearch]

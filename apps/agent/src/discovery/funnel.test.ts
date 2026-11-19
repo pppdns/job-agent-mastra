@@ -104,6 +104,7 @@ const NO_FACTS: ListingFactsInput = {
   travel: null,
   employmentType: null,
   timezone: null,
+  recruiter: null,
 };
 
 describe("triage", () => {

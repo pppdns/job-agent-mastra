@@ -22,6 +22,8 @@ type DraftOutput = {
   version?: number;
   title?: string | null;
   company?: string | null;
+  /** False for a recruiter post that doesn't name the employer (research is refused). */
+  researchable?: boolean;
 };
 
 /** The assessment a successful save_job_draft call stored (its validated tool input). */
@@ -81,7 +83,7 @@ export function AssessmentCard({
       <div className="mt-4">
         <AssessmentView assessment={assessment} showSummary={false} />
       </div>
-      {onResearch && jobId && (
+      {onResearch && jobId && output.researchable !== false && (
         <div className="mt-3 border-t pt-3">
           <ResearchSuggestions
             topics={suggestedResearchTopics(assessment)}

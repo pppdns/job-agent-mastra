@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   companyKey,
+  companyLine,
   DISCOVERY_SOURCE_LABELS,
   type DiscoverySource,
   type PostingInput,
@@ -664,6 +665,7 @@ export async function jobsToAssess(
 export type DigestMatch = {
   id: string;
   title: string | null;
+  /** As shown: a recruiter post reads "Acme via Tact" or "Tact (recruiter)" (`companyLine`). */
   company: string | null;
   location: string | null;
   triageScore: number;
@@ -683,6 +685,7 @@ export async function digestMatches(
       id: jobs.id,
       title: jobs.title,
       company: jobs.company,
+      facts: jobs.facts,
       location: jobs.location,
       triageScore: jobs.triageScore,
       triageReason: jobs.triageReason,
@@ -707,8 +710,9 @@ export async function digestMatches(
     db,
     rows.map((r) => r.id),
   );
-  return rows.map((r) => ({
+  return rows.map(({ facts, ...r }) => ({
     ...r,
+    company: companyLine(r.company, facts),
     triageScore: r.triageScore ?? 0,
     sources: sources[r.id] ?? [],
   }));
