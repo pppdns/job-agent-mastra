@@ -6,10 +6,10 @@ import { type Job, jobs, type ListingClosed, postings, sources } from "./schema"
 import { serializeWrites } from "./write-lock";
 
 // The daily listing check (apps/agent/src/listings): which jobs to look at, their links, and
-// dismissing a job whose listing closed. Only `new` and `shortlisted` jobs are ever dismissed.
+// dismissing a job whose listing closed. Only `new`, `shortlisted` and `to_apply` jobs are ever dismissed.
 
 /** Statuses the listing check may dismiss: the user hasn't applied yet. */
-export const LISTING_CHECK_STATUSES = ["new", "shortlisted"] as const;
+export const LISTING_CHECK_STATUSES = ["new", "shortlisted", "to_apply"] as const;
 
 export type JobToCheck = {
   id: string;
@@ -21,7 +21,7 @@ export type JobToCheck = {
 };
 
 /**
- * Jobs worth checking, least recently checked first: shortlisted jobs, and new jobs the user
+ * Jobs worth checking, least recently checked first: shortlisted and to-apply jobs, and new jobs the user
  * would see that came from a chat or scored at least the digest threshold. Archived jobs and
  * jobs the listing check already dismissed once (the user may have restored them) are skipped.
  */
@@ -45,7 +45,7 @@ export async function jobsToCheckListings(
         isNull(jobs.archivedAt),
         isNull(jobs.listingClosedAt),
         or(
-          eq(jobs.status, "shortlisted"),
+          inArray(jobs.status, ["shortlisted", "to_apply"]),
           and(
             eq(jobs.status, "new"),
             visibleJobs(settings.triageThreshold),
@@ -105,7 +105,7 @@ export function markListingsChecked(db: Db, jobIds: string[], at = new Date()): 
 
 /**
  * Dismisses (and archives) a job whose listing closed, recording why. Only while the job is
- * still `new` or `shortlisted`: a status the user changed in the meantime wins. Returns the
+ * still `new`, `shortlisted` or `to_apply`: a status the user changed in the meantime wins. Returns the
  * updated job, or undefined when nothing changed.
  */
 export function dismissClosedListing(

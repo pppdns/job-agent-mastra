@@ -59,7 +59,7 @@ async function discovered(n: number, score: number) {
 const ids = async () => (await jobsToCheckListings(db, settings)).map((j) => j.id).sort();
 
 describe("jobsToCheckListings", () => {
-  it("picks shortlisted jobs and new ones at the digest threshold, never applied ones", async () => {
+  it("picks shortlisted and to-apply jobs and new ones at the digest threshold, never applied ones", async () => {
     const high = await discovered(1, 80);
     const low = await discovered(2, 65);
     const shortlistedLow = await discovered(3, 40);
@@ -68,9 +68,11 @@ describe("jobsToCheckListings", () => {
     await setJobStatus(db, applied, "applied");
     const dismissed = await discovered(5, 90);
     await setJobStatus(db, dismissed, "dismissed");
+    const toApplyLow = await discovered(6, 30);
+    await setJobStatus(db, toApplyLow, "to_apply");
     const { job: chat } = await upsertJob(db, { canonicalUrl: "https://jobs.lever.co/x/1" });
 
-    expect(await ids()).toEqual([high, shortlistedLow, chat.id].sort());
+    expect(await ids()).toEqual([high, shortlistedLow, toApplyLow, chat.id].sort());
     expect(await ids()).not.toContain(low);
   });
 

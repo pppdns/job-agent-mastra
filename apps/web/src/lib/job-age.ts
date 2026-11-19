@@ -36,7 +36,7 @@ export type AgeTone = "success" | "muted" | "warning" | "destructive";
 export type Age = { label: string; short: string; tone: AgeTone; tooltip: string; date: Date };
 
 /** Statuses where freshness still matters: the user hasn't applied yet. */
-const DECIDING: readonly JobStatus[] = ["new", "shortlisted"];
+const DECIDING: readonly JobStatus[] = ["new", "shortlisted", "to_apply"];
 
 /**
  * The job's age for the jobs table: since it was posted when a listing says so, otherwise since
@@ -74,10 +74,13 @@ export function jobAge(
   };
 }
 
-/** No progress this long: worth a follow-up (amber). */
+/** No progress this long: worth a follow-up (amber). Default; a stage may set its own. */
 export const FOLLOW_UP_DAYS = 7;
-/** No progress this long: probably stuck (red). */
+/** No progress this long: probably stuck (red). Default; a stage may set its own. */
 export const STUCK_DAYS = 14;
+/** To apply: listings often close within days, so nudge sooner. */
+export const TO_APPLY_FOLLOW_UP_DAYS = 2;
+export const TO_APPLY_STUCK_DAYS = 5;
 
 /** What a job in progress needs from the user; null = nothing, progress is recent. */
 export type Attention = "follow_up" | "stuck";
@@ -91,11 +94,26 @@ type ProgressJob = Pick<
 >;
 
 /** Per in-progress status: what the date marks, and what to do when it gets old. */
-const STAGE: Partial<Record<JobStatus, { verb: string; followUp: string; stuck: string }>> = {
+type Stage = {
+  verb: string;
+  followUp: string;
+  stuck: string;
+  followUpDays?: number;
+  stuckDays?: number;
+};
+
+const STAGE: Partial<Record<JobStatus, Stage>> = {
   shortlisted: {
     verb: "Shortlisted",
-    followUp: "not applied yet: apply or drop it",
-    stuck: "still not applied: apply or drop it",
+    followUp: "not decided yet: mark it to apply or drop it",
+    stuck: "still not decided: mark it to apply or drop it",
+  },
+  to_apply: {
+    verb: "Marked to apply",
+    followUp: "not applied yet: apply before the listing closes",
+    stuck: "still not applied: apply now or drop it",
+    followUpDays: TO_APPLY_FOLLOW_UP_DAYS,
+    stuckDays: TO_APPLY_STUCK_DAYS,
   },
   applied: {
     verb: "Applied",
@@ -116,8 +134,9 @@ const STAGE: Partial<Record<JobStatus, { verb: string; followUp: string; stuck: 
 
 /**
  * Time since the job last progressed in the pipeline (a status change or a new interview round),
- * for jobs in progress. Under `FOLLOW_UP_DAYS` it needs nothing (`muted`); then `follow_up`
- * (`warning`), from `STUCK_DAYS` `stuck` (`destructive`). Null for other statuses, archived
+ * for jobs in progress. Under the stage's follow-up days (default `FOLLOW_UP_DAYS`) it needs
+ * nothing (`muted`); then `follow_up` (`warning`), from its stuck days (default `STUCK_DAYS`)
+ * `stuck` (`destructive`). Null for other statuses, archived
  * jobs, or without a change time.
  */
 export function progressAge(job: ProgressJob, now: Date): ProgressAge | null {
@@ -134,7 +153,11 @@ export function progressAge(job: ProgressJob, now: Date): ProgressAge | null {
   const age = compactAge(since, now);
   const days = (now.getTime() - since.getTime()) / DAY_MS;
   const attention: Attention | null =
-    days >= STUCK_DAYS ? "stuck" : days >= FOLLOW_UP_DAYS ? "follow_up" : null;
+    days >= (stage.stuckDays ?? STUCK_DAYS)
+      ? "stuck"
+      : days >= (stage.followUpDays ?? FOLLOW_UP_DAYS)
+        ? "follow_up"
+        : null;
   const hint = attention === "stuck" ? stage.stuck : attention ? stage.followUp : null;
   return {
     label: age === "today" ? `${verb} today` : `${verb} ${age} ago`,

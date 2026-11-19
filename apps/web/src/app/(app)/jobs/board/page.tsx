@@ -37,6 +37,7 @@ export default function JobBoardPage() {
 
 const EMPTY_HINT: Record<PipelineStatus, string> = {
   shortlisted: "Shortlist jobs from the list to plan your applications.",
+  to_apply: "Mark shortlisted jobs you've decided to apply to.",
   applied: "Nothing waiting on a reply.",
   interviewing: "No interviews going on.",
   offer: "No offers yet.",
@@ -79,7 +80,7 @@ async function Board() {
             key={status}
             id={column.id}
             aria-label={column.label}
-            className="flex w-[85vw] max-w-xs shrink-0 snap-start flex-col gap-2 rounded-xl bg-muted/50 p-2 @4xl:w-auto @4xl:max-w-none"
+            className="flex w-[85vw] max-w-xs shrink-0 snap-start flex-col gap-2 rounded-xl bg-muted/50 p-2 @5xl:w-auto @5xl:max-w-none"
           >
             <h2 className="flex items-center gap-2 px-1 text-sm font-medium">
               {column.label}

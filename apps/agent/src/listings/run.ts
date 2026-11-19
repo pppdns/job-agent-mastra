@@ -18,7 +18,7 @@ import {
 
 // One listing check: every job in scope, each of its links with a verified rule, one request at
 // a time with a pause per site. The first confidently closed link dismisses the job (only
-// while it is still new or shortlisted); unknown answers change nothing.
+// while it is still new, shortlisted or to apply); unknown answers change nothing.
 
 /** Pause between two requests to the same site (LinkedIn rate-limits a fast guest client). */
 const SITE_GAP_MS: Partial<Record<ListingSite, number>> = { linkedin: 1_500 };

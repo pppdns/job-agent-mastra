@@ -17,7 +17,7 @@ const CLOSED_LI = `<h2 class="top-card-layout__title">x</h2><figcaption class="c
 const OPEN_LI = `<h2 class="top-card-layout__title">x</h2>`;
 
 /** Chat jobs are always in scope; status set as given. */
-async function job(url: string, status: "new" | "shortlisted" | "applied" = "new") {
+async function job(url: string, status: "new" | "shortlisted" | "to_apply" | "applied" = "new") {
   const { job } = await upsertJob(db, { canonicalUrl: url, title: `Job ${url}`, company: "Acme" });
   if (status !== "new") await setJobStatus(db, job.id, status);
   return job.id;
@@ -40,7 +40,7 @@ const guest = (id: string) => `https://www.linkedin.com/jobs-guest/jobs/api/jobP
 const noWait = async () => {};
 
 describe("runListingCheck", () => {
-  it("dismisses closed new and shortlisted jobs, keeps open, unknown and applied ones", async () => {
+  it("dismisses closed new, shortlisted and to-apply jobs, keeps open, unknown and applied ones", async () => {
     const closedNew = await job("https://www.linkedin.com/jobs/view/1000001/");
     const closedShortlisted = await job(
       "https://www.linkedin.com/jobs/view/1000002/",
@@ -50,7 +50,9 @@ describe("runListingCheck", () => {
     const unknown = await job("https://jobs.ashbyhq.com/acme/e9f8842c-3ed3-4b89-bd55-f59cff9773cb");
     const applied = await job("https://www.linkedin.com/jobs/view/1000005/", "applied");
     const unsupported = await job("https://himalayas.app/companies/acme/jobs/x");
+    const closedToApply = await job("https://www.linkedin.com/jobs/view/1000006/", "to_apply");
     const { calls, fetchProbe } = fake({
+      [guest("1000006")]: { status: 404, body: "" },
       [guest("1000001")]: { status: 200, body: CLOSED_LI },
       [guest("1000002")]: { status: 404, body: "" },
       [guest("1000003")]: { status: 200, body: OPEN_LI },
@@ -63,15 +65,17 @@ describe("runListingCheck", () => {
     const result = await runListingCheck(db, { fetchProbe, wait: noWait });
 
     expect(calls).not.toContain(guest("1000005"));
-    expect(result).toMatchObject({ jobs: 5, checks: 4, open: 1, unknown: 1, unsupported: 1 });
+    expect(result).toMatchObject({ jobs: 6, checks: 5, open: 1, unknown: 1, unsupported: 1 });
     expect(result.closed.map((c) => [c.id, c.previousStatus]).sort()).toEqual(
       [
         [closedNew, "new"],
         [closedShortlisted, "shortlisted"],
+        [closedToApply, "to_apply"],
       ].sort(),
     );
     expect(await statusOf(closedNew)).toBe("dismissed");
     expect(await statusOf(closedShortlisted)).toBe("dismissed");
+    expect(await statusOf(closedToApply)).toBe("dismissed");
     for (const id of [open, unknown, unsupported]) expect(await statusOf(id)).toBe("new");
     expect(await statusOf(applied)).toBe("applied");
   });
@@ -131,11 +135,23 @@ describe("closed email", () => {
       site: "lever" as const,
       signal: "Lever API: job not found (404)",
     },
+    {
+      id: "c",
+      title: "Staff",
+      company: "Initech",
+      previousStatus: "to_apply",
+      url: "https://jobs.lever.co/x/z",
+      site: "lever" as const,
+      signal: "Lever API: job not found (404)",
+    },
   ];
 
-  it("lists shortlisted jobs first, escapes values and links to the app", () => {
+  it("lists to-apply then shortlisted jobs first, escapes values and links to the app", () => {
     const email = buildClosedEmail(closed, "https://app.example/");
-    expect(email.subject).toBe("🧹 2 jobs no longer available (1 shortlisted)");
+    expect(email.subject).toBe("🧹 3 jobs no longer available (1 to apply, 1 shortlisted)");
+    expect(email.text.indexOf("[To apply] Staff")).toBeLessThan(
+      email.text.indexOf("[Shortlisted] Lead"),
+    );
     expect(email.text.indexOf("[Shortlisted] Lead")).toBeLessThan(email.text.indexOf("Engineer"));
     expect(email.html).toContain("Engineer &lt;script&gt;");
     expect(email.html).toContain("Acme &amp; Co");

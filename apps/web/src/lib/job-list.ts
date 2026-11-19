@@ -14,6 +14,7 @@ export const JOB_TABS = [
   "active",
   "new",
   "shortlisted",
+  "to_apply",
   "applied",
   "interviewing",
   "offer",
