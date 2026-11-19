@@ -10,7 +10,7 @@ import { reportError } from "../../sentry";
 import { getAppDb } from "../app-db";
 import { discoveryScheduleEnabled } from "./discover-jobs";
 
-// Daily listing check: re-checks the links of shortlisted and top new jobs, dismisses those whose
+// Daily listing check: re-checks the links of shortlisted, to-apply and top new jobs, dismisses those whose
 // listing closed, and emails the list. See src/listings/AGENTS.md.
 
 export const CHECK_LISTINGS_WORKFLOW_ID = "check-listings";
@@ -81,7 +81,7 @@ const check = createStep({
 export const checkListingsWorkflow = createWorkflow({
   id: CHECK_LISTINGS_WORKFLOW_ID,
   description:
-    "Re-checks the listings of shortlisted and top new jobs, dismisses closed ones and emails the list",
+    "Re-checks the listings of shortlisted, to-apply and top new jobs, dismisses closed ones and emails the list",
   inputSchema,
   outputSchema,
   options: { autoRestartActiveRuns: false },

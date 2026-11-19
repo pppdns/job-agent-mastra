@@ -76,6 +76,7 @@ describe("statusChangeRefusal", () => {
   it("allows a short user request that names the status", () => {
     expect(statusChangeRefusal([user("I applied to Acme today, mark it")], "applied")).toBeNull();
     expect(statusChangeRefusal([user("Not interested in Contoso")], "dismissed")).toBeNull();
+    expect(statusChangeRefusal([user("I decided to apply to Acme")], "to_apply")).toBeNull();
     expect(
       statusChangeRefusal([user("I applied"), toolCall("find_saved_jobs")], "applied"),
     ).toBeNull();

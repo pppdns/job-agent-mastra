@@ -24,6 +24,7 @@ import {
 const STATUS_STYLE: Record<JobStatus, string> = {
   new: "",
   shortlisted: "border-info/40 bg-info/10 text-info",
+  to_apply: "border-info/60 bg-info/15 text-info",
   applied: "text-muted-foreground",
   interviewing: "border-info/40 bg-info/10 text-info",
   offer: "border-info/60 bg-info/15 font-semibold text-info",

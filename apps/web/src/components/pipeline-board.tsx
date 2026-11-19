@@ -14,7 +14,7 @@ export type BoardColumn = {
 };
 
 /**
- * The board's columns: a 4-column grid once the board is 56rem wide (container query); below it a horizontal, snapping scroller
+ * The board's columns: a 5-column grid once the board is 64rem wide (container query); below it a horizontal, snapping scroller
  * (the next column peeks in) with chips above that jump to a column and mark the visible one.
  * Children are the columns, in `columns` order, each with `id`.
  */
@@ -45,7 +45,7 @@ export function PipelineBoard({
     <div className="@container flex flex-col gap-3">
       <nav
         aria-label="Board columns"
-        className="flex gap-1.5 overflow-x-auto [scrollbar-width:none] @4xl:hidden"
+        className="flex gap-1.5 overflow-x-auto [scrollbar-width:none] @5xl:hidden"
       >
         {columns.map((c) => (
           <button
@@ -86,7 +86,7 @@ export function PipelineBoard({
       </nav>
       <div
         ref={scroller}
-        className="-mx-4 flex items-start snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 @4xl:mx-0 @4xl:grid @4xl:snap-none @4xl:grid-cols-4 @4xl:overflow-visible @4xl:px-0"
+        className="-mx-4 flex items-start snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 @5xl:mx-0 @5xl:grid @5xl:snap-none @5xl:grid-cols-4 @5xl:overflow-visible @5xl:px-0"
       >
         {children}
       </div>

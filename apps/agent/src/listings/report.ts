@@ -1,29 +1,38 @@
+import { JOB_STATUS_LABELS } from "@copilot/shared";
 import type { HttpJson } from "../discovery/sources/http";
 import { type Email, type EmailConfig, emailNotConfigured, escapeHtml, sendEmail } from "../email";
 import type { ClosedJob } from "./run";
 
-// The daily "no longer available" email: the jobs the listing check dismissed, shortlisted ones
-// first, each with the link that closed and a link to the job in the app (to restore it).
+// The daily "no longer available" email: the jobs the listing check dismissed, to-apply then
+// shortlisted ones first, each with the link that closed and a link to the job in the app (to restore it).
 // Sent only when something was dismissed.
 
 export const CLOSED_EMOJI = "🧹";
 
 const plural = (n: number) => `${n} job${n === 1 ? "" : "s"}`;
 
+/** Statuses the user picked by hand, tagged and listed first (most committed first). */
+const TAGGED = ["to_apply", "shortlisted"] as const;
+type Tagged = (typeof TAGGED)[number];
+const rank = (status: string) => {
+  const i = TAGGED.indexOf(status as Tagged);
+  return i < 0 ? 0 : TAGGED.length - i;
+};
+
 export function buildClosedEmail(closed: ClosedJob[], baseUrl: string): Email {
   const base = baseUrl.replace(/\/+$/, "");
-  const sorted = [...closed].sort(
-    (a, b) =>
-      Number(b.previousStatus === "shortlisted") - Number(a.previousStatus === "shortlisted"),
-  );
-  const shortlisted = closed.filter((c) => c.previousStatus === "shortlisted").length;
-  const subject = `${CLOSED_EMOJI} ${plural(closed.length)} no longer available${shortlisted > 0 ? ` (${shortlisted} shortlisted)` : ""}`;
+  const sorted = [...closed].sort((a, b) => rank(b.previousStatus) - rank(a.previousStatus));
+  const counts = TAGGED.map((s) => {
+    const n = closed.filter((c) => c.previousStatus === s).length;
+    return n > 0 ? `${n} ${JOB_STATUS_LABELS[s].toLowerCase()}` : "";
+  }).filter(Boolean);
+  const subject = `${CLOSED_EMOJI} ${plural(closed.length)} no longer available${counts.length > 0 ? ` (${counts.join(", ")})` : ""}`;
   const intro = `These listings closed, so the jobs were dismissed. To bring one back, open it and change its status.`;
   const line = (c: ClosedJob) => ({
     title: c.title ?? "Untitled job",
     company: c.company ?? "",
     app: `${base}/jobs/${encodeURIComponent(c.id)}`,
-    tag: c.previousStatus === "shortlisted" ? "Shortlisted" : "",
+    tag: rank(c.previousStatus) > 0 ? JOB_STATUS_LABELS[c.previousStatus as Tagged] : "",
   });
 
   const text = [

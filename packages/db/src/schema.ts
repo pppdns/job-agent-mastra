@@ -35,7 +35,7 @@ export type ListingClosed = {
   url: string;
   site: string;
   signal: string;
-  /** The status the job had before (`new` or `shortlisted`). */
+  /** The status the job had before (`new`, `shortlisted` or `to_apply`). */
   previousStatus: string;
 };
 

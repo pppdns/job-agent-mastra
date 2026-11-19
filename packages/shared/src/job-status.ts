@@ -2,6 +2,7 @@
 export const JOB_STATUSES = [
   "new",
   "shortlisted",
+  "to_apply",
   "applied",
   "interviewing",
   "offer",
@@ -13,6 +14,7 @@ export type JobStatus = (typeof JOB_STATUSES)[number];
 export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
   new: "New",
   shortlisted: "Shortlisted",
+  to_apply: "To apply",
   applied: "Applied",
   interviewing: "Interviewing",
   offer: "Offer",
@@ -24,7 +26,13 @@ export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
 export const CLOSED_JOB_STATUSES: readonly JobStatus[] = ["rejected", "dismissed"];
 
 /** Statuses in progress, in pipeline order: the columns of the board. */
-export const PIPELINE_STATUSES = ["shortlisted", "applied", "interviewing", "offer"] as const;
+export const PIPELINE_STATUSES = [
+  "shortlisted",
+  "to_apply",
+  "applied",
+  "interviewing",
+  "offer",
+] as const;
 export type PipelineStatus = (typeof PIPELINE_STATUSES)[number];
 
 /** Upper bound for interview rounds the user can set. */

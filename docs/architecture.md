@@ -341,12 +341,12 @@ flowchart LR
 
 ## Closed listings
 
-Every morning (06:30, before discovery) the `check-listings` workflow re-checks the links of shortlisted jobs and new jobs scored at least the digest threshold. Each site has one deterministic rule proven on real listings (LinkedIn's closed banner or a 404, ATS APIs answering 404, boards answering 410 with their expired text); anything else is "unknown" and changes nothing. A closed link dismisses the job only while it is still `new` or `shortlisted`, records why (shown on the job page), and the day's dismissals are emailed. Details: [apps/agent/src/listings/AGENTS.md](../apps/agent/src/listings/AGENTS.md).
+Every morning (06:30, before discovery) the `check-listings` workflow re-checks the links of shortlisted and to-apply jobs and new jobs scored at least the digest threshold. Each site has one deterministic rule proven on real listings (LinkedIn's closed banner or a 404, ATS APIs answering 404, boards answering 410 with their expired text); anything else is "unknown" and changes nothing. A closed link dismisses the job only while it is still `new`, `shortlisted` or `to_apply`, records why (shown on the job page), and the day's dismissals are emailed. Details: [apps/agent/src/listings/AGENTS.md](../apps/agent/src/listings/AGENTS.md).
 
 ```mermaid
 flowchart LR
-  CRON["schedule 06:30"] --> SEL[shortlisted + new ≥ digest threshold] --> CHK{per-site rule}
-  CHK -->|closed| DIS[dismiss + archive<br/>if still new/shortlisted] --> MAIL["email: N jobs no longer available"]
+  CRON["schedule 06:30"] --> SEL[shortlisted + to apply + new ≥ digest threshold] --> CHK{per-site rule}
+  CHK -->|closed| DIS[dismiss + archive<br/>if still new/shortlisted/to apply] --> MAIL["email: N jobs no longer available"]
   CHK -->|open / unknown / no rule| KEEP[unchanged]
 ```
 

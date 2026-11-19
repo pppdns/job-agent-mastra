@@ -41,6 +41,14 @@ test("track interview rounds on the board and keep a note on the job", async ({ 
   ).toBeVisible();
   await expect(card).toContainText("today");
 
+  // Decided to apply: the card moves to its own column.
+  await card.getByRole("button", { name: /^Status of / }).click();
+  await page.getByRole("menuitemradio", { name: "To apply" }).click();
+  await expect(
+    column("To apply").getByRole("listitem").filter({ hasText: "Orbit Freight" }),
+  ).toBeVisible();
+  await expect(card).toContainText("Marked to apply");
+
   // Interviewing starts at round 1; set the total, then mark a round done.
   await card.getByRole("button", { name: /^Status of / }).click();
   await page.getByRole("menuitemradio", { name: "Interviewing" }).click();

@@ -7,6 +7,8 @@ import {
   progressAge,
   STUCK_DAYS,
   stageAge,
+  TO_APPLY_FOLLOW_UP_DAYS,
+  TO_APPLY_STUCK_DAYS,
 } from "./job-age";
 
 const DAY = 86_400_000;
@@ -111,6 +113,18 @@ describe("progressAge", () => {
     expect(applied(FOLLOW_UP_DAYS)).toMatchObject({ tone: "warning", attention: "follow_up" });
     expect(applied(FOLLOW_UP_DAYS)?.tooltip).toContain("follow");
     expect(applied(STUCK_DAYS)).toMatchObject({ tone: "destructive", attention: "stuck" });
+  });
+
+  it("nudges a job marked to apply sooner: listings close fast", () => {
+    const toApply = (days: number) =>
+      progressAge({ ...base, status: "to_apply", statusChangedAt: ago(days) }, now);
+    expect(toApply(1)).toMatchObject({ label: "Marked to apply 1d ago", attention: null });
+    expect(toApply(TO_APPLY_FOLLOW_UP_DAYS)).toMatchObject({
+      tone: "warning",
+      attention: "follow_up",
+    });
+    expect(toApply(TO_APPLY_STUCK_DAYS)).toMatchObject({ tone: "destructive", attention: "stuck" });
+    expect(toApply(TO_APPLY_STUCK_DAYS)?.tooltip).toContain("apply now");
   });
 
   it("counts from the latest round and names it", () => {

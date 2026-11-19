@@ -13,6 +13,7 @@ import { latestUserText } from "./ingest-listing";
 const STATUS_WORDS: Record<JobStatus, RegExp> = {
   new: /\bnew\b|\breset\b|\bunmark/i,
   shortlisted: /shortlist|interested|\bkeep\b|\bsave\b|consider/i,
+  to_apply: /to apply|\bready\b|decided|going to apply|will apply|want to apply/i,
   applied: /\bappl(y|ied|ying|ication)/i,
   interviewing: /interview|\bcall\b|screen/i,
   offer: /\boffer/i,
@@ -71,8 +72,8 @@ export async function updateJobStatus(db: Db, jobId: string, status: JobStatus) 
 export const setJobStatusTool = createTool({
   id: "set_job_status",
   description:
-    "Set where a saved job stands in the user's own search: new, shortlisted, applied, " +
-    "interviewing, offer, rejected or dismissed. Rejected and dismissed archive the job; any " +
+    "Set where a saved job stands in the user's own search: new, shortlisted, to_apply (decided " +
+    "to apply, not applied yet), applied, interviewing, offer, rejected or dismissed. Rejected and dismissed archive the job; any " +
     "other status unarchives it. Only when the user asks for it in their message; the app refuses " +
     "it in a turn that read a listing or web page. Bookkeeping only; nothing is sent anywhere.",
   inputSchema: z.object({
