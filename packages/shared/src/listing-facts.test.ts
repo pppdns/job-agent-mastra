@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  companyLine,
   decideEligibility,
   type ListingFactsInput,
   levelFromTitle,
+  recruiterPost,
   verifyFacts,
 } from "./listing-facts";
 import type { Home } from "./remote-scope";
@@ -25,6 +27,7 @@ const NONE: ListingFactsInput = {
   travel: null,
   employmentType: null,
   timezone: null,
+  recruiter: null,
 };
 
 /** Facts whose every quote is the listing itself, so verification keeps them. */
@@ -76,6 +79,32 @@ describe("verifyFacts", () => {
     expect(facts.level).toEqual({ level: "staff", quote: "Staff Engineer" });
     expect(facts.levelFrom).toBe("title");
     expect(facts.headerPlaces).toEqual(["Poland, Hungary"]);
+  });
+
+  it("keeps a recruiter's client name only when the listing states it", () => {
+    const post = "Our client, Acme Robotics, is hiring. Hiring for one of Europe's top startups.";
+    const recruiter = (employer: string | null, quote = "Our client") =>
+      verifyFacts({ ...NONE, recruiter: { employer, quote } }, post, null).recruiter;
+    expect(recruiter("Acme Robotics")).toEqual({ employer: "Acme Robotics", quote: "Our client" });
+    expect(recruiter("Tact")).toEqual({ employer: null, quote: "Our client" });
+    expect(recruiter(null, "We are a staffing firm")).toBeNull();
+  });
+});
+
+describe("recruiterPost / companyLine", () => {
+  const facts = (employer: string | null) => ({ recruiter: { employer, quote: "Our client" } });
+
+  it("names the agency and the employer when stated", () => {
+    expect(recruiterPost("Tact", facts(null))).toEqual({ recruiter: "Tact", employer: null });
+    expect(companyLine("Tact", facts(null))).toBe("Tact (recruiter)");
+    expect(companyLine("Tact", facts("Acme"))).toBe("Acme via Tact");
+  });
+
+  it("is the company itself for employer posts and older facts", () => {
+    expect(companyLine("Acme", { recruiter: null })).toBe("Acme");
+    expect(companyLine("Acme", {})).toBe("Acme");
+    expect(companyLine("Acme", null)).toBe("Acme");
+    expect(recruiterPost("Acme, Inc.", facts("ACME"))).toBeNull();
   });
 });
 

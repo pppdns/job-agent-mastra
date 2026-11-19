@@ -1,7 +1,8 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createDb, type Db, migrateDb, upsertJob } from "@copilot/db";
+import { createDb, type Db, migrateDb, saveFacts, upsertJob } from "@copilot/db";
+import { FACTS_VERSION, type ListingFacts } from "@copilot/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Resolver } from "../ingest/url-guard";
 import { createFixtureWebProviders } from "../web/fixture-providers";
@@ -72,6 +73,23 @@ describe("runResearch", () => {
     ).toMatchObject({
       status: "unavailable",
     });
+  });
+
+  it("researches a recruiter post's named employer, and refuses one that names none", async () => {
+    const recruiter = async (employer: string | null) =>
+      saveFacts(db, jobId, {
+        facts: { recruiter: { employer, quote: "Our client" } } as ListingFacts,
+        version: FACTS_VERSION,
+        decision: null,
+      });
+    await recruiter(null);
+    expect(await runResearch({ jobId, topics: ["business"], questions: [] }, deps())).toMatchObject(
+      { status: "unavailable", reason: expect.stringContaining("recruiter") },
+    );
+    await recruiter("Acme Robotics");
+    expect(await runResearch({ jobId, topics: ["business"], questions: [] }, deps())).toMatchObject(
+      { company: "Acme Robotics" },
+    );
   });
 
   it("retries a transient read failure and reports the retry as progress", async () => {

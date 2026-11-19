@@ -268,6 +268,7 @@ describe("location eligibility", () => {
     travel: null,
     employmentType: null,
     timezone: null,
+    recruiter: null,
     headerPlaces: [],
     levelFrom: null,
   });

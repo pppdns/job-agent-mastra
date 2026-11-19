@@ -12,6 +12,7 @@ import {
   staleTriageCount,
 } from "@copilot/db";
 import {
+  companyLine,
   DISCOVERY_SOURCE_LABELS,
   type DiscoverySource,
   locationBlockReason,
@@ -294,7 +295,9 @@ async function ScreenedOut({ params }: { params: JobListParams }) {
                     {job.title ?? "Untitled job"}
                   </Link>{" "}
                   <span className="text-muted-foreground">
-                    {[job.company, job.location].filter(Boolean).join(" · ")}
+                    {[companyLine(job.company, job.facts), job.location]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </span>
                   <JobChips
                     {...jobChips(overviewChipInput(job), preferences)}
@@ -527,7 +530,7 @@ function JobRow({
   const age = showsStageAge(tab) ? stageAge(job, now) : jobAge(job, now);
   const fitColored = fitMatters(job);
   const title = job.title ?? "Untitled job";
-  const meta = [job.company, job.location].filter(Boolean).join(" · ");
+  const meta = [companyLine(job.company, job.facts), job.location].filter(Boolean).join(" · ");
   return (
     <TableRow className={cn("relative", job.archivedAt && "text-muted-foreground")}>
       <TableCell className="pl-3 align-top pt-3">

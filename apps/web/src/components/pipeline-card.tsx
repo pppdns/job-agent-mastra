@@ -1,4 +1,5 @@
 import type { JobOverview } from "@copilot/db";
+import { companyLine } from "@copilot/shared";
 import { NotebookTextIcon } from "lucide-react";
 import Link from "next/link";
 import { ProgressPill } from "@/components/age-pill";
@@ -13,7 +14,7 @@ import type { ProgressAge } from "@/lib/job-age";
  */
 export function PipelineCard({ job, age }: { job: JobOverview; age: ProgressAge | null }) {
   const title = job.title ?? "Untitled job";
-  const meta = [job.company, job.location].filter(Boolean).join(" · ");
+  const meta = [companyLine(job.company, job.facts), job.location].filter(Boolean).join(" · ");
   const { summary } = job;
   return (
     <li className="relative flex flex-col gap-2 rounded-lg border bg-card p-3 text-sm shadow-xs transition-colors hover:border-foreground/20">

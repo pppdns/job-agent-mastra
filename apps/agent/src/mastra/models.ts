@@ -237,6 +237,8 @@ function mockFacts(prompt: string) {
     travel: null,
     employmentType: null,
     timezone: null,
+    // "Our client" posts: a recruiter with the employer unnamed.
+    recruiter: line(/\bour client\b/i) ? { employer: null, quote: line(/\bour client\b/i) } : null,
   };
 }
 

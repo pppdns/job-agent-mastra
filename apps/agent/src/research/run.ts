@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { type Db, getJobDetail, listClaims } from "@copilot/db";
-import { RESEARCH_TOPIC_LABELS, type ResearchTopic } from "@copilot/shared";
+import { RESEARCH_TOPIC_LABELS, type ResearchTopic, recruiterPost } from "@copilot/shared";
 import type { TracingContext } from "@mastra/core/observability";
 import { env } from "../env";
 import type { Resolver } from "../ingest/url-guard";
@@ -40,7 +40,15 @@ export async function runResearch(
   if (!detail?.job.company) {
     return { status: "unavailable" as const, reason: "unknown job or no company name" };
   }
-  const company = detail.job.company;
+  // A recruiter post: research the employer it names, never the agency.
+  const post = recruiterPost(detail.job.company, detail.job.facts);
+  if (post && !post.employer) {
+    return {
+      status: "unavailable" as const,
+      reason: `a recruiter (${detail.job.company}) posted this job and the listing doesn't name the employer; ask the recruiter who it is`,
+    };
+  }
+  const company = post?.employer ?? detail.job.company;
   const runId = randomUUID();
   const limits = deps.limits ?? DEFAULT_LIMITS;
   const budget = new ResearchBudget(limits, deps.signal);
@@ -62,6 +70,7 @@ export async function runResearch(
   await progress({ kind: "start", company, topics: input.topics });
   const prompt = [
     `Company: ${company}`,
+    post && `Posted by the recruiter ${detail.job.company}, not by the company itself`,
     detail.job.title && `Role: ${detail.job.title}`,
     detail.job.location && `Location: ${detail.job.location}`,
     `Topics: ${input.topics.map((t) => `${t} (${RESEARCH_TOPIC_LABELS[t]})`).join(", ")}`,
