@@ -224,3 +224,18 @@ Not verified: browser errors and web source-map upload (needs the `SENTRY_AUTH_T
 - Fix checked live through the adapter (3 phrases, 1-day window): the empty runs came back as empty searches with the actor's message read (status message or log), and the source wasn't reported as "every search came back empty". A second check hit 4 stalls in a row (11:22–11:28 UTC): with the 90 s timeout and one retry, two searches still ended partial, named by phrase, in about 6 minutes instead of 20.
 - `nomad-agent/jobgether-scraper` (the actor replaced on 2026-11-15) answered again on 2026-11-16 (3 jobs, 33 s).
 
+
+## Recruiter posts (2026-11-19)
+
+Listing facts v4 add `recruiter` (an agency posting for a client). Measured live with `recruiter.eval.ts` on the 15 Nov production backup, against labels from Opus 5.5 and GPT-6.1 (disagreements adjudicated by hand; "unclear" ones left out). Stratified: listings with client wording, agency-looking company names, everything else.
+
+| Sample | Precision | Recall | Employers shown as recruiter | Client name right |
+| --- | --- | --- | --- | --- |
+| Main, first prompt (296) | 100% (46/46) | 75% (46/61) | 0 | 0/1 |
+| Main, final prompt (296) | 98% (60/61) | 97% (60/62) | 1 | 1/3 |
+| Holdout, final prompt (145) | 93% (26/28) | 81% (26/32) | 2 | 3/3 |
+
+- The first prompt only knew "our client" wording; it missed agencies describing the client in the third person ("We are working with an early-stage AI company"). The final prompt (tuned on the main sample) names those signs; the holdout checks it on unseen jobs.
+- The false flags are staffing firms that employ the hire on W2 or contract terms at an unnamed client (Kellton, Extend Your Team, Dresden Partners): borderline, shown as "(recruiter)" with research refused. Misses keep the old display (agency as company).
+- Location eligibility with the v4 prompt (`location-scope.eval.ts`, cached labels): main 76% exact (v3 73%), hide precision 99% (98%), recall 89% (86%); holdout 83% (82%), 98% (98%), 90% (89%); still no open job hidden.
+- Cost: $9.7 in all (labels $8.4, extractor runs $1.3).
