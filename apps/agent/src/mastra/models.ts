@@ -207,6 +207,7 @@ function mockFacts(prompt: string) {
   const remote = line(/\bremote\b/i);
   const hybrid = line(/\bhybrid\b/i);
   const location = listing.match(/^Location: (.+)$/m);
+  const client = line(/\bour client\b/i);
   const pay = listing.match(/(EUR|USD) ([\d,]+) – ([\d,]+)/);
   const amount = (s: string | undefined) => Number((s ?? "").replaceAll(",", ""));
   return {
@@ -238,7 +239,7 @@ function mockFacts(prompt: string) {
     employmentType: null,
     timezone: null,
     // "Our client" posts: a recruiter with the employer unnamed.
-    recruiter: line(/\bour client\b/i) ? { employer: null, quote: line(/\bour client\b/i) } : null,
+    recruiter: client ? { employer: null, quote: client } : null,
   };
 }
 

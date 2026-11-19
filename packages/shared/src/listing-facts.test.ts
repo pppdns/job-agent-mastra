@@ -82,12 +82,16 @@ describe("verifyFacts", () => {
   });
 
   it("keeps a recruiter's client name only when the listing states it", () => {
-    const post = "Our client, Acme Robotics, is hiring. Hiring for one of Europe's top startups.";
+    const post =
+      "Our client, Acme Robotics, is hiring. Hiring for one of Europe's top startups, " +
+      "who build agents for enterprise workflows and ship them to large customers.";
     const recruiter = (employer: string | null, quote = "Our client") =>
       verifyFacts({ ...NONE, recruiter: { employer, quote } }, post, null).recruiter;
     expect(recruiter("Acme Robotics")).toEqual({ employer: "Acme Robotics", quote: "Our client" });
     expect(recruiter("Tact")).toEqual({ employer: null, quote: "Our client" });
     expect(recruiter(null, "We are a staffing firm")).toBeNull();
+    // A long span from the listing isn't a company name.
+    expect(recruiter(post.slice(0, 90))?.employer).toBeNull();
   });
 });
 

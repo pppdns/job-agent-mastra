@@ -156,13 +156,13 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
           </p>
         )}
         <p className="flex flex-wrap gap-x-4 text-sm text-muted-foreground">
-          {job.company && (
+          {(job.company || post) && (
             <span className="inline-flex items-center gap-1.5">
               <Building2Icon className="size-4" />
               {post && (
                 <span className="text-foreground">{post.employer ?? "Employer not named"}</span>
               )}
-              {post && "· via"}
+              {post && job.company && "· via"}
               {job.companyKey ? (
                 <Link
                   href={`/companies/${encodeURIComponent(job.companyKey)}`}
@@ -173,7 +173,7 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
               ) : (
                 job.company
               )}
-              {post && " (recruiter)"}
+              {post && job.company && " (recruiter)"}
             </span>
           )}
           {job.location && (
