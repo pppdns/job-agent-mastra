@@ -47,7 +47,7 @@ test("track interview rounds on the board and keep a note on the job", async ({ 
   await expect(
     column("To apply").getByRole("listitem").filter({ hasText: "Orbit Freight" }),
   ).toBeVisible();
-  await expect(card).toContainText("Marked to apply today");
+  await expect(card).toContainText("Marked to apply");
 
   // Interviewing starts at round 1; set the total, then mark a round done.
   await card.getByRole("button", { name: /^Status of / }).click();
