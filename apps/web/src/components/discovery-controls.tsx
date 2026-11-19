@@ -2,8 +2,19 @@
 
 import { ASSESS_BATCH_SIZES } from "@copilot/shared";
 
-/** What reading one listing's facts costs on average (fast model; measured on real listings). */
+// Rough per-job model costs for the labels and tooltips (the agent reserves these in
+// `apps/agent/src/discovery/budget.ts`; real costs are lower). Update both together.
+/** Reading one listing's facts (fast model). */
 const FACTS_USD_PER_JOB = 0.0015;
+/** Triaging one job (fast model). */
+const TRIAGE_USD_PER_JOB = 0.002;
+/** Fully assessing one job (main model; reserved at $0.08, about $0.04 real). */
+const ASSESS_USD_PER_JOB = 0.04;
+/** Two significant digits, so a sum like 0.0015 + 0.002 can't print float noise. */
+const usd = (n: number) => `$${Number(n.toPrecision(2))}`;
+/** Triage reads a job's facts first when they're missing, so a job costs both. */
+const TRIAGE_STEP = `reads each job's listing facts if missing and triages it (fast model, cheap: about ${usd(FACTS_USD_PER_JOB + TRIAGE_USD_PER_JOB)} a job)`;
+const ASSESS_STEP = `fully assesses the best matches (main model, the expensive step: about ${usd(ASSESS_USD_PER_JOB)} a job)`;
 
 import { useRouter } from "next/navigation";
 import {
@@ -64,25 +75,38 @@ export function DiscoveryControls({
   );
   const busy = running || pending;
   const cost = maxBackfillUsd === null ? "" : ` · up to $${maxBackfillUsd.toFixed(2)}`;
+  // The button's amount is only LinkedIn's raised cap, not a cap on the whole run.
+  const backfillCost =
+    maxBackfillUsd === null
+      ? "Model spend comes on top."
+      : "The amount on the button is LinkedIn's raised cap alone; other paid boards and model spend come on top.";
   return (
     <div className="flex flex-col gap-2">
       <form action={action} className="flex flex-wrap items-center gap-2">
-        <Hint text="Fetches new postings from every due source (free feeds; paid Apify boards cost per result), screens them in code, then reads listing facts and triages the new jobs (fast model, cents), fully assesses the best matches (main model, about $0.04 each) and emails them.">
+        <Hint
+          text={`Fetches new postings from the enabled sources that are due (free feeds; paid Apify boards cost per result, capped per source and by the monthly budget) and screens them in code. Then, for every job waiting for triage (not only the new ones), it ${TRIAGE_STEP}, ${ASSESS_STEP} and emails them. Model spend is capped per run.`}
+        >
           <Button type="submit" name="run" value="now" disabled={busy}>
             {running ? "Running…" : "Run now"}
           </Button>
         </Hint>
-        <Hint text="Like Run now, but asks every source for the last 7 days and ignores each source's hours between runs. Paid boards return more results, so it costs more; the shown amount is the cap.">
+        <Hint
+          text={`Like Run now, but asks the enabled sources for the last 7 days (career sites have no date filter) and ignores their hours between runs; paid sources may spend 4× their usual per-run cap. ${backfillCost}`}
+        >
           <Button type="submit" name="run" value="backfill-7" variant="outline" disabled={busy}>
             Backfill 7 days{cost}
           </Button>
         </Hint>
-        <Hint text="Like Run now, but asks every source for the last 30 days and ignores each source's hours between runs. The most expensive run (many paid results); the shown amount is the cap.">
+        <Hint
+          text={`Like Run now, but asks the enabled sources for the last 30 days (career sites have no date filter) and ignores their hours between runs; paid sources may spend 4× their usual per-run cap. The most expensive run. ${backfillCost}`}
+        >
           <Button type="submit" name="run" value="backfill-30" variant="outline" disabled={busy}>
             Backfill 30 days{cost}
           </Button>
         </Hint>
-        <Hint text="Fetches nothing. Scores the jobs still waiting for triage against your profile (fast model, 0–100 with a reason; cheap, about $0.002 a job), hides low scores, then assesses and emails the new matches.">
+        <Hint
+          text={`Fetches nothing. For the jobs waiting for triage it ${TRIAGE_STEP}: a 0–100 score against your profile, low scores hidden. Then it ${ASSESS_STEP} among the new matches and emails them.`}
+        >
           <Button
             type="submit"
             name="run"
@@ -94,7 +118,9 @@ export function DiscoveryControls({
           </Button>
         </Hint>
         {awaitingFacts > 0 && (
-          <Hint text="Fetches nothing, triages nothing. For jobs whose facts are missing or outdated, a fast model (cheap, under $0.002 a job) quotes work mode, places, pay, level, languages and focus from the listing; code then checks every quote and decides whether the job is open from where you live, hiding closed ones. Fills the job chips.">
+          <Hint
+            text={`Fetches and triages nothing. For jobs whose facts are missing or outdated, a fast model (cheap, about ${usd(FACTS_USD_PER_JOB)} a job) quotes work mode, places, pay, level, languages and focus from the listing; code then checks every quote and decides whether the job is open from where you live, hiding closed ones. Fills the job chips.`}
+          >
             <Button type="submit" name="run" value="extract" variant="outline" disabled={busy}>
               Read listing facts · {awaitingFacts.toLocaleString("en-US")} jobs · about $
               {(awaitingFacts * FACTS_USD_PER_JOB).toFixed(2)}
@@ -103,7 +129,9 @@ export function DiscoveryControls({
         )}
         <span className="flex flex-wrap items-center gap-1">
           <input type="hidden" name="assessLimit" value={assessLimit} />
-          <Hint text="Fetches and triages nothing. Writes full assessments for the best triaged matches that have none yet (main model, the expensive step: about $0.04 a job), up to the batch size picked next to it.">
+          <Hint
+            text={`Fetches and triages nothing. Writes full assessments for the best triaged matches that have none yet (main model, the expensive step: about ${usd(ASSESS_USD_PER_JOB)} a job), up to the batch size picked next to it.`}
+          >
             <Button type="submit" name="run" value="assess" variant="outline" disabled={busy}>
               Assess more matches · up to {assessLimit}
             </Button>
@@ -127,8 +155,8 @@ export function DiscoveryControls({
         </span>
       </form>
       <p className="text-xs text-muted-foreground">
-        Assessing uses the main model, about $0.04 a job, best matches first. A bigger batch raises
-        that run&apos;s spend cap to fit.
+        Assessing uses the main model, about {usd(ASSESS_USD_PER_JOB)} a job, best matches first. A
+        bigger batch raises that run&apos;s spend cap to fit.
       </p>
       {running && (
         <form action={action}>
