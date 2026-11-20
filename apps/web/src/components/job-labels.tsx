@@ -6,8 +6,8 @@ import { StarIcon, TagIcon } from "lucide-react";
 // chips (round, tone-colored) and never read as something the model decided. Important ones
 // (solid red, star) are the user's top priority and come first.
 
-/** Classes of one label; shared with the editor so both look the same. */
-export function labelClassName(important: boolean, muted?: boolean) {
+/** Classes of one label: solid red when important, solid ink otherwise, faded when muted. */
+function labelClassName(important: boolean, muted?: boolean) {
   return cn(
     "inline-flex h-5 max-w-full items-center gap-1 rounded-sm px-1.5 text-[11px] font-semibold whitespace-nowrap",
     important
@@ -21,7 +21,7 @@ export function labelClassName(important: boolean, muted?: boolean) {
 }
 
 /** Icon of one label: a filled star when important, else a tag. */
-export function LabelIcon({ important }: { important: boolean }) {
+function LabelIcon({ important }: { important: boolean }) {
   return important ? (
     <StarIcon aria-hidden className="size-3 shrink-0 fill-current" />
   ) : (

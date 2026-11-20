@@ -29,6 +29,8 @@ describe("normalizeJobLabels", () => {
 
   it("caps the length of a label and the number of labels", () => {
     expect(normalizeLabelText("x".repeat(50))).toHaveLength(MAX_LABEL_LENGTH);
+    // An emoji straddling the limit stays whole (no lone surrogate).
+    expect(normalizeLabelText(`${"x".repeat(31)}🚀🚀`)).toBe(`${"x".repeat(31)}🚀`);
     const many = Array.from({ length: 12 }, (_, i) => label(`label ${i}`));
     expect(normalizeJobLabels(many)).toHaveLength(MAX_JOB_LABELS);
   });

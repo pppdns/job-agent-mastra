@@ -141,6 +141,11 @@ test("add your own labels, mark one important and edit them from the list", asyn
   await page.getByRole("button", { name: "Add", exact: true }).click();
   const editorLabels = page.getByRole("list", { name: "Labels on this job" }).getByRole("listitem");
   await expect(editorLabels).toHaveText(["Call Anna", "Referral"]);
+  // The same label in another case is refused with a notice, not silently merged.
+  await field.fill("referral");
+  await field.press("Enter");
+  await expect(page.getByText("“Referral” is already on this job")).toBeVisible();
+  await expect(editorLabels).toHaveCount(2);
   await page.keyboard.press("Escape");
 
   // The list row shows both, the important one first; the row menu edits them.

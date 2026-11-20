@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useOptimistic, useRef, useState, useTransition } from "react";
 import { setJobArchivedAction, setJobStatusAction, setJobTopAction } from "@/app/actions";
-import { LabelsEditor, useJobLabels } from "@/components/job-labels-editor";
+import { JobLabelsEditor } from "@/components/job-labels-editor";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -44,7 +44,7 @@ const STATUS_STYLE: Record<JobStatus, string> = {
 
 /**
  * Status button with a menu to change the status, mark it as top, edit the user's labels or
- * (un)archive the job. "Labels…" opens the labels picker anchored on the same button.
+ * (un)archive the job. "Labels…" opens the labels editor anchored on the same button.
  */
 export function JobStatusMenu({
   jobId,
@@ -72,87 +72,90 @@ export function JobStatusMenu({
   const [pending, startTransition] = useTransition();
   // Optimistic, so a second toggle before the refresh lands undoes the first.
   const [optimisticTop, setOptimisticTop] = useOptimistic(top);
-  const [currentLabels, saveLabels] = useJobLabels(jobId, labels ?? null);
   const [labelsOpen, setLabelsOpen] = useState(false);
-  // Set when "Labels…" closes the menu, so the menu doesn't pull focus back from the picker.
+  // Set when "Labels…" closes the menu, so the menu doesn't pull focus back from the editor.
   const openingLabels = useRef(false);
+  const trigger = (
+    <DropdownMenuTrigger asChild>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={pending}
+        aria-label={`Status of ${title}: ${JOB_STATUS_LABELS[status]}${archived ? ", archived" : ""}`}
+        className={cn(
+          "h-7 gap-1 rounded-full px-2.5 text-xs",
+          archived ? "text-muted-foreground" : !quiet && STATUS_STYLE[status],
+        )}
+      >
+        {status === "applied" && <CheckIcon className="size-3" />}
+        {JOB_STATUS_LABELS[status]}
+        <ChevronDownIcon className="size-3 opacity-60" />
+      </Button>
+    </DropdownMenuTrigger>
+  );
+  const menu = (
+    <DropdownMenu>
+      {editLabels ? <PopoverAnchor asChild>{trigger}</PopoverAnchor> : trigger}
+      <DropdownMenuContent
+        align="end"
+        onCloseAutoFocus={(event) => {
+          if (!openingLabels.current) return;
+          openingLabels.current = false;
+          event.preventDefault();
+        }}
+      >
+        <DropdownMenuRadioGroup
+          value={status}
+          onValueChange={(value) => startTransition(() => setJobStatusAction(jobId, value))}
+        >
+          {JOB_STATUSES.map((s) => (
+            <DropdownMenuRadioItem key={s} value={s}>
+              {JOB_STATUS_LABELS[s]}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        {optimisticTop !== undefined && (
+          <DropdownMenuItem
+            onSelect={() =>
+              startTransition(async () => {
+                setOptimisticTop(!optimisticTop);
+                await setJobTopAction(jobId, !optimisticTop);
+              })
+            }
+          >
+            {optimisticTop ? <StarOffIcon /> : <StarIcon />}
+            {optimisticTop ? "Remove top mark" : "Mark as top"}
+          </DropdownMenuItem>
+        )}
+        {editLabels && (
+          <DropdownMenuItem
+            onSelect={() => {
+              openingLabels.current = true;
+              setLabelsOpen(true);
+            }}
+          >
+            <TagIcon />
+            Labels…
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem
+          onSelect={() => startTransition(() => setJobArchivedAction(jobId, !archived))}
+        >
+          {archived ? <ArchiveRestoreIcon /> : <ArchiveIcon />}
+          {archived ? "Unarchive" : "Archive"}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+  if (!editLabels) return menu;
+  // The editor (and its state) mounts only while the popover is open.
   return (
     <Popover open={labelsOpen} onOpenChange={setLabelsOpen}>
-      <DropdownMenu>
-        <PopoverAnchor asChild>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={pending}
-              aria-label={`Status of ${title}: ${JOB_STATUS_LABELS[status]}${archived ? ", archived" : ""}`}
-              className={cn(
-                "h-7 gap-1 rounded-full px-2.5 text-xs",
-                archived ? "text-muted-foreground" : !quiet && STATUS_STYLE[status],
-              )}
-            >
-              {status === "applied" && <CheckIcon className="size-3" />}
-              {JOB_STATUS_LABELS[status]}
-              <ChevronDownIcon className="size-3 opacity-60" />
-            </Button>
-          </DropdownMenuTrigger>
-        </PopoverAnchor>
-        <DropdownMenuContent
-          align="end"
-          onCloseAutoFocus={(event) => {
-            if (!openingLabels.current) return;
-            openingLabels.current = false;
-            event.preventDefault();
-          }}
-        >
-          <DropdownMenuRadioGroup
-            value={status}
-            onValueChange={(value) => startTransition(() => setJobStatusAction(jobId, value))}
-          >
-            {JOB_STATUSES.map((s) => (
-              <DropdownMenuRadioItem key={s} value={s}>
-                {JOB_STATUS_LABELS[s]}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-          <DropdownMenuSeparator />
-          {optimisticTop !== undefined && (
-            <DropdownMenuItem
-              onSelect={() =>
-                startTransition(async () => {
-                  setOptimisticTop(!optimisticTop);
-                  await setJobTopAction(jobId, !optimisticTop);
-                })
-              }
-            >
-              {optimisticTop ? <StarOffIcon /> : <StarIcon />}
-              {optimisticTop ? "Remove top mark" : "Mark as top"}
-            </DropdownMenuItem>
-          )}
-          {editLabels && (
-            <DropdownMenuItem
-              onSelect={() => {
-                openingLabels.current = true;
-                setLabelsOpen(true);
-              }}
-            >
-              <TagIcon />
-              Labels…
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem
-            onSelect={() => startTransition(() => setJobArchivedAction(jobId, !archived))}
-          >
-            {archived ? <ArchiveRestoreIcon /> : <ArchiveIcon />}
-            {archived ? "Unarchive" : "Archive"}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {editLabels && (
-        <PopoverContent align="end" className="w-72 p-2">
-          <LabelsEditor labels={currentLabels} onChange={saveLabels} />
-        </PopoverContent>
-      )}
+      {menu}
+      <PopoverContent align="end" className="w-72 p-2">
+        <JobLabelsEditor jobId={jobId} labels={labels ?? null} />
+      </PopoverContent>
     </Popover>
   );
 }

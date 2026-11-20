@@ -15,9 +15,13 @@ export const jobLabelSchema = z.object({
 });
 export type JobLabel = z.infer<typeof jobLabelSchema>;
 
-/** One label's text as stored: trimmed, inner whitespace collapsed, cut to `MAX_LABEL_LENGTH`. */
+/**
+ * One label's text as stored: trimmed, inner whitespace collapsed, cut to `MAX_LABEL_LENGTH`
+ * code points (so an emoji is never split in half).
+ */
 export function normalizeLabelText(text: string): string {
-  return text.replace(/\s+/g, " ").trim().slice(0, MAX_LABEL_LENGTH).trim();
+  const collapsed = text.replace(/\s+/g, " ").trim();
+  return Array.from(collapsed).slice(0, MAX_LABEL_LENGTH).join("").trim();
 }
 
 /**
