@@ -61,8 +61,8 @@ function StarToggle({
 }
 
 /**
- * The job's labels, each with a star (important) and a delete button, then a field to add one
- * (Enter adds; the star beside it marks the new label important).
+ * A field to add a label (focused on open; Enter adds; the star beside it marks the new label
+ * important), then the job's labels, each with a star (important) and a delete button.
  */
 export function LabelsEditor({
   labels,
@@ -83,6 +83,27 @@ export function LabelsEditor({
   };
   return (
     <div className="flex flex-col gap-2">
+      <form
+        className="flex items-center gap-1"
+        onSubmit={(event) => {
+          event.preventDefault();
+          add();
+        }}
+      >
+        <Input
+          aria-label="New label"
+          placeholder={full ? `At most ${MAX_JOB_LABELS} labels` : "New label"}
+          value={text}
+          maxLength={MAX_LABEL_LENGTH}
+          disabled={full}
+          onChange={(event) => setText(event.target.value)}
+          className="h-7 text-sm"
+        />
+        <StarToggle on={important} label="Important" onClick={() => setImportant(!important)} />
+        <Button type="submit" size="sm" className="h-7" disabled={full || !text.trim()}>
+          Add
+        </Button>
+      </form>
       {labels.length > 0 && (
         <ul aria-label="Labels on this job" className="flex flex-col gap-0.5">
           {labels.map((label) => (
@@ -116,27 +137,6 @@ export function LabelsEditor({
           ))}
         </ul>
       )}
-      <form
-        className="flex items-center gap-1"
-        onSubmit={(event) => {
-          event.preventDefault();
-          add();
-        }}
-      >
-        <StarToggle on={important} label="Important" onClick={() => setImportant(!important)} />
-        <Input
-          aria-label="New label"
-          placeholder={full ? `At most ${MAX_JOB_LABELS} labels` : "New label"}
-          value={text}
-          maxLength={MAX_LABEL_LENGTH}
-          disabled={full}
-          onChange={(event) => setText(event.target.value)}
-          className="h-7 text-sm"
-        />
-        <Button type="submit" size="sm" className="h-7" disabled={full || !text.trim()}>
-          Add
-        </Button>
-      </form>
     </div>
   );
 }

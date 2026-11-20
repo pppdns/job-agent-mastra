@@ -110,7 +110,7 @@ test("mark a job as top on its page, see the badge and filter by it", async ({ p
   await expect(row).toHaveCount(0);
 });
 
-test("add your own labels on the job page and edit them from the list", async ({ page }) => {
+test("add your own labels, mark one important and edit them from the list", async ({ page }) => {
   test.setTimeout(60_000);
   await page.goto("/");
   await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
@@ -123,35 +123,34 @@ test("add your own labels on the job page and edit them from the list", async ({
 
   const table = page.getByRole("table", { name: "Jobs" });
   const row = table.getByRole("row").filter({ hasText: "Quillon Labs" });
-  const rowLabels = row.getByRole("list", { name: "Your labels" });
+  const rowLabels = row.getByRole("list", { name: "Your labels" }).getByRole("listitem");
   await page.goto("/jobs");
   await expect(row).toBeVisible();
   await expect(rowLabels).toHaveCount(0);
 
-  // On the job page: type a new label and create it.
+  // On the job page: add a label, then an important one, which goes first.
   await row.getByRole("link").click();
   await expect(page).toHaveURL(/\/jobs\/[0-9a-f-]{36}$/);
   await page.getByRole("button", { name: "Add label" }).click();
-  const search = page.getByPlaceholder("Find or create a label");
-  await search.fill("Referral");
-  await page.getByRole("option", { name: "Create “Referral”" }).click();
-  await expect(page.getByRole("button", { name: "Remove label Referral" })).toBeVisible();
+  const field = page.getByRole("textbox", { name: "New label" });
+  await expect(field).toBeFocused();
+  await field.fill("Referral");
+  await field.press("Enter");
+  await field.fill("Call Anna");
+  await page.getByRole("button", { name: "Important", exact: true }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const editorLabels = page.getByRole("list", { name: "Labels on this job" }).getByRole("listitem");
+  await expect(editorLabels).toHaveText(["Call Anna", "Referral"]);
   await page.keyboard.press("Escape");
 
-  // The list row shows it; the row menu's picker offers it (checked) and adds another.
+  // The list row shows both, the important one first; the row menu edits them.
   await page.goto("/jobs");
-  await expect(rowLabels).toHaveText("Referral");
+  await expect(rowLabels).toHaveText(["Call Anna (important)", "Referral"]);
+  await expect(rowLabels.first()).toHaveAttribute("data-important", "true");
   await row.getByRole("button", { name: /^Status of / }).click();
   await page.getByRole("menuitem", { name: "Labels…" }).click();
-  await expect(page.getByRole("option", { name: "Referral" })).toHaveAttribute(
-    "data-checked",
-    "true",
-  );
-  await search.fill("visa ok");
-  await page.getByRole("option", { name: "Create “visa ok”" }).click();
-  await expect(rowLabels.getByRole("listitem")).toHaveText(["Referral", "visa ok"]);
-
-  // Picking a checked label removes it.
-  await page.getByRole("option", { name: "Referral" }).click();
-  await expect(rowLabels.getByRole("listitem")).toHaveText(["visa ok"]);
+  await page.getByRole("button", { name: "Important: Call Anna" }).click();
+  await page.getByRole("button", { name: "Delete label Referral" }).click();
+  await expect(rowLabels).toHaveText(["Call Anna"]);
+  await expect(rowLabels.first()).not.toHaveAttribute("data-important");
 });
