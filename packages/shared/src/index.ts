@@ -26,6 +26,7 @@ export const DEFAULT_RESCORE_LIMIT = 25;
 export type RescoreLimit = number | "all";
 
 export * from "./assessment";
+export * from "./job-labels";
 export * from "./job-status";
 export * from "./listing-facts";
 export * from "./location-block";

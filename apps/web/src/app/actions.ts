@@ -23,6 +23,7 @@ import {
   saveSearchSettings,
   setInterviewRounds,
   setJobArchived,
+  setJobLabels,
   setJobNotes,
   setJobStatus,
   setJobsStatus,
@@ -35,6 +36,8 @@ import {
   type DiscoverySource,
   eligibilityFor,
   JOB_STATUSES,
+  type JobLabel,
+  jobLabelSchema,
   MAX_INTERVIEW_ROUNDS,
   MAX_JOB_NOTES_CHARS,
   RESCORE_BATCH_SIZES,
@@ -86,6 +89,14 @@ export async function setJobArchivedAction(jobId: string, archived: boolean): Pr
 /** Marks or unmarks a job as one of the user's top choices (a label, not a status). */
 export async function setJobTopAction(jobId: string, top: boolean): Promise<void> {
   await setJobTop(await appDb(), jobIdSchema.parse(jobId), z.boolean().parse(top));
+  refresh();
+}
+
+const labelsSchema = z.array(jobLabelSchema).max(50);
+
+/** Sets the user's own labels on a job (UI only; normalized in `setJobLabels`). */
+export async function setJobLabelsAction(jobId: string, labels: JobLabel[]): Promise<void> {
+  await setJobLabels(await appDb(), jobIdSchema.parse(jobId), labelsSchema.parse(labels));
   refresh();
 }
 

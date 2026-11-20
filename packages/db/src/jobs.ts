@@ -2,10 +2,12 @@ import { createHash, randomUUID } from "node:crypto";
 import {
   CLOSED_JOB_STATUSES,
   companyKey,
+  type JobLabel,
   type JobStatus,
   listingPostedDate,
   MAX_INTERVIEW_ROUNDS,
   MAX_JOB_NOTES_CHARS,
+  normalizeJobLabels,
   normalizeText,
 } from "@copilot/shared";
 import { and, desc, eq, inArray, isNull, like, or, sql } from "drizzle-orm";
@@ -500,6 +502,34 @@ export function setJobTop(db: Db, jobId: string, top: boolean): Promise<Job | un
     const [updated] = await db
       .update(jobs)
       .set(top ? { topAt: new Date(), keptAt: job.keptAt ?? new Date() } : { topAt: null })
+      .where(eq(jobs.id, jobId))
+      .returning();
+    return updated;
+  });
+}
+
+/**
+ * Replaces the user's own labels on a job (UI only: never searched or sent to a model),
+ * normalized with `normalizeJobLabels`. Status, progress and list order (`updatedAt`) stay as
+ * they are; adding a label keeps the job (`kept_at`, like the top mark), so a hidden job shows.
+ * Undefined for an unknown job.
+ */
+export function setJobLabels(
+  db: Db,
+  jobId: string,
+  labels: readonly JobLabel[],
+): Promise<Job | undefined> {
+  return serializeWrites(db, async () => {
+    const job = await db.query.jobs.findFirst({ where: eq(jobs.id, jobId) });
+    if (!job) return undefined;
+    const next = normalizeJobLabels(labels);
+    if (JSON.stringify(next) === JSON.stringify(job.labels ?? [])) return job;
+    const [updated] = await db
+      .update(jobs)
+      .set({
+        labels: next.length > 0 ? next : null,
+        ...(next.length > 0 && !job.keptAt ? { keptAt: new Date() } : {}),
+      })
       .where(eq(jobs.id, jobId))
       .returning();
     return updated;

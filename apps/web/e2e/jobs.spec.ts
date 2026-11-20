@@ -109,3 +109,53 @@ test("mark a job as top on its page, see the badge and filter by it", async ({ p
   await page.getByRole("menuitem", { name: "Remove top mark" }).click();
   await expect(row).toHaveCount(0);
 });
+
+test("add your own labels, mark one important and edit them from the list", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
+  const input = page.getByRole("textbox", { name: "Message" }).filter({ visible: true });
+  await input.fill("Listing: Release Manager at Quillon Labs, Berlin office.");
+  await input.press("Enter");
+  await expect(visible(page, '[data-role="assistant"]').last()).toContainText(
+    "Mock reply: save_job_draft v1",
+  );
+
+  const table = page.getByRole("table", { name: "Jobs" });
+  const row = table.getByRole("row").filter({ hasText: "Quillon Labs" });
+  const rowLabels = row.getByRole("list", { name: "Your labels" }).getByRole("listitem");
+  await page.goto("/jobs");
+  await expect(row).toBeVisible();
+  await expect(rowLabels).toHaveCount(0);
+
+  // On the job page: add a label, then an important one, which goes first.
+  await row.getByRole("link").click();
+  await expect(page).toHaveURL(/\/jobs\/[0-9a-f-]{36}$/);
+  await page.getByRole("button", { name: "Add label" }).click();
+  const field = page.getByRole("textbox", { name: "New label" });
+  await expect(field).toBeFocused();
+  await field.fill("Referral");
+  await field.press("Enter");
+  await field.fill("Call Anna");
+  await page.getByRole("button", { name: "Important", exact: true }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const editorLabels = page.getByRole("list", { name: "Labels on this job" }).getByRole("listitem");
+  await expect(editorLabels).toHaveText(["Call Anna", "Referral"]);
+  // The same label in another case is refused with a notice, not silently merged.
+  await field.fill("referral");
+  await field.press("Enter");
+  await expect(page.getByText("“Referral” is already on this job")).toBeVisible();
+  await expect(editorLabels).toHaveCount(2);
+  await page.keyboard.press("Escape");
+
+  // The list row shows both, the important one first; the row menu edits them.
+  await page.goto("/jobs");
+  await expect(rowLabels).toHaveText(["Call Anna (important)", "Referral"]);
+  await expect(rowLabels.first()).toHaveAttribute("data-important", "true");
+  await row.getByRole("button", { name: /^Status of / }).click();
+  await page.getByRole("menuitem", { name: "Labels…" }).click();
+  await page.getByRole("button", { name: "Important: Call Anna" }).click();
+  await page.getByRole("button", { name: "Delete label Referral" }).click();
+  await expect(rowLabels).toHaveText(["Call Anna"]);
+  await expect(rowLabels.first()).not.toHaveAttribute("data-important");
+});
