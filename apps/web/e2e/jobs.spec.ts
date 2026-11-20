@@ -115,7 +115,7 @@ test("add your own labels, mark one important and edit them from the list", asyn
   await page.goto("/");
   await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
   const input = page.getByRole("textbox", { name: "Message" }).filter({ visible: true });
-  await input.fill("Listing: Platform Engineer at Quillon Labs, Berlin office.");
+  await input.fill("Listing: Release Manager at Quillon Labs, Berlin office.");
   await input.press("Enter");
   await expect(visible(page, '[data-role="assistant"]').last()).toContainText(
     "Mock reply: save_job_draft v1",
