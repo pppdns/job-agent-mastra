@@ -43,6 +43,9 @@ test("a saved job's URL in a new chat is recognized without reading it again", a
   db.close();
   const jobPath = `/jobs/${String(rows[0]?.job_id)}`;
   const firstChat = page.url();
+  // The trace row of the saved listing links the job page.
+  const traceLink = () => visible(page, `[data-slot="trace-line"] a[href="${jobPath}"]`);
+  await expect(traceLink()).toHaveText("Open job");
   await page.goto(jobPath);
   await expect(page.getByText("Posted 2 Mar 2026")).toBeVisible();
   await expect(page.getByText(/^Added \d{1,2} \w+ \d{4}$/)).toBeVisible();
@@ -63,6 +66,8 @@ test("a saved job's URL in a new chat is recognized without reading it again", a
   await expect(visible(page, '[data-role="assistant"]')).toContainText(
     "Mock reply: ingest_listing already_saved",
   );
+  await traceLink().click();
+  await expect(page).toHaveURL(jobPath);
 });
 
 test("a private-network URL is blocked before any fetch", async ({ page }) => {

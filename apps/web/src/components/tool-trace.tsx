@@ -1,5 +1,6 @@
 import { JOB_STATUS_LABELS, type JobStatus } from "@copilot/shared";
-import { FileTextIcon } from "lucide-react";
+import { ExternalLinkIcon, FileTextIcon } from "lucide-react";
+import Link from "next/link";
 import { Trace, TraceDescription, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
 import { toolFailure } from "@/lib/tool-output";
 
@@ -32,6 +33,7 @@ const SOURCE_LABELS: Record<string, string> = {
 
 type IngestOutput = {
   status?: string;
+  jobId?: string;
   reason?: string;
   complete?: boolean;
   source?: { kind?: string; url?: string | null };
@@ -83,10 +85,6 @@ function ToolLine({ part }: { part: ToolPart }) {
   if (name === "save_job_draft") {
     const output = (part.output ?? {}) as { version?: number };
     return <Line title={`Saved assessment v${output.version}`} />;
-  }
-  if (name === "propose_job_snapshot") {
-    // Older chats: snapshots no longer exist, every saved assessment is current.
-    return <Line title="Proposed a snapshot" description="no longer needed" />;
   }
   if (name === "propose_job_snapshot") {
     // Older chats: snapshots no longer exist, every saved assessment is current.
@@ -144,6 +142,7 @@ function ToolLine({ part }: { part: ToolPart }) {
       <Line
         title={`Read ${source}${output.complete === false ? " (may be incomplete)" : ""}`}
         description={what || output.source?.url || undefined}
+        href={output.jobId && `/jobs/${output.jobId}`}
       />
     );
   }
@@ -154,6 +153,7 @@ function ToolLine({ part }: { part: ToolPart }) {
       <Line
         title="Already saved, not read again"
         description={[what, status].filter(Boolean).join(" · ") || undefined}
+        href={output.jobId && `/jobs/${output.jobId}`}
       />
     );
   }
@@ -172,10 +172,13 @@ function Line({
   title,
   description,
   status,
+  href,
 }: {
   title: string;
   description?: string;
   status?: "running" | "error";
+  /** Link to the saved job's page, shown after the description. */
+  href?: string;
 }) {
   return (
     <TraceLine status={status}>
@@ -184,6 +187,14 @@ function Line({
       </TraceIcon>
       <TraceTitle>{title}</TraceTitle>
       {description && <TraceDescription>{description}</TraceDescription>}
+      {href && (
+        <Link
+          href={href}
+          className="inline-flex shrink-0 items-center gap-1 text-xs underline-offset-4 hover:text-foreground hover:underline"
+        >
+          Open job <ExternalLinkIcon className="size-3" />
+        </Link>
+      )}
     </TraceLine>
   );
 }
