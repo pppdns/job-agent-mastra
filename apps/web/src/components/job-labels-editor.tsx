@@ -33,6 +33,9 @@ export function useJobLabels(jobId: string, labels: readonly string[] | null) {
   return [current, save] as const;
 }
 
+// cmdk value of the "Create" item; no label starts like this in practice.
+const CREATE = "__create__:";
+
 /**
  * Search box over the labels already in use: picking one toggles it on the job, and typing a new
  * one offers "Create". Known labels come most used first.
@@ -59,7 +62,12 @@ export function LabelsPicker({
         : [...labels, label],
     );
   return (
-    <Command>
+    // Own filter: plain substring match, and "Create" always matches what was typed.
+    <Command
+      filter={(value, query) =>
+        value.startsWith(CREATE) || value.toLowerCase().includes(query.trim().toLowerCase()) ? 1 : 0
+      }
+    >
       <CommandInput
         placeholder="Find or create a label"
         value={search}
@@ -83,8 +91,7 @@ export function LabelsPicker({
           ))}
           {isNew && (
             <CommandItem
-              forceMount
-              value={`create:${typed}`}
+              value={`${CREATE}${typed}`}
               disabled={full}
               onSelect={() => {
                 toggle(typed);
