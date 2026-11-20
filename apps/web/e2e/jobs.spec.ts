@@ -96,8 +96,11 @@ test("mark a job as top on its page, see the badge and filter by it", async ({ p
   // The list shows the badge, and "Top only" keeps just top jobs.
   await page.goto("/jobs");
   await expect(row.getByText("Top", { exact: true })).toBeVisible();
-  await page.getByRole("checkbox", { name: "Top only" }).check();
+  // Controlled checkbox: it turns checked once the filtered list has loaded.
+  const topOnly = page.getByRole("checkbox", { name: "Top only" });
+  await topOnly.click();
   await expect(page).toHaveURL(/top=1/);
+  await expect(topOnly).toBeChecked();
   await expect(table.getByRole("row")).toHaveCount(2); // header + the top job
   await expect(row).toBeVisible();
 
