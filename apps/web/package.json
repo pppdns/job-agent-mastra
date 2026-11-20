@@ -18,6 +18,7 @@
     "@shadcn/react": "^0.3.1",
     "ai": "~7.0.159",
     "class-variance-authority": "^0.7.1",
+    "cmdk": "^1.1.1",
     "cn": "^0.5.2",
     "lucide-react": "^1.66.0",
     "next": "16.4.6",

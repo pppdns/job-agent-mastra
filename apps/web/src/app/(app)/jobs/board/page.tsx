@@ -1,4 +1,4 @@
-import { listPipelineJobs } from "@copilot/db";
+import { listJobLabels, listPipelineJobs } from "@copilot/db";
 import { JOB_STATUS_LABELS, PIPELINE_STATUSES, type PipelineStatus } from "@copilot/shared";
 import { cn } from "cn";
 import { RadarIcon } from "lucide-react";
@@ -45,7 +45,8 @@ const EMPTY_HINT: Record<PipelineStatus, string> = {
 
 async function Board() {
   await connection(); // libsql is synchronous: keep these reads out of prerendering
-  const jobs = await listPipelineJobs(await appDb());
+  const db = await appDb();
+  const [jobs, knownLabels] = await Promise.all([listPipelineJobs(db), listJobLabels(db)]);
   if (jobs.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -111,7 +112,7 @@ async function Board() {
             ) : (
               <ul className="flex flex-col gap-2">
                 {cards.map(({ job, age }) => (
-                  <PipelineCard key={job.id} job={job} age={age} />
+                  <PipelineCard key={job.id} job={job} age={age} knownLabels={knownLabels} />
                 ))}
               </ul>
             )}

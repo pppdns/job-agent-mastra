@@ -5,6 +5,7 @@ import {
   currentPreferences,
   type JobOverview,
   jobTabCounts,
+  listJobLabels,
   listJobsPage,
   postingSourcesByJob,
   screenedOutPostings,
@@ -28,6 +29,7 @@ import { FIT_TONE, FitMeter, TONE_FILL, VerdictIcon } from "@/components/assessm
 import { InterviewRounds } from "@/components/interview-rounds";
 import { JobChips } from "@/components/job-chips";
 import { JobFilters } from "@/components/job-filters";
+import { JobLabels } from "@/components/job-labels";
 import { BulkBar, JobSelection, RowCheckbox, SelectAllCheckbox } from "@/components/job-selection";
 import { JobStatusMenu } from "@/components/job-status-menu";
 import { KeepButton, RetriageButton } from "@/components/keep-buttons";
@@ -199,13 +201,14 @@ async function JobPage({
       </p>
     );
   }
-  const [sources, perCompany, preferences] = await Promise.all([
+  const [sources, perCompany, preferences, knownLabels] = await Promise.all([
     postingSourcesByJob(
       db,
       jobs.filter((j) => j.origin === "discovery").map((j) => j.id),
     ),
     companyJobCounts(db, [...new Set(jobs.flatMap((j) => (j.companyKey ? [j.companyKey] : [])))]),
     currentPreferences(db),
+    listJobLabels(db),
   ]);
   return (
     // Keyed by the list's URL: a new page, tab, search or filter starts with nothing selected.
@@ -218,6 +221,7 @@ async function JobPage({
         sources={sources}
         perCompany={perCompany}
         preferences={preferences}
+        knownLabels={knownLabels}
       />
       <Pager params={params} total={total} shown={jobs.length} />
     </JobSelection>
@@ -472,6 +476,7 @@ function JobTable({
   sources,
   perCompany,
   preferences,
+  knownLabels,
 }: {
   jobs: JobOverview[];
   tab: JobTab;
@@ -479,6 +484,7 @@ function JobTable({
   sources: Record<string, DiscoverySource[]>;
   perCompany: Record<string, number>;
   preferences: Preferences;
+  knownLabels: string[];
 }) {
   return (
     <Table aria-label="Jobs" className="table-fixed">
@@ -505,6 +511,7 @@ function JobTable({
             sources={sources[job.id] ?? []}
             moreAtCompany={job.companyKey ? (perCompany[job.companyKey] ?? 1) - 1 : 0}
             preferences={preferences}
+            knownLabels={knownLabels}
           />
         ))}
       </TableBody>
@@ -520,6 +527,7 @@ function JobRow({
   sources,
   moreAtCompany,
   preferences,
+  knownLabels,
 }: {
   job: JobOverview;
   tab: JobTab;
@@ -528,6 +536,7 @@ function JobRow({
   /** Other visible, active jobs at the same company. */
   moreAtCompany: number;
   preferences: Preferences;
+  knownLabels: string[];
 }) {
   const { summary } = job;
   const age = showsStageAge(tab) ? stageAge(job, now) : jobAge(job, now);
@@ -555,6 +564,7 @@ function JobRow({
         >
           {title}
         </Link>
+        <JobLabels labels={job.labels} muted={job.archivedAt !== null} className="mt-1" />
         <JobChips {...jobChips(overviewChipInput(job), preferences)} compact className="my-1" />
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           {meta && <span className="truncate">{meta}</span>}
@@ -632,6 +642,8 @@ function JobRow({
           status={job.status}
           archived={job.archivedAt !== null}
           top={job.topAt !== null}
+          labels={job.labels}
+          knownLabels={knownLabels}
           quiet={quietStatus(tab)}
         />
       </TableCell>
