@@ -5,6 +5,7 @@ import {
   assessmentSchema,
   assessmentSummary,
   type Eligibility,
+  type JobLabel,
   type JobStatus,
   type ListingFacts,
   moneyAmounts,
@@ -176,6 +177,8 @@ export type JobOverview = {
   hasNotes: boolean;
   /** When the user marked it as a top choice (null = not top). */
   topAt: Date | null;
+  /** The user's own labels (UI only; null = none). */
+  labels: JobLabel[] | null;
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -260,6 +263,7 @@ export const overviewColumns = {
   interviewRounds: jobs.interviewRounds,
   hasNotes: sql<number>`("app_jobs"."notes" is not null)`,
   topAt: jobs.topAt,
+  labels: jobs.labels,
   archivedAt: jobs.archivedAt,
   createdAt: jobs.createdAt,
   updatedAt: jobs.updatedAt,

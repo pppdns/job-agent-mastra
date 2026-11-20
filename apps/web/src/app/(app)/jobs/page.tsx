@@ -28,6 +28,7 @@ import { FIT_TONE, FitMeter, TONE_FILL, VerdictIcon } from "@/components/assessm
 import { InterviewRounds } from "@/components/interview-rounds";
 import { JobChips } from "@/components/job-chips";
 import { JobFilters } from "@/components/job-filters";
+import { JobLabels } from "@/components/job-labels";
 import { BulkBar, JobSelection, RowCheckbox, SelectAllCheckbox } from "@/components/job-selection";
 import { JobStatusMenu } from "@/components/job-status-menu";
 import { KeepButton, RetriageButton } from "@/components/keep-buttons";
@@ -555,6 +556,7 @@ function JobRow({
         >
           {title}
         </Link>
+        <JobLabels labels={job.labels} muted={job.archivedAt !== null} className="mt-1" />
         <JobChips {...jobChips(overviewChipInput(job), preferences)} compact className="my-1" />
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           {meta && <span className="truncate">{meta}</span>}
@@ -632,6 +634,8 @@ function JobRow({
           status={job.status}
           archived={job.archivedAt !== null}
           top={job.topAt !== null}
+          labels={job.labels}
+          editLabels
           quiet={quietStatus(tab)}
         />
       </TableCell>

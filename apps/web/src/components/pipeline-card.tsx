@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ProgressPill } from "@/components/age-pill";
 import { FitMeter } from "@/components/assessment-visuals";
 import { InterviewRounds } from "@/components/interview-rounds";
+import { JobLabels } from "@/components/job-labels";
 import { JobStatusMenu } from "@/components/job-status-menu";
 import { TopBadge } from "@/components/top-mark";
 import type { ProgressAge } from "@/lib/job-age";
@@ -27,6 +28,7 @@ export function PipelineCard({ job, age }: { job: JobOverview; age: ProgressAge 
           {title}
         </Link>
         {meta && <p className="truncate text-xs text-muted-foreground">{meta}</p>}
+        <JobLabels labels={job.labels} className="mt-1.5" />
       </div>
       {job.status === "interviewing" && (
         <InterviewRounds
@@ -60,6 +62,8 @@ export function PipelineCard({ job, age }: { job: JobOverview; age: ProgressAge 
             status={job.status}
             archived={job.archivedAt !== null}
             top={job.topAt !== null}
+            labels={job.labels}
+            editLabels
             quiet
           />
         </span>

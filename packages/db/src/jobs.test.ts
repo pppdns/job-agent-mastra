@@ -16,6 +16,7 @@ import {
   MAX_SNAPSHOT_CHARS,
   setInterviewRounds,
   setJobArchived,
+  setJobLabels,
   setJobNotes,
   setJobStatus,
   setJobTop,
@@ -478,5 +479,26 @@ describe("top mark", () => {
     expect((await listJobs(db))[0]?.topAt).toEqual(marked?.topAt);
     expect((await setJobTop(db, job.id, false))?.topAt).toBeNull();
     expect(await setJobTop(db, "missing", true)).toBeUndefined();
+  });
+});
+
+describe("setJobLabels", () => {
+  it("stores normalized labels without touching status or list order", async () => {
+    const { job } = await upsertJob(db, northwind);
+    const before = await db.query.jobs.findFirst({ where: eq(jobs.id, job.id) });
+    const labelled = await setJobLabels(db, job.id, [
+      { text: " Referral ", important: false },
+      { text: "Call  Anna", important: true },
+    ]);
+    const stored = [
+      { text: "Call Anna", important: true },
+      { text: "Referral", important: false },
+    ];
+    expect(labelled?.labels).toEqual(stored);
+    expect(labelled).toMatchObject({ status: before?.status, updatedAt: before?.updatedAt });
+    expect(labelled?.keptAt).toBeInstanceOf(Date);
+    expect((await listJobs(db))[0]?.labels).toEqual(stored);
+    expect((await setJobLabels(db, job.id, []))?.labels).toBeNull();
+    expect(await setJobLabels(db, "missing", [])).toBeUndefined();
   });
 });

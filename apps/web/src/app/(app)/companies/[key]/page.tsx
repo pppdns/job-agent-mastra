@@ -7,6 +7,7 @@ import { Suspense } from "react";
 import { FitMeter } from "@/components/assessment-visuals";
 import { EvidenceList } from "@/components/evidence-list";
 import { JobChips } from "@/components/job-chips";
+import { JobLabels } from "@/components/job-labels";
 import { PageHeader } from "@/components/page-header";
 import { TopBadge } from "@/components/top-mark";
 import { TriageScore } from "@/components/triage-score";
@@ -79,6 +80,7 @@ async function Company({ params }: Pick<PageProps<"/companies/[key]">, "params">
                   {job.title ?? "Untitled job"}
                 </Link>
                 {job.location && <span className="text-muted-foreground"> · {job.location}</span>}
+                <JobLabels labels={job.labels} muted={job.archivedAt !== null} className="mt-1" />
                 <JobChips
                   {...jobChips(overviewChipInput(job), preferences)}
                   compact

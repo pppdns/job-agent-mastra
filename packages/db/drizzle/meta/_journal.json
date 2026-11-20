@@ -169,6 +169,13 @@
       "when": 1795182122879,
       "tag": "0023_job_top",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1795203112730,
+      "tag": "0024_job_labels",
+      "breakpoints": true
     }
   ]
 }

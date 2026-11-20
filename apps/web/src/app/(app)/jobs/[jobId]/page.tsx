@@ -35,6 +35,7 @@ import { VerdictBadge } from "@/components/assessment-visuals";
 import { EvidenceList } from "@/components/evidence-list";
 import { InterviewRounds } from "@/components/interview-rounds";
 import { ChipEvidence, JobChips } from "@/components/job-chips";
+import { JobLabelsField } from "@/components/job-labels-editor";
 import { JobNotes } from "@/components/job-notes";
 import { JobStatusMenu } from "@/components/job-status-menu";
 import { AssessButton } from "@/components/keep-buttons";
@@ -129,6 +130,7 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
             />
           </span>
         </div>
+        <JobLabelsField jobId={job.id} labels={job.labels} muted={job.archivedAt !== null} />
         {links.length > 0 && (
           <ul aria-label="Original listing" className="flex flex-wrap gap-2 pt-2">
             {links.map((link, i) => (
