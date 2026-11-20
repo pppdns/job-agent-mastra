@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import {
   CLOSED_JOB_STATUSES,
   companyKey,
+  type JobLabel,
   type JobStatus,
   listingPostedDate,
   MAX_INTERVIEW_ROUNDS,
@@ -508,21 +509,20 @@ export function setJobTop(db: Db, jobId: string, top: boolean): Promise<Job | un
 }
 
 /**
- * Sets the user's own labels on a job (UI only: never searched or sent to a model). Normalized
- * with `normalizeJobLabels`, and a label matching one already in use apart from case takes that
- * spelling. Status, progress and list order (`updatedAt`) stay as they are; adding a label keeps
- * the job (`kept_at`, like the top mark), so a hidden job shows. Undefined for an unknown job.
+ * Replaces the user's own labels on a job (UI only: never searched or sent to a model),
+ * normalized with `normalizeJobLabels`. Status, progress and list order (`updatedAt`) stay as
+ * they are; adding a label keeps the job (`kept_at`, like the top mark), so a hidden job shows.
+ * Undefined for an unknown job.
  */
 export function setJobLabels(
   db: Db,
   jobId: string,
-  labels: readonly string[],
+  labels: readonly JobLabel[],
 ): Promise<Job | undefined> {
   return serializeWrites(db, async () => {
     const job = await db.query.jobs.findFirst({ where: eq(jobs.id, jobId) });
     if (!job) return undefined;
-    const known = new Map((await listJobLabels(db)).map((l) => [l.toLowerCase(), l]));
-    const next = normalizeJobLabels(labels).map((l) => known.get(l.toLowerCase()) ?? l);
+    const next = normalizeJobLabels(labels);
     if (JSON.stringify(next) === JSON.stringify(job.labels ?? [])) return job;
     const [updated] = await db
       .update(jobs)
@@ -534,15 +534,6 @@ export function setJobLabels(
       .returning();
     return updated;
   });
-}
-
-/** Every label the user has put on any job (archived ones too), most used first. */
-export async function listJobLabels(db: Db): Promise<string[]> {
-  const rows = await db.all<{ label: string }>(sql`
-    select l.value as label from ${jobs}, json_each(${jobs.labels}) as l
-    where ${jobs.labels} is not null
-    group by l.value order by count(*) desc, l.value collate nocase`);
-  return rows.map((r) => r.label);
 }
 
 /** Archives or unarchives a job without changing its status. Undefined for an unknown job. */

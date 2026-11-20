@@ -1,6 +1,6 @@
 "use client";
 
-import { JOB_STATUS_LABELS, JOB_STATUSES, type JobStatus } from "@copilot/shared";
+import { JOB_STATUS_LABELS, JOB_STATUSES, type JobLabel, type JobStatus } from "@copilot/shared";
 import { cn } from "cn";
 import {
   ArchiveIcon,
@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useOptimistic, useRef, useState, useTransition } from "react";
 import { setJobArchivedAction, setJobStatusAction, setJobTopAction } from "@/app/actions";
-import { LabelsPicker, useJobLabels } from "@/components/job-labels-editor";
+import { LabelsEditor, useJobLabels } from "@/components/job-labels-editor";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -53,7 +53,7 @@ export function JobStatusMenu({
   archived,
   top,
   labels,
-  knownLabels,
+  editLabels,
   quiet,
 }: {
   jobId: string;
@@ -62,10 +62,10 @@ export function JobStatusMenu({
   archived: boolean;
   /** Marked as one of the user's top choices; omitted where the page has its own toggle. */
   top?: boolean;
-  /** The user's labels on the job; with `knownLabels`, the menu offers "Labels…". */
-  labels?: readonly string[] | null;
-  /** Labels in use on any job, offered in the picker; omitted where the page has its own. */
-  knownLabels?: readonly string[];
+  /** The user's labels on the job, edited via "Labels…" when `editLabels` is set. */
+  labels?: readonly JobLabel[] | null;
+  /** Offer "Labels…"; off where the page has its own labels editor. */
+  editLabels?: boolean;
   /** Plain pill, e.g. on a tab where every job has this status. */
   quiet?: boolean;
 }) {
@@ -129,7 +129,7 @@ export function JobStatusMenu({
               {optimisticTop ? "Remove top mark" : "Mark as top"}
             </DropdownMenuItem>
           )}
-          {knownLabels && (
+          {editLabels && (
             <DropdownMenuItem
               onSelect={() => {
                 openingLabels.current = true;
@@ -148,9 +148,9 @@ export function JobStatusMenu({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      {knownLabels && (
-        <PopoverContent align="end" className="w-64 p-0">
-          <LabelsPicker labels={currentLabels} knownLabels={knownLabels} onChange={saveLabels} />
+      {editLabels && (
+        <PopoverContent align="end" className="w-72 p-2">
+          <LabelsEditor labels={currentLabels} onChange={saveLabels} />
         </PopoverContent>
       )}
     </Popover>

@@ -5,7 +5,6 @@ import {
   currentPreferences,
   type JobOverview,
   jobTabCounts,
-  listJobLabels,
   listJobsPage,
   postingSourcesByJob,
   screenedOutPostings,
@@ -201,14 +200,13 @@ async function JobPage({
       </p>
     );
   }
-  const [sources, perCompany, preferences, knownLabels] = await Promise.all([
+  const [sources, perCompany, preferences] = await Promise.all([
     postingSourcesByJob(
       db,
       jobs.filter((j) => j.origin === "discovery").map((j) => j.id),
     ),
     companyJobCounts(db, [...new Set(jobs.flatMap((j) => (j.companyKey ? [j.companyKey] : [])))]),
     currentPreferences(db),
-    listJobLabels(db),
   ]);
   return (
     // Keyed by the list's URL: a new page, tab, search or filter starts with nothing selected.
@@ -221,7 +219,6 @@ async function JobPage({
         sources={sources}
         perCompany={perCompany}
         preferences={preferences}
-        knownLabels={knownLabels}
       />
       <Pager params={params} total={total} shown={jobs.length} />
     </JobSelection>
@@ -476,7 +473,6 @@ function JobTable({
   sources,
   perCompany,
   preferences,
-  knownLabels,
 }: {
   jobs: JobOverview[];
   tab: JobTab;
@@ -484,7 +480,6 @@ function JobTable({
   sources: Record<string, DiscoverySource[]>;
   perCompany: Record<string, number>;
   preferences: Preferences;
-  knownLabels: string[];
 }) {
   return (
     <Table aria-label="Jobs" className="table-fixed">
@@ -511,7 +506,6 @@ function JobTable({
             sources={sources[job.id] ?? []}
             moreAtCompany={job.companyKey ? (perCompany[job.companyKey] ?? 1) - 1 : 0}
             preferences={preferences}
-            knownLabels={knownLabels}
           />
         ))}
       </TableBody>
@@ -527,7 +521,6 @@ function JobRow({
   sources,
   moreAtCompany,
   preferences,
-  knownLabels,
 }: {
   job: JobOverview;
   tab: JobTab;
@@ -536,7 +529,6 @@ function JobRow({
   /** Other visible, active jobs at the same company. */
   moreAtCompany: number;
   preferences: Preferences;
-  knownLabels: string[];
 }) {
   const { summary } = job;
   const age = showsStageAge(tab) ? stageAge(job, now) : jobAge(job, now);
@@ -643,7 +635,7 @@ function JobRow({
           archived={job.archivedAt !== null}
           top={job.topAt !== null}
           labels={job.labels}
-          knownLabels={knownLabels}
+          editLabels
           quiet={quietStatus(tab)}
         />
       </TableCell>

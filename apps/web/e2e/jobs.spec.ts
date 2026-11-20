@@ -109,3 +109,49 @@ test("mark a job as top on its page, see the badge and filter by it", async ({ p
   await page.getByRole("menuitem", { name: "Remove top mark" }).click();
   await expect(row).toHaveCount(0);
 });
+
+test("add your own labels on the job page and edit them from the list", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
+  const input = page.getByRole("textbox", { name: "Message" }).filter({ visible: true });
+  await input.fill("Listing: Platform Engineer at Quillon Labs, Berlin office.");
+  await input.press("Enter");
+  await expect(visible(page, '[data-role="assistant"]').last()).toContainText(
+    "Mock reply: save_job_draft v1",
+  );
+
+  const table = page.getByRole("table", { name: "Jobs" });
+  const row = table.getByRole("row").filter({ hasText: "Quillon Labs" });
+  const rowLabels = row.getByRole("list", { name: "Your labels" });
+  await page.goto("/jobs");
+  await expect(row).toBeVisible();
+  await expect(rowLabels).toHaveCount(0);
+
+  // On the job page: type a new label and create it.
+  await row.getByRole("link").click();
+  await expect(page).toHaveURL(/\/jobs\/[0-9a-f-]{36}$/);
+  await page.getByRole("button", { name: "Add label" }).click();
+  const search = page.getByPlaceholder("Find or create a label");
+  await search.fill("Referral");
+  await page.getByRole("option", { name: "Create “Referral”" }).click();
+  await expect(page.getByRole("button", { name: "Remove label Referral" })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  // The list row shows it; the row menu's picker offers it (checked) and adds another.
+  await page.goto("/jobs");
+  await expect(rowLabels).toHaveText("Referral");
+  await row.getByRole("button", { name: /^Status of / }).click();
+  await page.getByRole("menuitem", { name: "Labels…" }).click();
+  await expect(page.getByRole("option", { name: "Referral" })).toHaveAttribute(
+    "data-checked",
+    "true",
+  );
+  await search.fill("visa ok");
+  await page.getByRole("option", { name: "Create “visa ok”" }).click();
+  await expect(rowLabels.getByRole("listitem")).toHaveText(["Referral", "visa ok"]);
+
+  // Picking a checked label removes it.
+  await page.getByRole("option", { name: "Referral" }).click();
+  await expect(rowLabels.getByRole("listitem")).toHaveText(["visa ok"]);
+});

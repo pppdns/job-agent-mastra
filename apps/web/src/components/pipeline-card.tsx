@@ -14,16 +14,7 @@ import type { ProgressAge } from "@/lib/job-age";
  * One job on the board; the title link covers the card, controls sit above it. Fit shows only
  * while shortlisted (it decides whether to apply); later the progress age matters.
  */
-export function PipelineCard({
-  job,
-  age,
-  knownLabels,
-}: {
-  job: JobOverview;
-  age: ProgressAge | null;
-  /** Labels in use on any job, for the status menu's labels picker. */
-  knownLabels: string[];
-}) {
+export function PipelineCard({ job, age }: { job: JobOverview; age: ProgressAge | null }) {
   const title = job.title ?? "Untitled job";
   const meta = [companyLine(job.company, job.facts), job.location].filter(Boolean).join(" · ");
   const { summary } = job;
@@ -72,7 +63,7 @@ export function PipelineCard({
             archived={job.archivedAt !== null}
             top={job.topAt !== null}
             labels={job.labels}
-            knownLabels={knownLabels}
+            editLabels
             quiet
           />
         </span>

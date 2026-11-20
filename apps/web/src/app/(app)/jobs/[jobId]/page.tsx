@@ -4,7 +4,6 @@ import {
   type Job,
   jobPostings,
   latestListingSource,
-  listJobLabels,
 } from "@copilot/db";
 import {
   assessmentSummary,
@@ -97,11 +96,10 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
   const db = await appDb();
   const detail = await getJobDetail(db, jobId);
   if (!detail) notFound();
-  const [postings, preferences, listing, knownLabels] = await Promise.all([
+  const [postings, preferences, listing] = await Promise.all([
     jobPostings(db, jobId),
     currentPreferences(db),
     latestListingSource(db, jobId),
-    listJobLabels(db),
   ]);
   const { job, sources, draft, history, profileVersion, profileStale, claims, posted } = detail;
   // A recruiter post: the board's company is the agency, not the employer.
@@ -132,12 +130,7 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
             />
           </span>
         </div>
-        <JobLabelsField
-          jobId={job.id}
-          labels={job.labels}
-          knownLabels={knownLabels}
-          muted={job.archivedAt !== null}
-        />
+        <JobLabelsField jobId={job.id} labels={job.labels} muted={job.archivedAt !== null} />
         {links.length > 0 && (
           <ul aria-label="Original listing" className="flex flex-wrap gap-2 pt-2">
             {links.map((link, i) => (

@@ -5,6 +5,7 @@ import {
   assessmentSchema,
   assessmentSummary,
   type Eligibility,
+  type JobLabel,
   type JobStatus,
   type ListingFacts,
   moneyAmounts,
@@ -177,7 +178,7 @@ export type JobOverview = {
   /** When the user marked it as a top choice (null = not top). */
   topAt: Date | null;
   /** The user's own labels (UI only; null = none). */
-  labels: string[] | null;
+  labels: JobLabel[] | null;
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;

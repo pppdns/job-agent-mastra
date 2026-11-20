@@ -36,6 +36,8 @@ import {
   type DiscoverySource,
   eligibilityFor,
   JOB_STATUSES,
+  type JobLabel,
+  jobLabelSchema,
   MAX_INTERVIEW_ROUNDS,
   MAX_JOB_NOTES_CHARS,
   RESCORE_BATCH_SIZES,
@@ -90,10 +92,10 @@ export async function setJobTopAction(jobId: string, top: boolean): Promise<void
   refresh();
 }
 
-const labelsSchema = z.array(z.string().max(200)).max(50);
+const labelsSchema = z.array(jobLabelSchema).max(50);
 
 /** Sets the user's own labels on a job (UI only; normalized in `setJobLabels`). */
-export async function setJobLabelsAction(jobId: string, labels: string[]): Promise<void> {
+export async function setJobLabelsAction(jobId: string, labels: JobLabel[]): Promise<void> {
   await setJobLabels(await appDb(), jobIdSchema.parse(jobId), labelsSchema.parse(labels));
   refresh();
 }
