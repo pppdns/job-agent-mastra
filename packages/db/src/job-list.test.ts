@@ -201,6 +201,16 @@ describe("screened out, keep anyway, bulk, re-triage", () => {
     expect((await screenedOutPostings(db, { since: new Date(0), limit: 10 })).total).toBe(0);
   });
 
+  it("shows a hidden job once it is marked top, and keeps it after the mark is removed", async () => {
+    const low = await discovered("low", 20);
+    expect((await listJobs(db)).map((j) => j.id)).not.toContain(low);
+    await setJobTop(db, low, true);
+    const base = { tab: "active" as const, sort: "latest" as const, limit: 10, offset: 0 };
+    expect((await listJobsPage(db, { ...base, top: true })).jobs.map((j) => j.id)).toEqual([low]);
+    await setJobTop(db, low, false);
+    expect((await listJobs(db)).map((j) => j.id)).toContain(low);
+  });
+
   it("triages kept postings, and lists jobs whose postings all fail after a re-screen", async () => {
     await discovered("intern", null, { title: "Software Intern" });
     const dropped = await screenedOutPostings(db, { since: new Date(0), limit: 10 });

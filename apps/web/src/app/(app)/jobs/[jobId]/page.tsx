@@ -126,7 +126,6 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
               title={job.title ?? "Untitled job"}
               status={job.status}
               archived={job.archivedAt !== null}
-              top={job.topAt !== null}
             />
           </span>
         </div>

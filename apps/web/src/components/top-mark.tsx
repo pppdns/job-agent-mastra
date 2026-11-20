@@ -9,13 +9,14 @@ import { Button } from "@/components/ui/button";
 
 // The user's own "top choice" mark: a label beside the pipeline status, set only by hand.
 
-/** "Top" label on list rows and board cards. */
-export function TopBadge({ className }: { className?: string }) {
+/** "Top" label on list rows, board cards and company pages; grey once the job is archived. */
+export function TopBadge({ muted, className }: { muted?: boolean; className?: string }) {
   return (
     <Badge
       variant="outline"
       className={cn(
-        "h-4 gap-0.5 border-warning/50 bg-warning/10 px-1.5 text-[11px] text-warning",
+        "h-4 gap-0.5 px-1.5 text-[11px]",
+        muted ? "text-muted-foreground" : "border-warning/50 bg-warning/10 text-warning",
         className,
       )}
     >

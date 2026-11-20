@@ -489,7 +489,9 @@ export async function setJobNotes(
 
 /**
  * Marks or unmarks a job as one of the user's top choices. A label beside the status: status,
- * progress and list order (`updatedAt`) stay as they are. Undefined for an unknown job.
+ * progress and list order (`updatedAt`) stay as they are. Marking also keeps the job
+ * (`kept_at`, like "Keep anyway"), so a job the screen or triage hid shows in the list.
+ * Undefined for an unknown job.
  */
 export function setJobTop(db: Db, jobId: string, top: boolean): Promise<Job | undefined> {
   return serializeWrites(db, async () => {
@@ -497,7 +499,7 @@ export function setJobTop(db: Db, jobId: string, top: boolean): Promise<Job | un
     if (!job || (job.topAt !== null) === top) return job;
     const [updated] = await db
       .update(jobs)
-      .set({ topAt: top ? new Date() : null })
+      .set(top ? { topAt: new Date(), keptAt: job.keptAt ?? new Date() } : { topAt: null })
       .where(eq(jobs.id, jobId))
       .returning();
     return updated;

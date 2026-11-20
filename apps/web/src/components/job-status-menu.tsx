@@ -10,7 +10,7 @@ import {
   StarIcon,
   StarOffIcon,
 } from "lucide-react";
-import { useTransition } from "react";
+import { useOptimistic, useTransition } from "react";
 import { setJobArchivedAction, setJobStatusAction, setJobTopAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import {
@@ -52,12 +52,14 @@ export function JobStatusMenu({
   title: string;
   status: JobStatus;
   archived: boolean;
-  /** Marked as one of the user's top choices. */
-  top: boolean;
+  /** Marked as one of the user's top choices; omitted where the page has its own toggle. */
+  top?: boolean;
   /** Plain pill, e.g. on a tab where every job has this status. */
   quiet?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
+  // Optimistic, so a second toggle before the refresh lands undoes the first.
+  const [optimisticTop, setOptimisticTop] = useOptimistic(top);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -88,10 +90,19 @@ export function JobStatusMenu({
           ))}
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => startTransition(() => setJobTopAction(jobId, !top))}>
-          {top ? <StarOffIcon /> : <StarIcon />}
-          {top ? "Remove top mark" : "Mark as top"}
-        </DropdownMenuItem>
+        {optimisticTop !== undefined && (
+          <DropdownMenuItem
+            onSelect={() =>
+              startTransition(async () => {
+                setOptimisticTop(!optimisticTop);
+                await setJobTopAction(jobId, !optimisticTop);
+              })
+            }
+          >
+            {optimisticTop ? <StarOffIcon /> : <StarIcon />}
+            {optimisticTop ? "Remove top mark" : "Mark as top"}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           onSelect={() => startTransition(() => setJobArchivedAction(jobId, !archived))}
         >

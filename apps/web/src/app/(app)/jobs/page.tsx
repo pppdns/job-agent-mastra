@@ -568,7 +568,7 @@ function JobRow({
               compact
             />
           )}
-          {job.topAt && <TopBadge />}
+          {job.topAt && <TopBadge muted={job.archivedAt !== null} />}
           {job.hasNotes && (
             <NotebookTextIcon className="size-3.5" role="img" aria-label="Has a note" />
           )}
