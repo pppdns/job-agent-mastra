@@ -9,7 +9,7 @@ import {
   withParams,
 } from "@/lib/job-list";
 
-// Discovery filters for /jobs (source, minimum match score, posted within, unseen only). Each
+// Filters for /jobs (source, minimum match score, posted within, unseen only, top only). Each
 // change navigates to the filtered list (URL state, first page).
 
 const selectClass =
@@ -72,6 +72,15 @@ export function JobFilters({ params }: { params: JobListParams }) {
           className="size-4 accent-primary"
         />
         Unseen only
+      </label>
+      <label className="flex items-center gap-1.5">
+        <input
+          type="checkbox"
+          checked={params.top}
+          onChange={(e) => go({ top: e.target.checked })}
+          className="size-4 accent-primary"
+        />
+        Top only
       </label>
     </fieldset>
   );

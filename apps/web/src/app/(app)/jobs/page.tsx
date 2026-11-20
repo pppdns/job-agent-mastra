@@ -33,6 +33,7 @@ import { JobStatusMenu } from "@/components/job-status-menu";
 import { KeepButton, RetriageButton } from "@/components/keep-buttons";
 import { PageHeader } from "@/components/page-header";
 import { RescoreAllButton, RescoreButton } from "@/components/rescore-button";
+import { TopBadge } from "@/components/top-mark";
 import { TriageScore } from "@/components/triage-score";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -101,6 +102,7 @@ async function JobList({ searchParams }: Pick<PageProps<"/jobs">, "searchParams"
     minScore: params.minScore,
     postedWithinDays: params.postedWithinDays,
     unseen: params.unseen,
+    top: params.top,
   };
   const [counts, assessed, staleTriage, screenedCount] = await Promise.all([
     jobTabCounts(db, { ...filters, ids }),
@@ -399,6 +401,7 @@ function SearchForm({ params }: { params: JobListParams }) {
           <input type="hidden" name="posted" value={params.postedWithinDays} />
         )}
         {params.unseen && <input type="hidden" name="unseen" value="1" />}
+        {params.top && <input type="hidden" name="top" value="1" />}
       </form>
     </search>
   );
@@ -565,6 +568,7 @@ function JobRow({
               compact
             />
           )}
+          {job.topAt && <TopBadge />}
           {job.hasNotes && (
             <NotebookTextIcon className="size-3.5" role="img" aria-label="Has a note" />
           )}
@@ -627,6 +631,7 @@ function JobRow({
           title={title}
           status={job.status}
           archived={job.archivedAt !== null}
+          top={job.topAt !== null}
           quiet={quietStatus(tab)}
         />
       </TableCell>

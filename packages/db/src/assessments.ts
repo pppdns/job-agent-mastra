@@ -174,6 +174,8 @@ export type JobOverview = {
   interviewRounds: number | null;
   /** The job has a note (the text itself is read on the job page). */
   hasNotes: boolean;
+  /** When the user marked it as a top choice (null = not top). */
+  topAt: Date | null;
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -257,6 +259,7 @@ export const overviewColumns = {
   interviewRound: jobs.interviewRound,
   interviewRounds: jobs.interviewRounds,
   hasNotes: sql<number>`("app_jobs"."notes" is not null)`,
+  topAt: jobs.topAt,
   archivedAt: jobs.archivedAt,
   createdAt: jobs.createdAt,
   updatedAt: jobs.updatedAt,

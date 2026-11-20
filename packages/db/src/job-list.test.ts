@@ -44,7 +44,7 @@ import {
   setJobsStatus,
   staleTriageCount,
 } from "./job-list";
-import { addSource, setJobStatus, upsertJob } from "./jobs";
+import { addSource, setJobStatus, setJobTop, upsertJob } from "./jobs";
 import { decideApproval, proposeProfileChange } from "./profile";
 import { jobs, postings } from "./schema";
 
@@ -151,7 +151,7 @@ describe("listJobsPage", () => {
     expect(page.jobs.map((j) => j.id)).toEqual([strong, t90, t70, weak, pending]);
   });
 
-  it("filters by source, score, posted date and unseen; keeps search order for latest", async () => {
+  it("filters by source, score, posted date, unseen and top; keeps search order for latest", async () => {
     const a = await discovered("a", 90, { postedAt: new Date(now.getTime() - 2 * DAY) });
     const b = await discovered("b", 65, {
       source: "linkedin",
@@ -165,6 +165,8 @@ describe("listJobsPage", () => {
     expect(await ids({ ...base, minScore: 80 })).toEqual([a]);
     expect(await ids({ ...base, postedWithinDays: 7 })).toEqual([a]);
     expect(await ids({ ...base, unseen: true })).toEqual([a]);
+    await setJobTop(db, b, true);
+    expect(await ids({ ...base, top: true })).toEqual([b]);
     expect(await ids({ ...base, ids: [b, a] })).toEqual([b, a]);
     expect(await ids({ ...base, ids: [] })).toEqual([]);
   });

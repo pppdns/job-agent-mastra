@@ -26,6 +26,7 @@ import {
   setJobNotes,
   setJobStatus,
   setJobsStatus,
+  setJobTop,
 } from "@copilot/db";
 import {
   ASSESS_BATCH_SIZES,
@@ -79,6 +80,12 @@ export async function setJobStatusAction(jobId: string, status: string): Promise
 
 export async function setJobArchivedAction(jobId: string, archived: boolean): Promise<void> {
   await setJobArchived(await appDb(), jobIdSchema.parse(jobId), z.boolean().parse(archived));
+  refresh();
+}
+
+/** Marks or unmarks a job as one of the user's top choices (a label, not a status). */
+export async function setJobTopAction(jobId: string, top: boolean): Promise<void> {
+  await setJobTop(await appDb(), jobIdSchema.parse(jobId), z.boolean().parse(top));
   refresh();
 }
 

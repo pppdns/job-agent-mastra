@@ -29,6 +29,8 @@ export type JobListFilters = {
   postedWithinDays?: number;
   /** Only discovered matches not opened yet. */
   unseen?: boolean;
+  /** Only jobs the user marked as top choices. */
+  top?: boolean;
 };
 
 export type JobListQuery = JobListFilters & {
@@ -82,6 +84,7 @@ function filterConditions(filters: JobListFilters, now: Date): (SQL | undefined)
       ? gte(postedAt, now.getTime() - filters.postedWithinDays * 86_400_000)
       : undefined,
     filters.unseen ? and(eq(jobs.origin, "discovery"), isNull(jobs.seenAt)) : undefined,
+    filters.top ? isNotNull(jobs.topAt) : undefined,
   ];
 }
 

@@ -42,6 +42,7 @@ import { ListingDocument } from "@/components/listing-document";
 import { MarkSeen } from "@/components/mark-seen";
 import { PageHeader } from "@/components/page-header";
 import { ResearchJobButtons } from "@/components/research-job-buttons";
+import { TopToggle } from "@/components/top-mark";
 import { TriageScore } from "@/components/triage-score";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -119,11 +120,13 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
           <h1 className="text-2xl font-semibold tracking-tight">{job.title ?? "Untitled job"}</h1>
           <span className="ml-auto flex shrink-0 items-center gap-2 pt-1">
             {job.archivedAt && <Badge variant="secondary">Archived</Badge>}
+            <TopToggle jobId={job.id} top={job.topAt !== null} />
             <JobStatusMenu
               jobId={job.id}
               title={job.title ?? "Untitled job"}
               status={job.status}
               archived={job.archivedAt !== null}
+              top={job.topAt !== null}
             />
           </span>
         </div>

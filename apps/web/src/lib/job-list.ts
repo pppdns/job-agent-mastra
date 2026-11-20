@@ -44,6 +44,8 @@ export type JobListParams = {
   minScore?: number;
   postedWithinDays?: number;
   unseen: boolean;
+  /** Only jobs marked as top choices. */
+  top: boolean;
   /** 1-based. */
   page: number;
 };
@@ -53,7 +55,7 @@ const first = (value: string | string[] | undefined) => (Array.isArray(value) ? 
 const oneOf = <T extends number>(options: readonly T[], value: string | undefined) =>
   options.find((o) => String(o) === value);
 
-/** `?tab=&q=&sort=&source=&min=&posted=&unseen=&page=` with safe fallbacks. */
+/** `?tab=&q=&sort=&source=&min=&posted=&unseen=&top=&page=` with safe fallbacks. */
 export function parseJobListParams(
   params: Record<string, string | string[] | undefined>,
 ): JobListParams {
@@ -68,6 +70,7 @@ export function parseJobListParams(
     minScore: oneOf(MIN_SCORE_OPTIONS, first(params.min)),
     postedWithinDays: oneOf(POSTED_WITHIN_OPTIONS, first(params.posted)),
     unseen: first(params.unseen) === "1",
+    top: first(params.top) === "1",
     page: Number.isFinite(page) && page > 1 ? Math.min(page, 1_000) : 1,
   };
 }
@@ -82,6 +85,7 @@ export function jobListHref(params: JobListParams): string {
   if (params.minScore) search.set("min", String(params.minScore));
   if (params.postedWithinDays) search.set("posted", String(params.postedWithinDays));
   if (params.unseen) search.set("unseen", "1");
+  if (params.top) search.set("top", "1");
   if (params.page > 1) search.set("page", String(params.page));
   const query = search.toString();
   return query ? `/jobs?${query}` : "/jobs";
@@ -98,6 +102,6 @@ export function withParams(params: JobListParams, change: Partial<JobListParams>
   });
 }
 
-/** Whether any discovery filter is on. */
+/** Whether any filter is on. */
 export const hasFilters = (p: JobListParams) =>
-  Boolean(p.source || p.minScore || p.postedWithinDays || p.unseen);
+  Boolean(p.source || p.minScore || p.postedWithinDays || p.unseen || p.top);
