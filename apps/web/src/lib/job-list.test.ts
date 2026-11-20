@@ -12,6 +12,7 @@ describe("parseJobListParams", () => {
         min: "75",
         posted: "7",
         unseen: "1",
+        top: "1",
         page: "3",
       }),
     ).toEqual({
@@ -22,6 +23,7 @@ describe("parseJobListParams", () => {
       minScore: 75,
       postedWithinDays: 7,
       unseen: true,
+      top: true,
       page: 3,
     });
     expect(
@@ -41,6 +43,7 @@ describe("parseJobListParams", () => {
       minScore: undefined,
       postedWithinDays: undefined,
       unseen: false,
+      top: false,
       page: 1,
     });
   });
@@ -68,5 +71,7 @@ describe("parseJobListParams", () => {
     expect(withParams(params, { tab: "applied" })).toBe("/jobs?tab=applied");
     expect(hasFilters(params)).toBe(false);
     expect(hasFilters({ ...params, unseen: true })).toBe(true);
+    expect(hasFilters({ ...params, top: true })).toBe(true);
+    expect(withParams(params, { top: true })).toBe("/jobs?tab=new&top=1");
   });
 });

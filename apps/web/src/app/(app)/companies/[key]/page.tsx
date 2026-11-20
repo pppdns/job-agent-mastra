@@ -8,6 +8,7 @@ import { FitMeter } from "@/components/assessment-visuals";
 import { EvidenceList } from "@/components/evidence-list";
 import { JobChips } from "@/components/job-chips";
 import { PageHeader } from "@/components/page-header";
+import { TopBadge } from "@/components/top-mark";
 import { TriageScore } from "@/components/triage-score";
 import { Badge } from "@/components/ui/badge";
 import { jobChips, overviewChipInput } from "@/lib/job-chips";
@@ -94,6 +95,7 @@ async function Company({ params }: Pick<PageProps<"/companies/[key]">, "params">
               ) : (
                 job.origin === "discovery" && <TriageScore score={job.triageScore} />
               )}
+              {job.topAt && <TopBadge muted={job.archivedAt !== null} className="h-5" />}
               <Badge variant={job.archivedAt ? "secondary" : "outline"}>
                 {JOB_STATUS_LABELS[job.status]}
                 {job.archivedAt ? " · archived" : ""}

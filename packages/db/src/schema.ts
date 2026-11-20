@@ -100,6 +100,8 @@ export const jobs = sqliteTable(
      */
     listingClosedAt: integer("listing_closed_at", { mode: "timestamp_ms" }),
     listingClosed: text("listing_closed", { mode: "json" }).$type<ListingClosed>(),
+    /** When the user marked the job as a top choice (a label, not a status; null = not top). */
+    topAt: integer("top_at", { mode: "timestamp_ms" }),
     /** When the user first opened a discovered job (null = unseen). */
     seenAt: integer("seen_at", { mode: "timestamp_ms" }),
     createdAt: createdAt(),

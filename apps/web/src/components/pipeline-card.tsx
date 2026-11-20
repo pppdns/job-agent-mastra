@@ -6,6 +6,7 @@ import { ProgressPill } from "@/components/age-pill";
 import { FitMeter } from "@/components/assessment-visuals";
 import { InterviewRounds } from "@/components/interview-rounds";
 import { JobStatusMenu } from "@/components/job-status-menu";
+import { TopBadge } from "@/components/top-mark";
 import type { ProgressAge } from "@/lib/job-age";
 
 /**
@@ -37,6 +38,7 @@ export function PipelineCard({ job, age }: { job: JobOverview; age: ProgressAge 
       )}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         {age && <ProgressPill age={age} />}
+        {job.topAt && <TopBadge />}
         {job.hasNotes && (
           <NotebookTextIcon
             className="size-3.5 text-muted-foreground"
@@ -57,6 +59,7 @@ export function PipelineCard({ job, age }: { job: JobOverview; age: ProgressAge 
             title={title}
             status={job.status}
             archived={job.archivedAt !== null}
+            top={job.topAt !== null}
             quiet
           />
         </span>

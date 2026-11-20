@@ -67,3 +67,45 @@ test("track a job through statuses, archive it and bring it back", async ({ page
   await expect(pageStatus).toHaveText("Interviewing");
   await expect(page.getByText(/Interviewing since/)).toBeVisible();
 });
+
+test("mark a job as top on its page, see the badge and filter by it", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
+  const input = page.getByRole("textbox", { name: "Message" }).filter({ visible: true });
+  await input.fill("Listing: Staff Engineer at Starling Forge, Lisbon office.");
+  await input.press("Enter");
+  await expect(visible(page, '[data-role="assistant"]').last()).toContainText(
+    "Mock reply: save_job_draft v1",
+  );
+
+  const table = page.getByRole("table", { name: "Jobs" });
+  const row = table.getByRole("row").filter({ hasText: "Starling Forge" });
+  await page.goto("/jobs");
+  await expect(row).toBeVisible();
+  await expect(row.getByText("Top", { exact: true })).toHaveCount(0);
+
+  // The star on the job page marks it; the status stays New.
+  await row.getByRole("link").click();
+  await expect(page).toHaveURL(/\/jobs\/[0-9a-f-]{36}$/);
+  const star = page.getByRole("button", { name: "Mark top" });
+  await star.click();
+  await expect(page.getByRole("button", { name: "Top", pressed: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Status of / })).toHaveText("New");
+
+  // The list shows the badge, and "Top only" keeps just top jobs.
+  await page.goto("/jobs");
+  await expect(row.getByText("Top", { exact: true })).toBeVisible();
+  // Controlled checkbox: it turns checked once the filtered list has loaded.
+  const topOnly = page.getByRole("checkbox", { name: "Top only" });
+  await topOnly.click();
+  await expect(page).toHaveURL(/top=1/);
+  await expect(topOnly).toBeChecked();
+  await expect(table.getByRole("row")).toHaveCount(2); // header + the top job
+  await expect(row).toBeVisible();
+
+  // The status menu removes the mark; the filtered list is then empty.
+  await row.getByRole("button", { name: /^Status of / }).click();
+  await page.getByRole("menuitem", { name: "Remove top mark" }).click();
+  await expect(row).toHaveCount(0);
+});

@@ -18,6 +18,7 @@ import {
   setJobArchived,
   setJobNotes,
   setJobStatus,
+  setJobTop,
   upsertJob,
 } from "./jobs";
 import { jobs, sources } from "./schema";
@@ -461,5 +462,21 @@ describe("findJobByUrl", () => {
       content: "y",
     });
     expect(await findJobByUrl(db, { urls: [about] })).toBeUndefined();
+  });
+});
+
+describe("top mark", () => {
+  it("marks and unmarks a job without touching its status or list order", async () => {
+    const { job } = await upsertJob(db, northwind);
+    await setJobStatus(db, job.id, "shortlisted");
+    const before = await db.query.jobs.findFirst({ where: eq(jobs.id, job.id) });
+    const marked = await setJobTop(db, job.id, true);
+    expect(marked?.topAt).toBeInstanceOf(Date);
+    expect(marked).toMatchObject({ status: "shortlisted", updatedAt: before?.updatedAt });
+    expect(marked?.progressedAt).toEqual(before?.progressedAt);
+    expect((await setJobTop(db, job.id, true))?.topAt).toEqual(marked?.topAt);
+    expect((await listJobs(db))[0]?.topAt).toEqual(marked?.topAt);
+    expect((await setJobTop(db, job.id, false))?.topAt).toBeNull();
+    expect(await setJobTop(db, "missing", true)).toBeUndefined();
   });
 });

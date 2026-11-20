@@ -1,0 +1,1 @@
+ALTER TABLE `app_jobs` ADD `top_at` integer;

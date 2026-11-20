@@ -2,9 +2,16 @@
 
 import { JOB_STATUS_LABELS, JOB_STATUSES, type JobStatus } from "@copilot/shared";
 import { cn } from "cn";
-import { ArchiveIcon, ArchiveRestoreIcon, CheckIcon, ChevronDownIcon } from "lucide-react";
-import { useTransition } from "react";
-import { setJobArchivedAction, setJobStatusAction } from "@/app/actions";
+import {
+  ArchiveIcon,
+  ArchiveRestoreIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  StarIcon,
+  StarOffIcon,
+} from "lucide-react";
+import { useOptimistic, useTransition } from "react";
+import { setJobArchivedAction, setJobStatusAction, setJobTopAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -32,22 +39,27 @@ const STATUS_STYLE: Record<JobStatus, string> = {
   dismissed: "text-muted-foreground",
 };
 
-/** Status button with a menu to change the status or (un)archive the job. */
+/** Status button with a menu to change the status, mark it as top or (un)archive the job. */
 export function JobStatusMenu({
   jobId,
   title,
   status,
   archived,
+  top,
   quiet,
 }: {
   jobId: string;
   title: string;
   status: JobStatus;
   archived: boolean;
+  /** Marked as one of the user's top choices; omitted where the page has its own toggle. */
+  top?: boolean;
   /** Plain pill, e.g. on a tab where every job has this status. */
   quiet?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
+  // Optimistic, so a second toggle before the refresh lands undoes the first.
+  const [optimisticTop, setOptimisticTop] = useOptimistic(top);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -78,6 +90,19 @@ export function JobStatusMenu({
           ))}
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
+        {optimisticTop !== undefined && (
+          <DropdownMenuItem
+            onSelect={() =>
+              startTransition(async () => {
+                setOptimisticTop(!optimisticTop);
+                await setJobTopAction(jobId, !optimisticTop);
+              })
+            }
+          >
+            {optimisticTop ? <StarOffIcon /> : <StarIcon />}
+            {optimisticTop ? "Remove top mark" : "Mark as top"}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           onSelect={() => startTransition(() => setJobArchivedAction(jobId, !archived))}
         >
