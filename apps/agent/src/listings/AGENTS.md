@@ -1,6 +1,6 @@
 # src/listings — closed listing check
 
-Daily, the `check-listings` workflow (`src/mastra/workflows/check-listings.ts`, `30 6 * * *` in `DISCOVERY_TZ`, scheduled where discovery is: `discoveryScheduleEnabled()`) re-checks the links of **shortlisted and to-apply jobs and new jobs scored at least `digestThreshold`** (plus chat jobs), dismisses those whose listing closed, and emails the list. Only `new`, `shortlisted` and `to_apply` jobs are ever dismissed; a job the user restores is never dismissed again (`listing_closed_at` stays set).
+Daily, the `check-listings` workflow (`src/mastra/workflows/check-listings.ts`, `30 6 * * *` in `DISCOVERY_TZ`, scheduled where discovery is: `discoveryScheduleEnabled()`) re-checks the links of jobs in its **scopes** (`LISTING_SCOPES` in `packages/db/src/listings.ts`; daily: shortlisted, to apply, and new jobs scored at least `digestThreshold` or from chat), dismisses those whose listing closed, and emails the list. Only `new`, `shortlisted` and `to_apply` jobs are ever dismissed; a job the user restores is never dismissed again (`listing_closed_at` stays set).
 
 ```mermaid
 flowchart LR
@@ -25,6 +25,6 @@ flowchart LR
 - One closed link is enough: employers close first (an Ashby job gone while its LinkedIn copy still shows).
 - `run.ts`: one request at a time, 1.5 s between LinkedIn requests (0.5 s elsewhere); a 429 stops that site for the run. `dryRun` reports without writing or emailing.
 - `report.ts`: the email (`🧹 N jobs no longer available`), to-apply then shortlisted first (subject counts both), links to the job in the app. Sending via `src/email.ts` (shared with the discovery digest).
-- Run by hand: Studio → Workflows → `check-listings` (`{"dryRun": true}` first), or `pnpm agent:api workflow …`.
+- Run by hand: "Check listings" on /discovery (tick scopes, counts per scope, "Check now"; `trigger: "manual"`). It calls `POST /listings/check {scopes}` (409 while a run is going; a run still "running" after 2 h counts as dead) and shows `GET /listings/check`: the latest workflow run with its input and output, read from Mastra's workflow storage (no app table). A dry run only from Studio → Workflows → `check-listings` (`{"dryRun": true}`) or `pnpm agent:api workflow …`.
 - `pnpm listings:live` re-checks `corpus.json` live (not part of `pnpm check`). A closed entry that reads otherwise means a site changed: fix its rule. An open control that closed is only reported: replace it with a fresh open listing.
 - Adding a site: find closed and open listings in the production data, confirm them in a browser, add the rule, synthetic unit cases and corpus entries.

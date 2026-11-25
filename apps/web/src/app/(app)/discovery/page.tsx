@@ -160,6 +160,7 @@ async function Discovery() {
           counts={listingCounts}
           dailyScopes={DAILY_LISTING_SCOPES}
           running={listingCheck?.running === true}
+          digestThreshold={Math.max(settings.digestThreshold, settings.triageThreshold)}
         />
         {listingCheck === null ? (
           <p className="text-xs text-muted-foreground">

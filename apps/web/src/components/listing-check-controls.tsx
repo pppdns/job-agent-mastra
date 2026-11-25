@@ -6,13 +6,6 @@ import { type DiscoveryActionState, startListingCheckAction } from "@/app/action
 import { Button } from "@/components/ui/button";
 import { LISTING_SCOPE_LABELS } from "@/lib/listing-scopes";
 
-const SCOPE_HINTS: Record<ListingScope, string> = {
-  shortlisted: "",
-  to_apply: "",
-  top_new: "at or above the digest threshold, or added from a chat",
-  other_new: "the rest of the new jobs you see in Jobs",
-};
-
 /** Requests are spaced 1.5 s apart on LinkedIn, 0.5 s elsewhere; most jobs have a LinkedIn link. */
 const SECONDS_PER_JOB = 2;
 /** The run's cap (jobsToCheckListings' default limit): least recently checked first. */
@@ -26,10 +19,12 @@ export function ListingCheckControls({
   counts,
   dailyScopes,
   running,
+  digestThreshold,
 }: {
   counts: Record<ListingScope, number>;
   dailyScopes: readonly ListingScope[];
   running: boolean;
+  digestThreshold: number;
 }) {
   const [picked, setPicked] = useState<Set<ListingScope>>(() => new Set(dailyScopes));
   const [shown, action, pending] = useActionState(
@@ -45,11 +40,7 @@ export function ListingCheckControls({
       <fieldset className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
         <legend className="sr-only">Jobs to check</legend>
         {scopes.map((scope) => (
-          <label
-            key={scope}
-            className="flex items-center gap-1.5"
-            title={SCOPE_HINTS[scope] || undefined}
-          >
+          <label key={scope} className="flex items-center gap-1.5">
             <input
               type="checkbox"
               name="scope"
@@ -70,6 +61,10 @@ export function ListingCheckControls({
           </label>
         ))}
       </fieldset>
+      <p className="text-xs text-muted-foreground">
+        Top matches: new jobs scored at least {digestThreshold} (the digest threshold) or added from
+        a chat. Other matches: the rest of the new jobs you see in Jobs.
+      </p>
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="submit"

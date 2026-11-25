@@ -258,6 +258,7 @@ Goal: stop opening dead listings. Detection is deterministic per site, built onl
 - [x] Per-site rules (LinkedIn, Greenhouse, Lever, Ashby, Workable, Dice, Jobgether, NoDesk); unknown never dismisses; Cloudflare boards skipped
 - [x] Daily `check-listings` workflow: shortlisted, to-apply + new jobs ≥ digest threshold, dismiss only `new`/`shortlisted`/`to_apply`, evidence on the job page, separate email
 - [x] Verified on a copy of the production database (2026-11-15 backup): 43 jobs, 51 checks in 60 s, 7 closed (2 shortlisted), 0 unknown
+- [x] "Check listings" on /discovery: pick scopes (shortlisted, to apply, top new, other new) with live counts, run now, last check with its dismissed jobs (2026-11-25)
 - [ ] Verified live on Fly: first scheduled run and its email
 
 ## Simplifications chosen (tell me if any is unacceptable)

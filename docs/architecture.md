@@ -341,7 +341,7 @@ flowchart LR
 
 ## Closed listings
 
-Every morning (06:30, before discovery) the `check-listings` workflow re-checks the links of shortlisted and to-apply jobs and new jobs scored at least the digest threshold. Each site has one deterministic rule proven on real listings (LinkedIn's closed banner or a 404, ATS APIs answering 404, boards answering 410 with their expired text); anything else is "unknown" and changes nothing. A closed link dismisses the job only while it is still `new`, `shortlisted` or `to_apply`, records why (shown on the job page), and the day's dismissals are emailed. Details: [apps/agent/src/listings/AGENTS.md](../apps/agent/src/listings/AGENTS.md).
+Every morning (06:30, before discovery) the `check-listings` workflow re-checks the links of shortlisted and to-apply jobs and new jobs scored at least the digest threshold. Each site has one deterministic rule proven on real listings (LinkedIn's closed banner or a 404, ATS APIs answering 404, boards answering 410 with their expired text); anything else is "unknown" and changes nothing. A closed link dismisses the job only while it is still `new`, `shortlisted` or `to_apply`, records why (shown on the job page), and the day's dismissals are emailed. "Check listings" on /discovery runs the same check now on the groups the user ticks (shortlisted, to apply, top new, other new; counts shown) and shows the last check with the jobs it dismissed. Details: [apps/agent/src/listings/AGENTS.md](../apps/agent/src/listings/AGENTS.md).
 
 ```mermaid
 flowchart LR
