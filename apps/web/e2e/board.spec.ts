@@ -87,3 +87,50 @@ test("track interview rounds on the board and keep a note on the job", async ({ 
   await expect(notes).toContainText("Round 2: system design on Friday.");
   await expect(notes.getByRole("button", { name: "Edit" })).toBeVisible();
 });
+
+test("reorder cards within a column by their handle, and keep the order", async ({ page }) => {
+  test.setTimeout(60_000);
+  const companies = ["Quartzline Ferries", "Brambleworth Mills"];
+  for (const company of companies) {
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
+    const input = page.getByRole("textbox", { name: "Message" }).filter({ visible: true });
+    await input.fill(`Listing: Dock Scheduler at ${company}, Porto office.`);
+    await input.press("Enter");
+    await expect(visible(page, '[data-role="assistant"]').last()).toContainText(
+      "Mock reply: save_job_draft v1",
+    );
+    await page.goto(`/jobs?q=${encodeURIComponent(company)}`);
+    const row = page.getByRole("table", { name: "Jobs" }).getByRole("row").filter({
+      hasText: company,
+    });
+    await row.getByRole("button", { name: /^Status of / }).click();
+    await page.getByRole("menuitemradio", { name: "Shortlisted" }).click();
+    await expect(row.getByRole("button", { name: /^Status of / })).toHaveText("Shortlisted");
+  }
+
+  // Shortlisted later sorts lower; other specs' cards may share the column.
+  await page.goto("/jobs/board");
+  const column = page.getByRole("region", { name: "Shortlisted", exact: true });
+  const order = async () =>
+    (await column.getByRole("listitem").allTextContents()).flatMap((text) =>
+      companies.filter((c) => text.includes(c)),
+    );
+  await expect.poll(order).toEqual(companies);
+
+  // Keyboard: Space picks the card up, an arrow moves it, Space drops it.
+  const handle = column
+    .getByRole("listitem")
+    .filter({ hasText: companies[1] })
+    .getByRole("button", {
+      name: "Reorder Dock Scheduler",
+    });
+  await handle.focus();
+  await page.keyboard.press("Space");
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("Space");
+  await expect.poll(order).toEqual([companies[1], companies[0]]);
+
+  await page.reload();
+  await expect.poll(order).toEqual([companies[1], companies[0]]);
+});

@@ -419,9 +419,11 @@ describe("Company career sites", () => {
       ],
       costUsd: 0.4,
     });
-    const outcome = await createActorSource(careerSitesBoard, runner).fetch(
-      context({ maxUsd: 0.45 }),
-    );
+    // The screen judges posting age against the clock: pin it to the fixtures' date.
+    vi.useFakeTimers({ now, toFake: ["Date"] });
+    const outcome = await createActorSource(careerSitesBoard, runner)
+      .fetch(context({ maxUsd: 0.45 }))
+      .finally(() => vi.useRealTimers());
     expect(outcome.postings.map((p) => p.externalId)).toEqual(["2459270789", "3"]);
   });
 });
