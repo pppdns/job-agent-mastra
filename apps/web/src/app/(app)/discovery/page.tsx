@@ -1,9 +1,13 @@
 import {
   countAwaitingExtraction,
   countAwaitingTriage,
+  countListingScopes,
+  DAILY_LISTING_SCOPES,
   type DiscoveryRun,
   type FunnelResult,
   getSearchSettings,
+  LISTING_CHECK_LIMIT,
+  type ListingScope,
   listDiscoveryRuns,
   type ModelSpend,
   modelSpendByRun,
@@ -21,6 +25,8 @@ import {
   DISCOVERY_SOURCE_SITES,
   DISCOVERY_SOURCES,
   FACTS_VERSION,
+  JOB_STATUS_LABELS,
+  type JobStatus,
   PAID_DISCOVERY_SOURCES,
 } from "@copilot/shared";
 import { cn } from "cn";
@@ -33,6 +39,7 @@ import { TONES, type Tone } from "@/components/assessment-visuals";
 import { DiscoveryControls, RefreshWhileRunning } from "@/components/discovery-controls";
 import { RunProgress } from "@/components/discovery-run-progress";
 import { formatDuration, STATUS_TEXT, StatusIcon } from "@/components/discovery-status";
+import { ListingCheckControls } from "@/components/listing-check-controls";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,8 +51,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { LISTING_SCOPE_LABELS } from "@/lib/listing-scopes";
 import { costParts, runCost } from "@/lib/run-cost";
 import { runOutcome } from "@/lib/run-outcome";
+import { agentFetch } from "@/server/agent";
 import { appDb } from "@/server/db";
 import { serverEnv } from "@/server/env";
 
@@ -86,14 +95,17 @@ async function Discovery() {
   const db = await appDb();
   const now = Date.now();
   const monthAgo = new Date(now - 30 * DAY_MS);
-  const [runs, settings, spent, screenedOut, awaitingTriage, awaitingFacts] = await Promise.all([
-    listDiscoveryRuns(db, 20),
-    getSearchSettings(db),
-    sourceSpendSince(db, PAID_DISCOVERY_SOURCES, monthAgo),
-    screenedOutSince(db, new Date(now - 7 * DAY_MS)),
-    countAwaitingTriage(db),
-    countAwaitingExtraction(db, FACTS_VERSION),
-  ]);
+  const settings = await getSearchSettings(db);
+  const [runs, spent, screenedOut, awaitingTriage, awaitingFacts, listingCounts, listingCheck] =
+    await Promise.all([
+      listDiscoveryRuns(db, 20),
+      sourceSpendSince(db, PAID_DISCOVERY_SOURCES, monthAgo),
+      screenedOutSince(db, new Date(now - 7 * DAY_MS)),
+      countAwaitingTriage(db),
+      countAwaitingExtraction(db, FACTS_VERSION),
+      countListingScopes(db, settings),
+      listingCheckStatus(),
+    ]);
   const [modelSpend, spendByRun] = await Promise.all([
     modelSpendSince(db, monthAgo),
     modelSpendByRun(
@@ -111,7 +123,7 @@ async function Discovery() {
 
   return (
     <div className="flex flex-col gap-6">
-      <RefreshWhileRunning running={running} />
+      <RefreshWhileRunning running={running || listingCheck?.running === true} />
       <section className="flex flex-col gap-3">
         <p className="text-sm text-muted-foreground">
           New postings are fetched twice a day by the hosted app (or the main checkout's dev server,
@@ -136,6 +148,32 @@ async function Discovery() {
       ) : (
         runs[0] && <LastRun run={runs[0]} spend={spendByRun.get(runs[0].id)} />
       )}
+
+      <section aria-label="Check listings" className="flex flex-col gap-3">
+        <h2 className="font-medium">Check listings</h2>
+        <p className="text-sm text-muted-foreground">
+          Re-opens each job&apos;s listing links (LinkedIn, Greenhouse, Lever, Ashby and a few
+          boards) and dismisses jobs that no longer accept applications or were removed. Runs daily
+          at 06:30 on shortlisted, to-apply and top new jobs; archived jobs and jobs it closed once
+          are skipped. Dismissed jobs come back if you change their status.
+        </p>
+        <ListingCheckControls
+          counts={listingCounts}
+          dailyScopes={DAILY_LISTING_SCOPES}
+          maxJobs={LISTING_CHECK_LIMIT}
+          running={listingCheck?.running === true}
+          digestThreshold={Math.max(settings.digestThreshold, settings.triageThreshold)}
+        />
+        {listingCheck === null ? (
+          <p className="text-xs text-muted-foreground">
+            The agent server is not reachable, so the last check can&apos;t be shown.
+          </p>
+        ) : (
+          listingCheck.last && (
+            <LastListingCheck run={listingCheck.last} running={listingCheck.running} />
+          )
+        )}
+      </section>
 
       <section aria-label="Sources" className="flex flex-col gap-2">
         <p className="text-xs text-muted-foreground">
@@ -593,5 +631,123 @@ function SkippedLine({ results }: { results: SourceRunResult[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+type ListingCheckResult = {
+  dryRun?: boolean;
+  trigger?: "schedule" | "manual";
+  scopes?: ListingScope[];
+  jobs: number;
+  checks: number;
+  open: number;
+  unknown: number;
+  unsupported: number;
+  closed: {
+    id: string;
+    title: string | null;
+    company: string | null;
+    previousStatus: string;
+    url: string;
+    signal: string;
+  }[];
+  rateLimited: string[];
+  email: { status: string; message: string };
+};
+
+type ListingCheckRun = {
+  status: string;
+  startedAt: string;
+  finishedAt: string | null;
+  input: { trigger?: "schedule" | "manual"; scopes?: ListingScope[] } | null;
+  result: ListingCheckResult | null;
+  error: string | null;
+};
+
+/** The agent's GET /listings/check; null when it can't be reached. */
+async function listingCheckStatus(): Promise<{
+  running: boolean;
+  last: ListingCheckRun | null;
+} | null> {
+  const response = await agentFetch("/listings/check", { cache: "no-store" }).catch(() => null);
+  if (!response?.ok) return null;
+  return response.json().catch(() => null);
+}
+
+const LISTING_RUN_TONE: Record<string, { label: string; tone: Tone }> = {
+  running: { label: "Running", tone: "muted" },
+  success: { label: "Done", tone: "success" },
+  failed: { label: "Failed", tone: "destructive" },
+  canceled: { label: "Stopped", tone: "muted" },
+  interrupted: { label: "Interrupted", tone: "warning" },
+};
+
+function LastListingCheck({ run, running }: { run: ListingCheckRun; running: boolean }) {
+  const outcome = LISTING_RUN_TONE[run.status] ?? { label: run.status, tone: "muted" as Tone };
+  const result = run.result;
+  const trigger = run.input?.trigger ?? result?.trigger ?? "schedule";
+  const scopes = run.input?.scopes ?? result?.scopes ?? DAILY_LISTING_SCOPES;
+  const duration =
+    run.finishedAt &&
+    formatDuration(new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime());
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="font-medium">{running ? "Current check" : "Last check"}</h3>
+        <ToneBadge tone={outcome.tone}>{outcome.label}</ToneBadge>
+        <span className="text-xs text-muted-foreground">
+          {formatTime(new Date(run.startedAt))} · {trigger === "manual" ? "by hand" : "daily"}
+          {duration ? ` · ${duration}` : ""} ·{" "}
+          {scopes.map((s) => LISTING_SCOPE_LABELS[s]).join(", ")}
+        </span>
+      </div>
+      {running && <p className="text-muted-foreground">Checking listings…</p>}
+      {run.error && <p className="text-destructive">{run.error}</p>}
+      {result && (
+        <>
+          <p>
+            {result.closed.length === 0
+              ? `No closed listings among ${result.jobs.toLocaleString("en-US")} jobs.`
+              : `${result.dryRun ? "Dry run, nothing changed: would dismiss" : "Dismissed"} ${result.closed.length} of ${result.jobs.toLocaleString("en-US")} jobs.`}
+          </p>
+          <p className="text-xs text-muted-foreground tabular-nums">
+            {[
+              `${result.checks} links checked`,
+              `${result.open} open`,
+              result.unknown > 0 && `${result.unknown} unclear`,
+              result.unsupported > 0 && `${result.unsupported} links on sites it can't check`,
+              result.rateLimited.length > 0 && `rate limited: ${result.rateLimited.join(", ")}`,
+              result.closed.length > 0 && !result.dryRun && `email ${result.email.status}`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+          {result.closed.length > 0 && (
+            <ul className="flex flex-col divide-y rounded-md border">
+              {result.closed.map((job) => (
+                <li key={job.id} className="flex flex-wrap items-baseline gap-x-2 px-3 py-1.5">
+                  <Link href={`/jobs/${job.id}`} className="font-medium hover:underline">
+                    {job.title ?? "Untitled job"}
+                  </Link>
+                  <span className="text-muted-foreground">{job.company}</span>
+                  <span className="text-xs text-muted-foreground">
+                    was {JOB_STATUS_LABELS[job.previousStatus as JobStatus] ?? job.previousStatus}
+                  </span>
+                  <a
+                    href={job.url}
+                    target="_blank"
+                    rel="noopener"
+                    className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
+                  >
+                    {job.signal}
+                    <ExternalLinkIcon className="size-3" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
   );
 }

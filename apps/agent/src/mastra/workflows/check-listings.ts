@@ -1,9 +1,11 @@
+import { DAILY_LISTING_SCOPES, LISTING_SCOPES } from "@copilot/db";
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 import { httpJson } from "../../discovery/sources/http";
 import { emailConfig } from "../../email";
 import { env } from "../../env";
 import { LISTING_SITES } from "../../listings/checkers";
+import { acquireListingCheck, releaseListingCheck } from "../../listings/lock";
 import { sendClosedEmail } from "../../listings/report";
 import { runListingCheck } from "../../listings/run";
 import { reportError } from "../../sentry";
@@ -23,6 +25,13 @@ const inputSchema = z.object({
   dryRun: z.boolean().default(false),
   /** Most jobs checked (default: all in scope, up to 500). */
   limit: z.number().int().positive().max(2_000).nullish(),
+  /** Which jobs to check (see LISTING_SCOPES in packages/db listings.ts). */
+  scopes: z
+    .array(z.enum(LISTING_SCOPES))
+    .min(1)
+    .default([...DAILY_LISTING_SCOPES]),
+  /** Who started it: the daily schedule or "Check now" on /discovery. */
+  trigger: z.enum(["schedule", "manual"]).default("schedule"),
 });
 
 const closedSchema = z.object({
@@ -37,6 +46,8 @@ const closedSchema = z.object({
 
 const outputSchema = z.object({
   dryRun: z.boolean(),
+  trigger: z.enum(["schedule", "manual"]),
+  scopes: z.array(z.enum(LISTING_SCOPES)),
   jobs: z.number(),
   checks: z.number(),
   open: z.number(),
@@ -54,11 +65,16 @@ const check = createStep({
   inputSchema,
   outputSchema,
   execute: async ({ inputData, abortSignal, mastra }) => {
+    // The schedule and "Check now" share one slot: a second run does nothing.
+    if (!acquireListingCheck()) {
+      throw new Error("Another listing check was running, so this one did nothing.");
+    }
     const db = await getAppDb();
     try {
       const result = await runListingCheck(db, {
         dryRun: inputData.dryRun,
         limit: inputData.limit ?? undefined,
+        scopes: inputData.scopes,
         signal: abortSignal,
       });
       const email = inputData.dryRun
@@ -70,10 +86,18 @@ const check = createStep({
         ?.info(
           `listing check: ${result.jobs} jobs, ${result.checks} checks, ${result.closed.length} closed, ${result.unknown} unknown${result.rateLimited.length > 0 ? `, rate limited: ${result.rateLimited.join(", ")}` : ""}; email ${email.status}`,
         );
-      return { dryRun: inputData.dryRun, ...result, email };
+      return {
+        dryRun: inputData.dryRun,
+        trigger: inputData.trigger,
+        scopes: inputData.scopes,
+        ...result,
+        email,
+      };
     } catch (error) {
       if (!abortSignal?.aborted) reportError(error, { area: "listings" });
       throw error;
+    } finally {
+      releaseListingCheck();
     }
   },
 });
@@ -91,7 +115,7 @@ export const checkListingsWorkflow = createWorkflow({
         schedule: {
           cron: CHECK_LISTINGS_CRON,
           timezone: env.DISCOVERY_TZ,
-          inputData: { dryRun: false },
+          inputData: { dryRun: false, scopes: [...DAILY_LISTING_SCOPES], trigger: "schedule" },
         },
       }
     : {}),
