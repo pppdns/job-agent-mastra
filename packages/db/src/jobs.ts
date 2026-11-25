@@ -7,6 +7,7 @@ import {
   listingPostedDate,
   MAX_INTERVIEW_ROUNDS,
   MAX_JOB_NOTES_CHARS,
+  MAX_JOB_TITLE_CHARS,
   normalizeJobLabels,
   normalizeText,
 } from "@copilot/shared";
@@ -454,6 +455,32 @@ export async function setInterviewRounds(
       .returning();
     return updated;
   });
+}
+
+/**
+ * Renames a job (trimmed, whitespace collapsed). The dedupe key keeps the listing's original
+ * title, so the same listing shared again still matches; re-ingesting never overwrites a title.
+ * Throws on an empty or too long title; undefined for an unknown job.
+ */
+export async function setJobTitle(db: Db, jobId: string, title: string): Promise<Job | undefined> {
+  const text = title.replace(/\s+/g, " ").trim();
+  if (!text) throw new RangeError("A job title can't be empty");
+  if (text.length > MAX_JOB_TITLE_CHARS) {
+    throw new RangeError(`Job titles are limited to ${MAX_JOB_TITLE_CHARS} characters`);
+  }
+  return serializeWrites(db, () =>
+    db.transaction(async (tx) => {
+      const job = await tx.query.jobs.findFirst({ where: eq(jobs.id, jobId) });
+      if (!job || job.title === text) return job;
+      const [updated] = await tx
+        .update(jobs)
+        .set({ title: text })
+        .where(eq(jobs.id, jobId))
+        .returning();
+      await reindexJob(tx, jobId);
+      return updated;
+    }),
+  );
 }
 
 export type SetJobNotesResult =

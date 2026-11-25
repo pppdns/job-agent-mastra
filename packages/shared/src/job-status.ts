@@ -38,5 +38,8 @@ export type PipelineStatus = (typeof PIPELINE_STATUSES)[number];
 /** Upper bound for interview rounds the user can set. */
 export const MAX_INTERVIEW_ROUNDS = 12;
 
+/** Upper bound for a job title the user sets. */
+export const MAX_JOB_TITLE_CHARS = 200;
+
 /** Upper bound for a job's note. */
 export const MAX_JOB_NOTES_CHARS = 20_000;
