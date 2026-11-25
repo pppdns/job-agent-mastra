@@ -4,11 +4,11 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 const VIEWS = [
-  { view: "list", href: "/jobs", label: "List", icon: ListIcon },
   { view: "board", href: "/jobs/board", label: "Board", icon: KanbanIcon },
+  { view: "list", href: "/jobs", label: "List", icon: ListIcon },
 ] as const;
 
-/** List | Board switch in the Jobs header. */
+/** Board | List switch in the Jobs header. */
 export function ViewToggle({ current }: { current: "list" | "board" }) {
   return (
     <nav aria-label="Jobs view" className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">

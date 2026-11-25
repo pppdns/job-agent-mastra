@@ -78,7 +78,7 @@ export default function JobPage({ params }: PageProps<"/jobs/[jobId]">) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader>
-        <Link href="/jobs" className="text-sm text-muted-foreground hover:text-foreground">
+        <Link href="/jobs/board" className="text-sm text-muted-foreground hover:text-foreground">
           Jobs
         </Link>
       </PageHeader>

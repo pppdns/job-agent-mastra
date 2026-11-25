@@ -39,7 +39,7 @@ function Links({ pathname, newMatches }: { pathname: string; newMatches: number 
     <SidebarMenu>
       <SidebarMenuItem>
         <SidebarMenuButton asChild isActive={pathname.startsWith("/jobs")}>
-          <Link href="/jobs" onClick={() => setOpenMobile(false)}>
+          <Link href="/jobs/board" onClick={() => setOpenMobile(false)}>
             <BriefcaseIcon />
             <span>Jobs</span>
           </Link>

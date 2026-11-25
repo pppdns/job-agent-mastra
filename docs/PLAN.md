@@ -246,7 +246,7 @@ Goal: see what's in progress and where to follow up. All of it is data the user 
 
 - [x] `app_jobs.interview_round` / `interview_rounds` (1–12, total may be unknown), `progressed_at` (status change or new round; a new total alone isn't progress), `notes` + `notes_updated_at` (conflict token: a note saved elsewhere is never overwritten).
 - [x] Attention rule (`progressAge`): under 7 days without progress needs nothing (grey), 7–13 days amber "follow up", 14+ red "stuck"; same on the board, the list's "In stage" column and the job page.
-- [x] `/jobs/board` (List | Board toggle): Shortlisted, To apply, Applied, Interviewing, Offer columns, stalest first; status menu moves cards (no drag and drop); swipeable columns with jump chips on narrow screens (container query); round tracker with "Round N done", next round and total.
+- [x] `/jobs/board` (Board | List toggle; the default Jobs view): Shortlisted, To apply, Applied, Interviewing, Offer columns, stalest first; status menu moves cards (no drag and drop); swipeable columns with jump chips on narrow screens (container query); round tracker with "Round N done", next round and total.
 - [x] Job page: progress strip with the round tracker, notes card (Edit → Save, ⌘/Ctrl+Enter, Esc asks before discarding, leave-page warning). List rows: round tracker and note marker.
 - [x] Verified: db and `job-age` unit tests, e2e `board.spec.ts`, browser check on desktop and 375 px.
 - [x] Follow-up (2026-11-25): reorder cards within a column by a drag handle (pointer or keyboard); stored as `board_position`, a job entering a column goes to the bottom. Verified: db unit test, e2e `board.spec.ts`, browser check on desktop (mouse and keyboard).

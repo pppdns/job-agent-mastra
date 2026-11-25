@@ -5,6 +5,16 @@ import { expect, type Page, test } from "@playwright/test";
 
 const visible = (page: Page, selector: string) => page.locator(selector).filter({ visible: true });
 
+test("the sidebar's Jobs item opens the board", async ({ page }) => {
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
+  await page.getByRole("link", { name: "Jobs", exact: true }).filter({ visible: true }).click();
+  await expect(page).toHaveURL(/\/jobs\/board$/);
+  await expect(
+    page.getByRole("navigation", { name: "Jobs view" }).getByRole("link", { name: "Board" }),
+  ).toHaveAttribute("aria-current", "page");
+});
+
 test("track interview rounds on the board and keep a note on the job", async ({ page }) => {
   test.setTimeout(60_000);
   await page.goto("/");
