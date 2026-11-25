@@ -408,6 +408,13 @@ describe("pipeline progress", () => {
     await setJobStatus(db, c.id, "to_apply");
     await setJobStatus(db, c.id, "shortlisted");
     expect(await shortlisted()).toEqual([a.id, b.id, d.id, c.id]);
+
+    // Archived by hand and restored: also at the bottom, not back in its old place.
+    await reorderBoardColumn(db, "shortlisted", [c.id, a.id, b.id, d.id]);
+    await setJobArchived(db, c.id, true);
+    await reorderBoardColumn(db, "shortlisted", [b.id, a.id, d.id]);
+    await setJobArchived(db, c.id, false);
+    expect(await shortlisted()).toEqual([b.id, a.id, d.id, c.id]);
   });
 });
 

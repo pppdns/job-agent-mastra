@@ -235,9 +235,11 @@ export function reorderBoardColumn(
       .where(and(inArray(jobs.id, [...jobIds]), eq(jobs.status, status), isNull(jobs.archivedAt)));
     const placeable = new Set(inColumn.map((r) => r.id));
     const ordered = [...new Set(jobIds)].filter((id) => placeable.has(id));
-    for (const [position, id] of ordered.entries()) {
-      await db.update(jobs).set({ boardPosition: position }).where(eq(jobs.id, id));
-    }
+    await db.transaction(async (tx) => {
+      for (const [position, id] of ordered.entries()) {
+        await tx.update(jobs).set({ boardPosition: position }).where(eq(jobs.id, id));
+      }
+    });
   });
 }
 

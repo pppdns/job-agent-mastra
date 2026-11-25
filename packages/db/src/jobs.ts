@@ -538,14 +538,18 @@ export function setJobLabels(
   });
 }
 
-/** Archives or unarchives a job without changing its status. Undefined for an unknown job. */
+/**
+ * Archives or unarchives a job without changing its status; clears its Board position. Undefined
+ * for an unknown job.
+ */
 export function setJobArchived(db: Db, jobId: string, archived: boolean): Promise<Job | undefined> {
   return serializeWrites(db, async () => {
     const job = await db.query.jobs.findFirst({ where: eq(jobs.id, jobId) });
     if (!job || (job.archivedAt !== null) === archived) return job;
     const [updated] = await db
       .update(jobs)
-      .set({ archivedAt: archived ? new Date() : null })
+      // Restored, it goes below the cards the user arranged meanwhile, like a status change.
+      .set({ archivedAt: archived ? new Date() : null, boardPosition: null })
       .where(eq(jobs.id, jobId))
       .returning();
     return updated;

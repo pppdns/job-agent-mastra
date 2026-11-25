@@ -22,7 +22,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVerticalIcon } from "lucide-react";
-import { useOptimistic, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { reorderBoardColumnAction } from "@/app/actions";
 import { PipelineCard } from "@/components/pipeline-card";
 import type { ProgressAge } from "@/lib/job-age";
@@ -44,6 +44,7 @@ export function BoardColumnCards({
   cards: BoardCard[];
 }) {
   const [, start] = useTransition();
+  const [failed, setFailed] = useState(false);
   const [order, setOrder] = useOptimistic(cards.map((c) => c.job.id));
   const byId = new Map(cards.map((c) => [c.job.id, c]));
   const ordered = order.flatMap((id) => byId.get(id) ?? []);
@@ -62,9 +63,11 @@ export function BoardColumnCards({
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
     const next = arrayMove(order, order.indexOf(String(active.id)), order.indexOf(String(over.id)));
+    setFailed(false);
     start(async () => {
       setOrder(next);
-      await reorderBoardColumnAction(status, next);
+      // On failure the optimistic order falls back to the saved one; say so instead of crashing.
+      await reorderBoardColumnAction(status, next).catch(() => setFailed(true));
     });
   };
 
@@ -84,8 +87,12 @@ export function BoardColumnCards({
           onDragStart: ({ active }) => `Picked up ${titleFor(active.id)}, ${position(active.id)}.`,
           onDragOver: ({ active, over }) =>
             over ? `${titleFor(active.id)} is over ${position(over.id)}.` : undefined,
-          onDragEnd: ({ active, over }) =>
-            over ? `Moved ${titleFor(active.id)} to ${position(over.id)}.` : undefined,
+          onDragEnd: ({ active, over }) => {
+            if (!over) return undefined;
+            return active.id === over.id
+              ? `Dropped ${titleFor(active.id)}; it stays at ${position(over.id)}.`
+              : `Moved ${titleFor(active.id)} to ${position(over.id)}.`;
+          },
           onDragCancel: ({ active }) => `Cancelled. ${titleFor(active.id)} stays in place.`,
         },
       }}
@@ -97,6 +104,11 @@ export function BoardColumnCards({
           ))}
         </ul>
       </SortableContext>
+      {failed && (
+        <p role="alert" className="px-1 text-xs text-destructive">
+          Couldn't save the new order. Try again.
+        </p>
+      )}
     </DndContext>
   );
 }
