@@ -14,11 +14,13 @@ import {
   findJobByUrl,
   latestListingSource,
   MAX_SNAPSHOT_CHARS,
+  searchJobIds,
   setInterviewRounds,
   setJobArchived,
   setJobLabels,
   setJobNotes,
   setJobStatus,
+  setJobTitle,
   setJobTop,
   upsertJob,
 } from "./jobs";
@@ -534,5 +536,25 @@ describe("setJobLabels", () => {
     expect((await listJobs(db))[0]?.labels).toEqual(stored);
     expect((await setJobLabels(db, job.id, []))?.labels).toBeNull();
     expect(await setJobLabels(db, "missing", [])).toBeUndefined();
+  });
+});
+
+describe("setJobTitle", () => {
+  it("renames a job, keeps it findable and keeps the rename when the listing comes back", async () => {
+    const { job } = await upsertJob(db, northwind);
+    const renamed = await setJobTitle(db, job.id, "  Platform   Lead  ");
+    expect(renamed?.title).toBe("Platform Lead");
+    expect(await searchJobIds(db, "lead")).toEqual([job.id]);
+    expect(await searchJobIds(db, "senior")).toEqual([]);
+    const again = await upsertJob(db, northwind);
+    expect(again.job.id).toBe(job.id);
+    expect(again.job.title).toBe("Platform Lead");
+  });
+
+  it("rejects empty or too long titles and ignores unknown jobs", async () => {
+    const { job } = await upsertJob(db, northwind);
+    await expect(setJobTitle(db, job.id, "   ")).rejects.toThrow(RangeError);
+    await expect(setJobTitle(db, job.id, "x".repeat(201))).rejects.toThrow(RangeError);
+    expect(await setJobTitle(db, "missing", "Anything")).toBeUndefined();
   });
 });

@@ -28,6 +28,7 @@ import {
   setJobNotes,
   setJobStatus,
   setJobsStatus,
+  setJobTitle,
   setJobTop,
 } from "@copilot/db";
 import {
@@ -41,6 +42,7 @@ import {
   jobLabelSchema,
   MAX_INTERVIEW_ROUNDS,
   MAX_JOB_NOTES_CHARS,
+  MAX_JOB_TITLE_CHARS,
   PIPELINE_STATUSES,
   RESCORE_BATCH_SIZES,
   RESEARCH_TOPICS,
@@ -100,6 +102,20 @@ export async function reorderBoardColumnAction(status: string, jobIds: string[])
     await appDb(),
     z.enum(PIPELINE_STATUSES).parse(status),
     z.array(jobIdSchema).max(500).parse(jobIds),
+  );
+  refresh();
+}
+
+/** Renames a job (UI only; trimmed and checked in `setJobTitle`). */
+export async function setJobTitleAction(jobId: string, title: string): Promise<void> {
+  await setJobTitle(
+    await appDb(),
+    jobIdSchema.parse(jobId),
+    z
+      .string()
+      .min(1)
+      .max(MAX_JOB_TITLE_CHARS + 100)
+      .parse(title),
   );
   refresh();
 }

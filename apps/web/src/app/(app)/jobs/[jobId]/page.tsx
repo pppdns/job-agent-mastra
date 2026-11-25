@@ -38,6 +38,7 @@ import { ChipEvidence, JobChips } from "@/components/job-chips";
 import { JobLabelsField } from "@/components/job-labels-editor";
 import { JobNotes } from "@/components/job-notes";
 import { JobStatusMenu } from "@/components/job-status-menu";
+import { JobTitle } from "@/components/job-title";
 import { AssessButton } from "@/components/keep-buttons";
 import { ListingDocument } from "@/components/listing-document";
 import { MarkSeen } from "@/components/mark-seen";
@@ -118,7 +119,7 @@ async function JobDetail({ params }: Pick<PageProps<"/jobs/[jobId]">, "params">)
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
         <div className="flex items-start gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">{job.title ?? "Untitled job"}</h1>
+          <JobTitle jobId={job.id} title={job.title} />
           <span className="ml-auto flex shrink-0 items-center gap-2 pt-1">
             {job.archivedAt && <Badge variant="secondary">Archived</Badge>}
             <TopToggle jobId={job.id} top={job.topAt !== null} />
