@@ -1,7 +1,9 @@
 import type { JobOverview } from "@copilot/db";
 import { companyLine } from "@copilot/shared";
+import { cn } from "cn";
 import { NotebookTextIcon } from "lucide-react";
 import Link from "next/link";
+import type { CSSProperties, ReactNode } from "react";
 import { ProgressPill } from "@/components/age-pill";
 import { FitMeter } from "@/components/assessment-visuals";
 import { InterviewRounds } from "@/components/interview-rounds";
@@ -12,15 +14,39 @@ import type { ProgressAge } from "@/lib/job-age";
 
 /**
  * One job on the board; the title link covers the card, controls sit above it. Fit shows only
- * while shortlisted (it decides whether to apply); later the progress age matters.
+ * while shortlisted (it decides whether to apply); later the progress age matters. `sortable`
+ * comes from the column (`BoardColumnCards`): its drag handle sits top right.
  */
-export function PipelineCard({ job, age }: { job: JobOverview; age: ProgressAge | null }) {
+export function PipelineCard({
+  job,
+  age,
+  sortable,
+}: {
+  job: JobOverview;
+  age: ProgressAge | null;
+  sortable?: {
+    ref: (element: HTMLElement | null) => void;
+    style: CSSProperties;
+    dragging: boolean;
+    handle: ReactNode;
+  };
+}) {
   const title = job.title ?? "Untitled job";
   const meta = [companyLine(job.company, job.facts), job.location].filter(Boolean).join(" · ");
   const { summary } = job;
   return (
-    <li className="relative flex flex-col gap-2 rounded-lg border bg-card p-3 text-sm shadow-xs transition-colors hover:border-foreground/20">
-      <div className="min-w-0">
+    <li
+      ref={sortable?.ref}
+      style={sortable?.style}
+      className={cn(
+        "relative flex flex-col gap-2 rounded-lg border bg-card p-3 text-sm shadow-xs transition-colors hover:border-foreground/20",
+        sortable?.dragging && "z-20 border-foreground/20 shadow-lg",
+      )}
+    >
+      {sortable?.handle && (
+        <span className="absolute top-1.5 right-1.5 z-10">{sortable.handle}</span>
+      )}
+      <div className={cn("min-w-0", sortable?.handle && "pr-5")}>
         <Link
           href={`/jobs/${job.id}`}
           className="line-clamp-2 font-medium after:absolute after:inset-0 hover:underline"

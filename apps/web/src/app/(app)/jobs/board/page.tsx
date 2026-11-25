@@ -5,9 +5,9 @@ import { RadarIcon } from "lucide-react";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { BoardColumnCards } from "@/components/board-column-cards";
 import { PageHeader } from "@/components/page-header";
 import { type BoardColumn, PipelineBoard } from "@/components/pipeline-board";
-import { PipelineCard } from "@/components/pipeline-card";
 import { Button } from "@/components/ui/button";
 import { ViewToggle } from "@/components/view-toggle";
 import { progressAge } from "@/lib/job-age";
@@ -109,11 +109,7 @@ async function Board() {
             {cards.length === 0 ? (
               <p className="px-1 py-4 text-xs text-muted-foreground">{EMPTY_HINT[status]}</p>
             ) : (
-              <ul className="flex flex-col gap-2">
-                {cards.map(({ job, age }) => (
-                  <PipelineCard key={job.id} job={job} age={age} />
-                ))}
-              </ul>
+              <BoardColumnCards status={status} cards={cards} />
             )}
           </section>
         );

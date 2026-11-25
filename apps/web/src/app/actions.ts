@@ -18,6 +18,7 @@ import {
   listJobs,
   markJobSeen,
   rederiveEligibility,
+  reorderBoardColumn,
   rescreenPostings,
   resetStaleTriage,
   saveSearchSettings,
@@ -40,6 +41,7 @@ import {
   jobLabelSchema,
   MAX_INTERVIEW_ROUNDS,
   MAX_JOB_NOTES_CHARS,
+  PIPELINE_STATUSES,
   RESCORE_BATCH_SIZES,
   RESEARCH_TOPICS,
   RETRIAGE_MAX_JOBS,
@@ -89,6 +91,16 @@ export async function setJobArchivedAction(jobId: string, archived: boolean): Pr
 /** Marks or unmarks a job as one of the user's top choices (a label, not a status). */
 export async function setJobTopAction(jobId: string, top: boolean): Promise<void> {
   await setJobTop(await appDb(), jobIdSchema.parse(jobId), z.boolean().parse(top));
+  refresh();
+}
+
+/** The user's own order of one Board column, top to bottom (`reorderBoardColumn`). */
+export async function reorderBoardColumnAction(status: string, jobIds: string[]): Promise<void> {
+  await reorderBoardColumn(
+    await appDb(),
+    z.enum(PIPELINE_STATUSES).parse(status),
+    z.array(jobIdSchema).max(500).parse(jobIds),
+  );
   refresh();
 }
 
