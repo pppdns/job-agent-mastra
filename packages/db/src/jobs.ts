@@ -410,6 +410,8 @@ export function setJobStatus(db: Db, jobId: string, status: JobStatus): Promise<
         status,
         statusChangedAt: now,
         progressedAt: now,
+        // A job entering a column goes below the cards the user arranged there.
+        boardPosition: null,
         archivedAt: CLOSED_JOB_STATUSES.includes(status) ? (job.archivedAt ?? now) : null,
         // Interviews start at round 1; rounds are kept when leaving, so going back restores them.
         ...(status === "interviewing" && job.interviewRound === null && { interviewRound: 1 }),

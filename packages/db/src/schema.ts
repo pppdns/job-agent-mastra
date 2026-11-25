@@ -105,6 +105,8 @@ export const jobs = sqliteTable(
     topAt: integer("top_at", { mode: "timestamp_ms" }),
     /** The user's own labels, UI only (`normalizeJobLabels`; null = none). */
     labels: text("labels", { mode: "json" }).$type<JobLabel[]>(),
+    /** The user's order within its Board column (0 = top); null = not arranged, sorts after. */
+    boardPosition: integer("board_position"),
     /** When the user first opened a discovered job (null = unseen). */
     seenAt: integer("seen_at", { mode: "timestamp_ms" }),
     createdAt: createdAt(),

@@ -3,6 +3,7 @@ import {
   JOB_STATUSES,
   type JobStatus,
   PIPELINE_STATUSES,
+  type PipelineStatus,
 } from "@copilot/shared";
 import { and, count, desc, eq, gte, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 import { type JobOverview, latestAssessmentSql, overviewColumns, toOverview } from "./assessments";
@@ -208,8 +209,36 @@ export async function listPipelineJobs(db: Db): Promise<JobOverview[]> {
     .select(overviewColumns)
     .from(jobs)
     .where(and(isNull(jobs.archivedAt), inArray(jobs.status, [...PIPELINE_STATUSES])))
-    .orderBy(sql`coalesce(${jobs.progressedAt}, ${jobs.statusChangedAt}, ${jobs.createdAt})`);
+    .orderBy(
+      sql`${jobs.boardPosition} is null`,
+      jobs.boardPosition,
+      sql`coalesce(${jobs.progressedAt}, ${jobs.statusChangedAt}, ${jobs.createdAt})`,
+    );
   return rows.map((r) => toOverview(r, profileVersion));
+}
+
+/**
+ * The user's own order of one Board column: `jobIds` top to bottom. Only jobs still in that
+ * status and not archived are placed (a stale client may send others); the rest keep their
+ * place. Status, progress and `updatedAt` stay as they are.
+ */
+export function reorderBoardColumn(
+  db: Db,
+  status: PipelineStatus,
+  jobIds: readonly string[],
+): Promise<void> {
+  return serializeWrites(db, async () => {
+    if (jobIds.length === 0) return;
+    const inColumn = await db
+      .select({ id: jobs.id })
+      .from(jobs)
+      .where(and(inArray(jobs.id, [...jobIds]), eq(jobs.status, status), isNull(jobs.archivedAt)));
+    const placeable = new Set(inColumn.map((r) => r.id));
+    const ordered = [...new Set(jobIds)].filter((id) => placeable.has(id));
+    for (const [position, id] of ordered.entries()) {
+      await db.update(jobs).set({ boardPosition: position }).where(eq(jobs.id, id));
+    }
+  });
 }
 
 /** Sets the same pipeline status on many jobs (bulk actions), like `setJobStatus` each. */

@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getJobDetail, listJobs } from "./assessments";
 import { createDb, type Db, migrateDb } from "./index";
-import { listPipelineJobs } from "./job-list";
+import { listPipelineJobs, reorderBoardColumn } from "./job-list";
 import {
   addSource,
   backfillAtsKeys,
@@ -381,6 +381,33 @@ describe("pipeline progress", () => {
     const listed = await listPipelineJobs(db);
     expect(listed.map((j) => j.id)).toEqual([b.id, a.id]);
     expect(listed[0]).toMatchObject({ status: "shortlisted", hasNotes: false });
+  });
+
+  it("keeps the user's order in a column; jobs arriving later go below it", async () => {
+    const [a, b, c, d] = await Promise.all(
+      ["Alpha", "Beta", "Gamma", "Delta"].map(
+        async (company) => (await upsertJob(db, { company, title: "Engineer" })).job,
+      ),
+    );
+    if (!a || !b || !c || !d) throw new Error("jobs not created");
+    for (const job of [a, b, c]) await setJobStatus(db, job.id, "shortlisted");
+    await setJobStatus(db, d.id, "applied");
+    const shortlisted = async () =>
+      (await listPipelineJobs(db)).filter((j) => j.status === "shortlisted").map((j) => j.id);
+    const before = await shortlisted();
+    expect(before).toHaveLength(3);
+
+    // Other-status, unknown and duplicate ids are ignored.
+    await reorderBoardColumn(db, "shortlisted", [c.id, d.id, "missing", a.id, c.id, b.id]);
+    expect(await shortlisted()).toEqual([c.id, a.id, b.id]);
+    expect((await listPipelineJobs(db)).find((j) => j.id === d.id)?.status).toBe("applied");
+
+    // Arriving in an arranged column: at the bottom. Leaving and coming back resets the place.
+    await setJobStatus(db, d.id, "shortlisted");
+    expect(await shortlisted()).toEqual([c.id, a.id, b.id, d.id]);
+    await setJobStatus(db, c.id, "to_apply");
+    await setJobStatus(db, c.id, "shortlisted");
+    expect(await shortlisted()).toEqual([a.id, b.id, d.id, c.id]);
   });
 });
 
