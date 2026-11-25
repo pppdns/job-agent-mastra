@@ -249,6 +249,7 @@ Goal: see what's in progress and where to follow up. All of it is data the user 
 - [x] `/jobs/board` (List | Board toggle): Shortlisted, To apply, Applied, Interviewing, Offer columns, stalest first; status menu moves cards (no drag and drop); swipeable columns with jump chips on narrow screens (container query); round tracker with "Round N done", next round and total.
 - [x] Job page: progress strip with the round tracker, notes card (Edit → Save, ⌘/Ctrl+Enter, Esc asks before discarding, leave-page warning). List rows: round tracker and note marker.
 - [x] Verified: db and `job-age` unit tests, e2e `board.spec.ts`, browser check on desktop and 375 px.
+- [x] Follow-up (2026-11-25): reorder cards within a column by a drag handle (pointer or keyboard); stored as `board_position`, a job entering a column goes to the bottom. Verified: db unit test, e2e `board.spec.ts`, browser check on desktop (mouse and keyboard).
 
 ### M22 — Closed listings cleanup (agreed 2026-11-17)
 
