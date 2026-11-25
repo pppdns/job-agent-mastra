@@ -15,6 +15,7 @@ import {
   getSearchSettings,
   keepJob,
   keepPosting,
+  LISTING_SCOPES,
   listJobs,
   markJobSeen,
   rederiveEligibility,
@@ -352,6 +353,26 @@ async function startDiscoveryRun(body: object, started: string): Promise<Discove
   if (response.status === 409) return { ok: false, message: "A discovery run is already running." };
   if (!response.ok) return { ok: false, message: `Could not start the run (${response.status}).` };
   return { ok: true, message: started };
+}
+
+/** "Check now" in Check listings on /discovery: starts the check-listings workflow on the picked scopes. */
+export async function startListingCheckAction(
+  _prev: DiscoveryActionState,
+  formData: FormData,
+): Promise<DiscoveryActionState> {
+  const scopes = LISTING_SCOPES.filter((s) => formData.getAll("scope").includes(s));
+  if (scopes.length === 0) return { ok: false, message: "Pick at least one group of jobs." };
+  const response = await agentFetch("/listings/check", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ scopes }),
+  }).catch(() => null);
+  refresh();
+  if (!response) return { ok: false, message: "The agent server is not reachable." };
+  if (response.status === 409) return { ok: false, message: "A listing check is already running." };
+  if (!response.ok)
+    return { ok: false, message: `Could not start the check (${response.status}).` };
+  return { ok: true, message: "Started checking listings." };
 }
 
 /** "Stop run": cancels the running discovery run; it ends as interrupted. */
