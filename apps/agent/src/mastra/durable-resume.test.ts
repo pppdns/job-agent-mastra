@@ -66,15 +66,17 @@ describe("durable agent resume (spike)", () => {
     });
 
     const memory = { thread: "spike-thread", resource: LOCAL_USER_ID };
-    const started = Date.now();
     const { output, runId, cleanup } = await durable.stream("Tell me something", { memory });
 
     // First client reads a few UI chunks, then disconnects.
     const first = toAISdkStream(output, { from: "agent", version: "v7" }).getReader();
-    for (let i = 0; i < 4; i++) await first.read();
+    await first.read();
+    // Timed from the first chunk, not from `stream()`: agent startup varies (slow CI runners).
+    const streaming = Date.now();
+    for (let i = 0; i < 3; i++) await first.read();
     await first.cancel();
     // The reply takes ~600 ms, so the run is still mid-stream here.
-    expect(Date.now() - started).toBeLessThan(400);
+    expect(Date.now() - streaming).toBeLessThan(400);
 
     // A reconnecting client observes the same run from the start of the cache.
     const observed = await durable.observe(runId);
