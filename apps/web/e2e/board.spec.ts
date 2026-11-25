@@ -135,9 +135,16 @@ test("reorder cards within a column by their handle, and keep the order", async 
     .getByRole("button", {
       name: "Reorder Dock Scheduler",
     });
-  await handle.focus();
-  await page.keyboard.press("Space");
+  // The server-rendered cards show before hydration attaches the drag listeners, and each key
+  // needs the previous one handled: wait for dnd-kit's live announcement after every press.
+  const announced = (text: RegExp) => expect(page.getByText(text)).toBeAttached({ timeout: 1_000 });
+  await expect(async () => {
+    await handle.focus();
+    await page.keyboard.press("Space");
+    await announced(/is over position 2 of 2\.$/);
+  }).toPass();
   await page.keyboard.press("ArrowUp");
+  await announced(/is over position 1 of 2\.$/);
   await page.keyboard.press("Space");
   await expect.poll(order).toEqual([companies[1], companies[0]]);
 
