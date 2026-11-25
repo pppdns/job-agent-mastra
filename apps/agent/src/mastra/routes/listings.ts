@@ -1,14 +1,19 @@
 import { LISTING_SCOPES } from "@copilot/db";
 import { type ContextWithMastra, registerApiRoute } from "@mastra/core/server";
 import { z } from "zod";
+import {
+  cancelListingCheckReservation,
+  listingCheckBusy,
+  reserveListingCheck,
+} from "../../listings/lock";
 import { CHECK_LISTINGS_WORKFLOW_ID } from "../workflows/check-listings";
 
 // "Check listings" on /discovery: start the check-listings workflow by hand, and report the
-// running or last run. Runs live only in Mastra's workflow storage (no app table).
+// running or last run. Runs live only in Mastra's workflow storage (no app table); whether one is
+// running comes from the in-process lock (src/listings/lock.ts), so a run that died with a
+// restart (no auto-restart) shows as interrupted and never blocks.
 
 const WORKFLOW_KEY = "checkListingsWorkflow";
-/** A run still "running" after this long died with the process (no auto-restart): ignore it. */
-const STALE_MS = 2 * 60 * 60 * 1000;
 
 const bodySchema = z.object({ scopes: z.array(z.enum(LISTING_SCOPES)).min(1) });
 
@@ -24,31 +29,20 @@ export type ListingCheckRun = {
   error: string | null;
 };
 
-async function recentRuns(c: ContextWithMastra) {
-  const workflow = c.get("mastra").getWorkflow(WORKFLOW_KEY);
-  const { runs } = await workflow.listWorkflowRuns({ page: 0, perPage: 5 });
-  const sorted = [...runs].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
-  return { workflow, runs: sorted };
-}
-
-const snapshotStatus = (snapshot: unknown) => {
-  const parsed = typeof snapshot === "string" ? JSON.parse(snapshot) : snapshot;
-  return (parsed as { status?: string } | null)?.status ?? "unknown";
-};
-
-const isLive = (run: { snapshot: unknown; createdAt: Date }) =>
-  snapshotStatus(run.snapshot) === "running" && Date.now() - +new Date(run.createdAt) < STALE_MS;
+const workflowOf = (c: ContextWithMastra) => c.get("mastra").getWorkflow(WORKFLOW_KEY);
 
 /** GET /listings/check — the running run (if any) and the latest run with its result. */
 export const listingCheckStatusRoute = registerApiRoute("/listings/check", {
   method: "GET",
   handler: async (c) => {
-    const { workflow, runs } = await recentRuns(c);
+    const workflow = workflowOf(c);
+    const live = listingCheckBusy();
+    // Newest first (the libsql adapter orders by createdAt DESC).
+    const { runs } = await workflow.listWorkflowRuns({ page: 0, perPage: 1 });
     const latest = runs[0];
-    if (!latest) return c.json({ running: false, last: null });
+    if (!latest) return c.json({ running: live, last: null });
     const state = await workflow.getWorkflowRunById(latest.runId);
-    const status = state?.status ?? snapshotStatus(latest.snapshot);
-    const live = isLive(latest);
+    const status = state?.status ?? "unknown";
     const last: ListingCheckRun = {
       runId: latest.runId,
       status: status === "running" && !live ? "interrupted" : status,
@@ -70,13 +64,20 @@ export const listingCheckRunRoute = registerApiRoute("/listings/check", {
     if (!parsed.success) {
       return c.json({ error: `scopes: one or more of ${LISTING_SCOPES.join(", ")}` }, 400);
     }
-    const { workflow, runs } = await recentRuns(c);
-    if (runs.some(isLive)) return c.json({ error: "A listing check is running" }, 409);
-    const run = await workflow.createRun();
-    const { runId } = await run.startAsync({
-      inputData: { dryRun: false, scopes: parsed.data.scopes, trigger: "manual" },
-      tracingOptions: { rootSpanName: `check-listings (manual: ${parsed.data.scopes.join(", ")})` },
-    });
-    return c.json({ workflowRunId: runId, workflowId: CHECK_LISTINGS_WORKFLOW_ID }, 202);
+    // Reserved synchronously, before any await, so a second click gets 409.
+    if (!reserveListingCheck()) return c.json({ error: "A listing check is running" }, 409);
+    try {
+      const run = await workflowOf(c).createRun();
+      const { runId } = await run.startAsync({
+        inputData: { dryRun: false, scopes: parsed.data.scopes, trigger: "manual" },
+        tracingOptions: {
+          rootSpanName: `check-listings (manual: ${parsed.data.scopes.join(", ")})`,
+        },
+      });
+      return c.json({ workflowRunId: runId, workflowId: CHECK_LISTINGS_WORKFLOW_ID }, 202);
+    } catch (error) {
+      cancelListingCheckReservation();
+      throw error;
+    }
   },
 });

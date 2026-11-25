@@ -8,8 +8,6 @@ import { LISTING_SCOPE_LABELS } from "@/lib/listing-scopes";
 
 /** Requests are spaced 1.5 s apart on LinkedIn, 0.5 s elsewhere; most jobs have a LinkedIn link. */
 const SECONDS_PER_JOB = 2;
-/** The run's cap (jobsToCheckListings' default limit): least recently checked first. */
-const MAX_JOBS = 500;
 
 /**
  * "Check now": pick which jobs to re-check (counts per group, already archived or once-closed
@@ -18,11 +16,14 @@ const MAX_JOBS = 500;
 export function ListingCheckControls({
   counts,
   dailyScopes,
+  maxJobs,
   running,
   digestThreshold,
 }: {
   counts: Record<ListingScope, number>;
   dailyScopes: readonly ListingScope[];
+  /** One run's cap (LISTING_CHECK_LIMIT): the least recently checked first. */
+  maxJobs: number;
   running: boolean;
   digestThreshold: number;
 }) {
@@ -32,7 +33,7 @@ export function ListingCheckControls({
     null as DiscoveryActionState,
   );
   const total = [...picked].reduce((sum, s) => sum + counts[s], 0);
-  const jobs = Math.min(total, MAX_JOBS);
+  const jobs = Math.min(total, maxJobs);
   const minutes = Math.max(1, Math.round((jobs * SECONDS_PER_JOB) / 60));
   const scopes = Object.keys(LISTING_SCOPE_LABELS) as ListingScope[];
   return (
@@ -74,8 +75,8 @@ export function ListingCheckControls({
           {running ? "Checking…" : `Check now · ${jobs.toLocaleString("en-US")} jobs`}
         </Button>
         <span className="text-xs text-muted-foreground">
-          {total > MAX_JOBS
-            ? `${total.toLocaleString("en-US")} picked; one run checks the ${MAX_JOBS} least recently checked. `
+          {total > maxJobs
+            ? `${total.toLocaleString("en-US")} picked; one run checks the ${maxJobs} least recently checked. `
             : ""}
           {jobs > 0 && !running ? `About ${minutes} min. ` : ""}
           Free (plain page requests, no model).

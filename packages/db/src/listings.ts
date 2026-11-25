@@ -31,6 +31,9 @@ export const LISTING_SCOPES = ["shortlisted", "to_apply", "top_new", "other_new"
 export type ListingScope = (typeof LISTING_SCOPES)[number];
 export const DAILY_LISTING_SCOPES: readonly ListingScope[] = ["shortlisted", "to_apply", "top_new"];
 
+/** Most jobs one listing check looks at (least recently checked first). */
+export const LISTING_CHECK_LIMIT = 500;
+
 type ScopeSettings = Pick<SearchSettings, "triageThreshold" | "digestThreshold">;
 
 /** New jobs from a chat or scored at least the digest threshold (never below the triage one). */
@@ -83,7 +86,7 @@ export async function countListingScopes(
 export async function jobsToCheckListings(
   db: Db,
   settings: ScopeSettings,
-  limit = 500,
+  limit = LISTING_CHECK_LIMIT,
   scopes: readonly ListingScope[] = DAILY_LISTING_SCOPES,
 ): Promise<JobToCheck[]> {
   if (scopes.length === 0) return [];

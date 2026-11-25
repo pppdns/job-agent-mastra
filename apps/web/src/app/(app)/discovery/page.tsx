@@ -6,6 +6,7 @@ import {
   type DiscoveryRun,
   type FunnelResult,
   getSearchSettings,
+  LISTING_CHECK_LIMIT,
   type ListingScope,
   listDiscoveryRuns,
   type ModelSpend,
@@ -159,6 +160,7 @@ async function Discovery() {
         <ListingCheckControls
           counts={listingCounts}
           dailyScopes={DAILY_LISTING_SCOPES}
+          maxJobs={LISTING_CHECK_LIMIT}
           running={listingCheck?.running === true}
           digestThreshold={Math.max(settings.digestThreshold, settings.triageThreshold)}
         />
@@ -633,6 +635,7 @@ function SkippedLine({ results }: { results: SourceRunResult[] }) {
 }
 
 type ListingCheckResult = {
+  dryRun?: boolean;
   trigger?: "schedule" | "manual";
   scopes?: ListingScope[];
   jobs: number;
@@ -668,7 +671,7 @@ async function listingCheckStatus(): Promise<{
 } | null> {
   const response = await agentFetch("/listings/check", { cache: "no-store" }).catch(() => null);
   if (!response?.ok) return null;
-  return response.json();
+  return response.json().catch(() => null);
 }
 
 const LISTING_RUN_TONE: Record<string, { label: string; tone: Tone }> = {
@@ -705,7 +708,7 @@ function LastListingCheck({ run, running }: { run: ListingCheckRun; running: boo
           <p>
             {result.closed.length === 0
               ? `No closed listings among ${result.jobs.toLocaleString("en-US")} jobs.`
-              : `Dismissed ${result.closed.length} of ${result.jobs.toLocaleString("en-US")} jobs.`}
+              : `${result.dryRun ? "Dry run, nothing changed: would dismiss" : "Dismissed"} ${result.closed.length} of ${result.jobs.toLocaleString("en-US")} jobs.`}
           </p>
           <p className="text-xs text-muted-foreground tabular-nums">
             {[
@@ -714,7 +717,7 @@ function LastListingCheck({ run, running }: { run: ListingCheckRun; running: boo
               result.unknown > 0 && `${result.unknown} unclear`,
               result.unsupported > 0 && `${result.unsupported} links on sites it can't check`,
               result.rateLimited.length > 0 && `rate limited: ${result.rateLimited.join(", ")}`,
-              result.closed.length > 0 && `email ${result.email.status}`,
+              result.closed.length > 0 && !result.dryRun && `email ${result.email.status}`,
             ]
               .filter(Boolean)
               .join(" · ")}

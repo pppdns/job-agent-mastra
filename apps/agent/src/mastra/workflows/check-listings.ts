@@ -5,6 +5,7 @@ import { httpJson } from "../../discovery/sources/http";
 import { emailConfig } from "../../email";
 import { env } from "../../env";
 import { LISTING_SITES } from "../../listings/checkers";
+import { acquireListingCheck, releaseListingCheck } from "../../listings/lock";
 import { sendClosedEmail } from "../../listings/report";
 import { runListingCheck } from "../../listings/run";
 import { reportError } from "../../sentry";
@@ -64,6 +65,10 @@ const check = createStep({
   inputSchema,
   outputSchema,
   execute: async ({ inputData, abortSignal, mastra }) => {
+    // The schedule and "Check now" share one slot: a second run does nothing.
+    if (!acquireListingCheck()) {
+      throw new Error("Another listing check was running, so this one did nothing.");
+    }
     const db = await getAppDb();
     try {
       const result = await runListingCheck(db, {
@@ -91,6 +96,8 @@ const check = createStep({
     } catch (error) {
       if (!abortSignal?.aborted) reportError(error, { area: "listings" });
       throw error;
+    } finally {
+      releaseListingCheck();
     }
   },
 });
