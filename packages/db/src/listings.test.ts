@@ -7,7 +7,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { recordPosting, saveTriage } from "./discovery";
 import { createDb, type Db, migrateDb } from "./index";
 import { addSource, setJobStatus, upsertJob } from "./jobs";
-import { dismissClosedListing, jobsToCheckListings, markListingsChecked } from "./listings";
+import {
+  countListingScopes,
+  dismissClosedListing,
+  jobsToCheckListings,
+  markListingsChecked,
+} from "./listings";
 import { jobs } from "./schema";
 
 let db: Db;
@@ -74,6 +79,31 @@ describe("jobsToCheckListings", () => {
 
     expect(await ids()).toEqual([high, shortlistedLow, toApplyLow, chat.id].sort());
     expect(await ids()).not.toContain(low);
+  });
+
+  it("checks only the picked scopes and counts each scope", async () => {
+    const high = await discovered(1, 80);
+    const low = await discovered(2, 65);
+    const below = await discovered(3, 40); // hidden: under the triage threshold
+    const shortlisted = await discovered(4, 50);
+    await setJobStatus(db, shortlisted, "shortlisted");
+    const closed = await discovered(5, 70);
+    await dismissClosedListing(db, closed, { url: "u", site: "linkedin", signal: "s" }, now);
+    await setJobStatus(db, closed, "new"); // restored by the user: never checked again
+
+    const picked = async (scopes: Parameters<typeof jobsToCheckListings>[3]) =>
+      (await jobsToCheckListings(db, settings, 500, scopes)).map((j) => j.id).sort();
+    expect(await picked(["other_new"])).toEqual([low]);
+    expect(await picked(["top_new", "other_new"])).toEqual([high, low].sort());
+    expect(await picked(["shortlisted"])).toEqual([shortlisted]);
+    expect(await picked([])).toEqual([]);
+    expect(await picked(["top_new", "other_new"])).not.toContain(below);
+    expect(await countListingScopes(db, settings)).toEqual({
+      shortlisted: 1,
+      to_apply: 0,
+      top_new: 1,
+      other_new: 1,
+    });
   });
 
   it("lists every listing link of a job, deduplicated", async () => {

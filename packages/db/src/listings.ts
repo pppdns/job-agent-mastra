@@ -21,15 +21,72 @@ export type JobToCheck = {
 };
 
 /**
- * Jobs worth checking, least recently checked first: shortlisted and to-apply jobs, and new jobs the user
- * would see that came from a chat or scored at least the digest threshold. Archived jobs and
- * jobs the listing check already dismissed once (the user may have restored them) are skipped.
+ * The groups of jobs a listing check can cover; disjoint, so their counts add up. The daily run
+ * checks `DAILY_LISTING_SCOPES`; /discovery lets the user pick any.
+ * - `shortlisted`, `to_apply`: jobs in that status
+ * - `top_new`: new jobs the user would see that came from a chat or scored at least the digest threshold
+ * - `other_new`: the other new jobs the user would see
+ */
+export const LISTING_SCOPES = ["shortlisted", "to_apply", "top_new", "other_new"] as const;
+export type ListingScope = (typeof LISTING_SCOPES)[number];
+export const DAILY_LISTING_SCOPES: readonly ListingScope[] = ["shortlisted", "to_apply", "top_new"];
+
+type ScopeSettings = Pick<SearchSettings, "triageThreshold" | "digestThreshold">;
+
+/** New jobs from a chat or scored at least the digest threshold (never below the triage one). */
+const topNew = (settings: ScopeSettings) =>
+  or(
+    eq(jobs.origin, "chat"),
+    sql`coalesce(${jobs.triageScore}, -1) >= ${Math.max(settings.digestThreshold, settings.triageThreshold)}`,
+  );
+
+function scopeCondition(scope: ListingScope, settings: ScopeSettings) {
+  switch (scope) {
+    case "shortlisted":
+    case "to_apply":
+      return eq(jobs.status, scope);
+    case "top_new":
+      return and(eq(jobs.status, "new"), visibleJobs(settings.triageThreshold), topNew(settings));
+    case "other_new":
+      return and(
+        eq(jobs.status, "new"),
+        visibleJobs(settings.triageThreshold),
+        sql`NOT ${topNew(settings)}`,
+      );
+  }
+}
+
+/** Never checked: archived jobs and jobs the listing check already dismissed once (the user may have restored them). */
+const checkable = and(isNull(jobs.archivedAt), isNull(jobs.listingClosedAt));
+
+/** How many jobs each scope covers right now (before the run's limit). */
+export async function countListingScopes(
+  db: Db,
+  settings: ScopeSettings,
+): Promise<Record<ListingScope, number>> {
+  const counts = await Promise.all(
+    LISTING_SCOPES.map(async (scope) => {
+      const [row] = await db
+        .select({ n: sql<number>`count(*)` })
+        .from(jobs)
+        .where(and(checkable, scopeCondition(scope, settings)));
+      return [scope, Number(row?.n ?? 0)] as const;
+    }),
+  );
+  return Object.fromEntries(counts) as Record<ListingScope, number>;
+}
+
+/**
+ * Jobs worth checking in the given scopes, least recently checked first. Archived jobs and jobs
+ * the listing check already dismissed once are skipped.
  */
 export async function jobsToCheckListings(
   db: Db,
-  settings: Pick<SearchSettings, "triageThreshold" | "digestThreshold">,
+  settings: ScopeSettings,
   limit = 500,
+  scopes: readonly ListingScope[] = DAILY_LISTING_SCOPES,
 ): Promise<JobToCheck[]> {
+  if (scopes.length === 0) return [];
   const rows = await db
     .select({
       id: jobs.id,
@@ -40,23 +97,7 @@ export async function jobsToCheckListings(
       linkedinJobId: jobs.linkedinJobId,
     })
     .from(jobs)
-    .where(
-      and(
-        isNull(jobs.archivedAt),
-        isNull(jobs.listingClosedAt),
-        or(
-          inArray(jobs.status, ["shortlisted", "to_apply"]),
-          and(
-            eq(jobs.status, "new"),
-            visibleJobs(settings.triageThreshold),
-            or(
-              eq(jobs.origin, "chat"),
-              sql`${jobs.triageScore} >= ${Math.max(settings.digestThreshold, settings.triageThreshold)}`,
-            ),
-          ),
-        ),
-      ),
-    )
+    .where(and(checkable, or(...scopes.map((scope) => scopeCondition(scope, settings)))))
     .orderBy(sql`${jobs.listingCheckedAt} IS NOT NULL`, asc(jobs.listingCheckedAt), asc(jobs.id))
     .limit(limit);
   if (rows.length === 0) return [];

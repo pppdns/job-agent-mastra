@@ -11,6 +11,7 @@ import { copilotAgent } from "./agents/copilot";
 import { researcherAgent } from "./agents/researcher";
 import { chatResumeRoute, chatRoute, chatStopRoute } from "./routes/chat";
 import { assessJobRoute, discoveryRunRoute, discoveryStopRoute } from "./routes/discovery";
+import { listingCheckRunRoute, listingCheckStatusRoute } from "./routes/listings";
 import { threadMessagesRoute } from "./routes/thread-messages";
 import { createStorage } from "./storage";
 import { CHECK_LISTINGS_SCHEDULE_ID, checkListingsWorkflow } from "./workflows/check-listings";
@@ -91,6 +92,8 @@ export const mastra = new Mastra({
       discoveryRunRoute,
       discoveryStopRoute,
       assessJobRoute,
+      listingCheckStatusRoute,
+      listingCheckRunRoute,
     ],
   },
 });

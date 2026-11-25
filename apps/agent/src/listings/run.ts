@@ -4,6 +4,7 @@ import {
   getSearchSettings,
   type JobToCheck,
   jobsToCheckListings,
+  type ListingScope,
   markListingsChecked,
 } from "@copilot/db";
 import {
@@ -56,6 +57,8 @@ export type ListingCheckOptions = {
   /** Report only: dismiss nothing and don't record the check. */
   dryRun?: boolean;
   limit?: number;
+  /** Which jobs to check (default: the daily scopes). */
+  scopes?: readonly ListingScope[];
   now?: () => Date;
 };
 
@@ -69,7 +72,7 @@ export async function runListingCheck(
   const { fetchProbe = probeFetch, wait = sleep, signal, dryRun = false } = options;
   const now = options.now ?? (() => new Date());
   const settings = await getSearchSettings(db);
-  const jobs = await jobsToCheckListings(db, settings, options.limit);
+  const jobs = await jobsToCheckListings(db, settings, options.limit, options.scopes);
 
   const result: ListingCheckResult = {
     jobs: jobs.length,
