@@ -5,6 +5,16 @@ import { expect, type Page, test } from "@playwright/test";
 
 const visible = (page: Page, selector: string) => page.locator(selector).filter({ visible: true });
 
+test("the sidebar's Jobs item opens the board", async ({ page }) => {
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
+  await page.getByRole("link", { name: "Jobs", exact: true }).filter({ visible: true }).click();
+  await expect(page).toHaveURL(/\/jobs\/board$/);
+  await expect(
+    page.getByRole("navigation", { name: "Jobs view" }).getByRole("link", { name: "Board" }),
+  ).toHaveAttribute("aria-current", "page");
+});
+
 test("track interview rounds on the board and keep a note on the job", async ({ page }) => {
   test.setTimeout(60_000);
   await page.goto("/");
@@ -125,9 +135,16 @@ test("reorder cards within a column by their handle, and keep the order", async 
     .getByRole("button", {
       name: "Reorder Dock Scheduler",
     });
-  await handle.focus();
-  await page.keyboard.press("Space");
+  // The server-rendered cards show before hydration attaches the drag listeners, and each key
+  // needs the previous one handled: wait for dnd-kit's live announcement after every press.
+  const announced = (text: RegExp) => expect(page.getByText(text)).toBeAttached({ timeout: 1_000 });
+  await expect(async () => {
+    await handle.focus();
+    await page.keyboard.press("Space");
+    await announced(/is over position 2 of 2\.$/);
+  }).toPass();
   await page.keyboard.press("ArrowUp");
+  await announced(/is over position 1 of 2\.$/);
   await page.keyboard.press("Space");
   await expect.poll(order).toEqual([companies[1], companies[0]]);
 
