@@ -9,6 +9,7 @@ Synthetic pages shaped like real provider output (Tavily markdown of LinkedIn gu
 | `linkedin-login.md` | Sign-in page (localized) instead of a job |
 | `linkedin-truncated.md` | Job card present but description cut short, no criteria block |
 | `ats-complete.md` | Employer ATS posting for the same role as `linkedin-complete.md` |
+| `board-related-only.md` | Job-board page read as only its "Related Jobs" sidebar (long country lists, no listing), as Tavily returns WeWorkRemotely |
 | `ats-other-company.md` | Same title at a different company with a similar name |
 | `remote-ambiguous.md` | "Remote-first" in European time zones without saying where hiring is possible; pay only "competitive" (evals) |
 | `remote-platform-match.md` | Fully remote (EU) platform/Kubernetes role with stated pay: a clear match for the seeded eval profile (triage eval) |

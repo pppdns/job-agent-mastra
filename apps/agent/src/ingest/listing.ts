@@ -123,9 +123,16 @@ export function parseLinkedInPage(markdown: string): ParsedPage {
   return { title, company, location, description: bound(description), criteria, completeness };
 }
 
+// Job-board sidebars ("Related Jobs" on WeWorkRemotely) list other postings, often with long
+// country lists. Everything from such a heading on is dropped, so a read that returned only
+// the sidebar counts as no listing and the next extractor gets a turn.
+const OTHER_JOBS_HEADING = /^#{1,6} +(related|similar|more|other) +(remote +)?jobs\b/im;
+
 /** Parses a non-LinkedIn page (company or ATS posting). Title and company come from the caller's expectations. */
 export function parseGenericPage(markdown: string): ParsedPage {
-  const text = cleanMarkdown(markdown);
+  const cleaned = cleanMarkdown(markdown);
+  const otherJobs = cleaned.search(OTHER_JOBS_HEADING);
+  const text = otherJobs >= 0 ? cleaned.slice(0, otherJobs).trim() : cleaned;
   const title = text.match(/^# (.+)$/m)?.[1]?.trim();
   const words = wordCount(text);
   const completeness: Completeness =

@@ -235,6 +235,21 @@ describe("ingestUrl: guard and other pages", () => {
     });
   });
 
+  it("uses Firecrawl when Tavily returns only a job board's related-jobs sidebar", async () => {
+    const url = "https://weworkremotely.com/remote-jobs/northwind-senior-platform-engineer";
+    const { web, calls } = fakeWeb({ [url]: page("board-related-only.md") }, [], {
+      [url]: {
+        ok: true,
+        text: `${fixture("ats-complete.md")}\n\n${fixture("board-related-only.md")}`,
+      },
+    });
+    const result = await ingestUrl(url, {}, deps(web));
+    expect(result).toMatchObject({ status: "saved", source: { provider: "firecrawl", url } });
+    expect(calls.scrape).toEqual([url]);
+    if (result.status !== "saved") throw new Error("not saved");
+    expect(result.listing.description).not.toContain("Related Jobs");
+  });
+
   it("recognizes a saved page under different tracking parameters", async () => {
     const url = "https://careers.example.com/platform-engineer";
     const { web, calls } = fakeWeb({ [url]: page("ats-complete.md") });
