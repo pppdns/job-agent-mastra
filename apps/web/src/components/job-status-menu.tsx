@@ -12,6 +12,7 @@ import {
   TagIcon,
 } from "lucide-react";
 import { useOptimistic, useRef, useState, useTransition } from "react";
+import { setJobArchivedAction, setJobStatusAction, setJobTopAction } from "@/app/actions";
 import { JobLabelsEditor } from "@/components/job-labels-editor";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,7 +25,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
-import { setJobArchivedAction, setJobStatusAction, setJobTopAction } from "@/lib/actions-client";
 
 /**
  * Whose move it is, in one hue so it never competes with fit's colors: tinted = the user's move

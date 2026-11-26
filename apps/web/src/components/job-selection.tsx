@@ -1,8 +1,8 @@
 "use client";
 
 import { createContext, useContext, useState, useTransition } from "react";
+import { setJobsStatusAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
-import { setJobsStatusAction } from "@/lib/actions-client";
 
 // Bulk selection on /jobs: checkboxes in rows and the header, and a bar to shortlist or dismiss
 // the selected jobs at once. Selection lives in the browser only and clears after an action.

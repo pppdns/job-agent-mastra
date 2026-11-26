@@ -3,9 +3,9 @@
 import { MAX_JOB_TITLE_CHARS } from "@copilot/shared";
 import { PencilIcon } from "lucide-react";
 import { type FormEvent, useOptimistic, useRef, useState, useTransition } from "react";
+import { setJobTitleAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { setJobTitleAction } from "@/lib/actions-client";
 
 /**
  * The job's title as the page heading, renamed in place: the pencil (or a double-click) edits it,

@@ -15,10 +15,11 @@ import {
 } from "@copilot/shared";
 import { PlusIcon, XIcon } from "lucide-react";
 import { type FormEvent, type ReactNode, useState, useTransition } from "react";
+import { editPreferencesAction } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { editPreferencesAction } from "@/lib/actions-client";
+import { saveFailed } from "@/lib/app-update";
 import { cn } from "@/lib/utils";
 
 /** The color a level gets everywhere (chips use the same mapping). */
@@ -186,9 +187,13 @@ export function PreferencesEditor({
         },
         languages: draft.languages.filter((l) => l.name.trim()),
       };
-      const result = await editPreferencesAction(cleaned, version);
-      if (result.error) setError(result.error);
-      else setMessage(result.message ?? "Saved.");
+      try {
+        const result = await editPreferencesAction(cleaned, version);
+        if (result.error) setError(result.error);
+        else setMessage(result.message ?? "Saved.");
+      } catch (thrown) {
+        setError(saveFailed(thrown));
+      }
     });
   };
 

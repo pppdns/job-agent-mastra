@@ -2,8 +2,8 @@
 
 import type { ResearchTopic } from "@copilot/shared";
 import { useState, useTransition } from "react";
+import { startResearchAction } from "@/app/actions";
 import { ResearchSuggestions } from "@/components/research-suggestions";
-import { startResearchAction } from "@/lib/actions-client";
 
 /** Job page: starts research on the picked topics in a new chat and opens it there. */
 export function ResearchJobButtons({ jobId, topics }: { jobId: string; topics: ResearchTopic[] }) {

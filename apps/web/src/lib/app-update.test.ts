@@ -1,14 +1,21 @@
+import * as Sentry from "@sentry/nextjs";
 import { UnrecognizedActionError } from "next/dist/client/components/unrecognized-action-error";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getAppUpdateState,
-  guardAction,
   isVersionSkewError,
   markAppStale,
   resetAppUpdateState,
+  SAVE_FAILED_MESSAGE,
+  saveFailed,
 } from "./app-update";
 
-afterEach(resetAppUpdateState);
+vi.mock("@sentry/nextjs", () => ({ captureException: vi.fn() }));
+
+afterEach(() => {
+  resetAppUpdateState();
+  vi.clearAllMocks();
+});
 
 describe("isVersionSkewError", () => {
   it("recognizes a server action the server no longer knows", () => {
@@ -34,40 +41,24 @@ describe("isVersionSkewError", () => {
   });
 });
 
-describe("guardAction", () => {
-  it("passes results through", async () => {
-    await expect(guardAction(async (a: number) => a + 1)(1)).resolves.toBe(2);
-    expect(getAppUpdateState()).toBe("current");
-  });
-
-  it("rethrows other errors", async () => {
-    const action = guardAction(async () => {
-      throw new Error("boom");
-    });
-    await expect(action()).rejects.toThrow("boom");
-    expect(getAppUpdateState()).toBe("current");
-  });
-
-  it("marks the app outdated and never settles on version skew", async () => {
-    const action = guardAction(async () => {
-      throw new UnrecognizedActionError("Server Action not found");
-    });
-    const outcome = await Promise.race([
-      action().then(
-        () => "resolved",
-        () => "rejected",
-      ),
-      new Promise((done) => setTimeout(() => done("pending"), 20)),
-    ]);
-    expect(outcome).toBe("pending");
+describe("saveFailed", () => {
+  it("raises the banner on version skew without reporting it", () => {
+    expect(saveFailed(new UnrecognizedActionError("Server Action not found"))).toBe(
+      SAVE_FAILED_MESSAGE,
+    );
     expect(getAppUpdateState()).toBe("failed");
+    expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 
-  it("keeps a failure over a later stale check", async () => {
-    void guardAction(async () => {
-      throw new UnrecognizedActionError("x");
-    })();
-    await new Promise((done) => setTimeout(done, 0));
+  it("reports other failures and leaves the banner alone", () => {
+    const error = new Error("An unexpected response was received from the server.");
+    expect(saveFailed(error)).toBe(SAVE_FAILED_MESSAGE);
+    expect(getAppUpdateState()).toBe("current");
+    expect(Sentry.captureException).toHaveBeenCalledWith(error);
+  });
+
+  it("keeps a failure over a later stale check", () => {
+    saveFailed(new UnrecognizedActionError("x"));
     markAppStale();
     expect(getAppUpdateState()).toBe("failed");
   });

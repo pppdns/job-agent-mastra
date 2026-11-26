@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { unstable_isUnrecognizedActionError } from "next/navigation";
 import { useSyncExternalStore } from "react";
 
@@ -53,22 +54,17 @@ export function useAppUpdateState(): AppUpdateState {
   return useSyncExternalStore(subscribe, getAppUpdateState, () => "current");
 }
 
+export const SAVE_FAILED_MESSAGE =
+  "Couldn't save. If the app was just updated, copy your text and reload.";
+
 /**
- * Wraps a server action for client code. When the call fails because of version skew, it marks
- * the app outdated (the banner appears) and returns a promise that never settles: the caller's
- * code after `await` never runs, so an editor stays open with its text, nothing claims "saved",
- * and the error never reaches an error boundary. Other errors are rethrown unchanged.
+ * For editors that hold typed text: a save that threw (an action unknown after a deploy, the
+ * server restarting, offline) must not reach an error boundary, which would drop the text. The
+ * editor catches it, shows this message and stays open. Version skew also raises the banner;
+ * anything else goes to Sentry.
  */
-export function guardAction<Args extends unknown[], Result>(
-  action: (...args: Args) => Promise<Result>,
-): (...args: Args) => Promise<Result> {
-  return async (...args) => {
-    try {
-      return await action(...args);
-    } catch (error) {
-      if (!isVersionSkewError(error)) throw error;
-      markAppOutdated();
-      return new Promise<Result>(() => {});
-    }
-  };
+export function saveFailed(error: unknown): string {
+  if (isVersionSkewError(error)) markAppOutdated();
+  else Sentry.captureException(error);
+  return SAVE_FAILED_MESSAGE;
 }

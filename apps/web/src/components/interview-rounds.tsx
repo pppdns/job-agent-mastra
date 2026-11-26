@@ -4,6 +4,7 @@ import { MAX_INTERVIEW_ROUNDS } from "@copilot/shared";
 import { cn } from "cn";
 import { ChevronDownIcon, StepForwardIcon } from "lucide-react";
 import { useOptimistic, useTransition } from "react";
+import { setInterviewRoundsAction } from "@/app/actions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,7 +18,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { setInterviewRoundsAction } from "@/lib/actions-client";
 
 type Rounds = { round: number; total: number | null };
 

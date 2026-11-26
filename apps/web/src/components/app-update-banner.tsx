@@ -29,8 +29,8 @@ async function checkVersion() {
 
 /**
  * Shown when this page is from an older deploy than the server's: before anything failed
- * ("stale", from the version check on focus/return and every 5 min) or after an action or a
- * lazy chunk failed because of it ("failed", from `guardAction` or the global listeners). The
+ * ("stale", from the version check on return to the tab and every 5 min) or after a save or a
+ * lazy chunk failed because of it ("failed", from `saveFailed` or the global listeners). The
  * page stays as it is, so the user can copy unsaved text before reloading.
  */
 export function AppUpdateBanner() {
@@ -46,13 +46,11 @@ export function AppUpdateBanner() {
     const onVisible = () => void checkVersion();
     window.addEventListener("error", onError);
     window.addEventListener("unhandledrejection", onRejection);
-    window.addEventListener("focus", onVisible);
     document.addEventListener("visibilitychange", onVisible);
     const timer = window.setInterval(onVisible, CHECK_EVERY_MS);
     return () => {
       window.removeEventListener("error", onError);
       window.removeEventListener("unhandledrejection", onRejection);
-      window.removeEventListener("focus", onVisible);
       document.removeEventListener("visibilitychange", onVisible);
       window.clearInterval(timer);
     };

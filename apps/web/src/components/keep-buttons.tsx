@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Button } from "@/components/ui/button";
 import {
   assessJobAction,
   type DiscoveryActionState,
   keepJobAction,
   keepPostingAction,
   retriageNowAction,
-} from "@/lib/actions-client";
+} from "@/app/actions";
+import { Button } from "@/components/ui/button";
 
 /** "Keep anyway" on a hidden job or a dropped posting: it shows in the list from now on. */
 export function KeepButton({ kind, id }: { kind: "job" | "posting"; id: string }) {

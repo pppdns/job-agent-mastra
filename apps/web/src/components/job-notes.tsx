@@ -3,6 +3,7 @@
 import { MAX_JOB_NOTES_CHARS } from "@copilot/shared";
 import { NotebookTextIcon, PencilIcon, PlusIcon } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { setJobNotesAction } from "@/app/actions";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,7 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { setJobNotesAction } from "@/lib/actions-client";
+import { saveFailed } from "@/lib/app-update";
 
 /**
  * The user's free-text note on a job. Read-only until "Edit"; Save (or ⌘/Ctrl+Enter) writes it,
@@ -39,6 +40,7 @@ export function JobNotes({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [conflict, setConflict] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [pending, startTransition] = useTransition();
   const field = useRef<HTMLTextAreaElement>(null);
@@ -68,6 +70,7 @@ export function JobNotes({
     setEditing(false);
     setConfirmDiscard(false);
     setConflict(false);
+    setSaveError(null);
   };
 
   const cancel = () => (dirty ? setConfirmDiscard(true) : stopEditing());
@@ -75,10 +78,15 @@ export function JobNotes({
   const save = () => {
     if (pending || tooLong) return;
     if (!dirty) return stopEditing();
+    setSaveError(null);
     startTransition(async () => {
-      const result = await setJobNotesAction(jobId, draft, updatedAtMs);
-      if (result.status === "conflict") setConflict(true);
-      else stopEditing();
+      try {
+        const result = await setJobNotesAction(jobId, draft, updatedAtMs);
+        if (result.status === "conflict") setConflict(true);
+        else stopEditing();
+      } catch (error) {
+        setSaveError(saveFailed(error));
+      }
     });
   };
 
@@ -136,14 +144,17 @@ export function JobNotes({
               placeholder="Interview rounds, people, impressions, next steps…"
               aria-invalid={tooLong || undefined}
               className="max-h-[60vh] min-h-40"
-              // Not `disabled`: a save blocked by a new deploy stays pending, and the text must
-              // stay selectable so it can be copied before reloading.
-              readOnly={pending}
+              disabled={pending}
             />
             {conflict && (
               <p role="alert" className="text-sm text-destructive">
                 This note was changed elsewhere since you opened the page. Copy your text, then
                 reload to see the latest version.
+              </p>
+            )}
+            {saveError && (
+              <p role="alert" className="text-sm text-destructive">
+                {saveError}
               </p>
             )}
             {tooLong && (

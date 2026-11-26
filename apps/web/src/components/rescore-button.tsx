@@ -3,6 +3,7 @@
 import { RESCORE_BATCH_SIZES, type RescoreLimit } from "@copilot/shared";
 import { RefreshCwIcon } from "lucide-react";
 import { useState, useTransition } from "react";
+import { startRescoreAction } from "@/app/actions";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,7 +16,6 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { startRescoreAction } from "@/lib/actions-client";
 
 /** Jobs a batch of `limit` covers out of `count`. */
 const covered = (limit: RescoreLimit, count: number) =>

@@ -23,8 +23,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { GripVerticalIcon } from "lucide-react";
 import { useOptimistic, useState, useTransition } from "react";
+import { reorderBoardColumnAction } from "@/app/actions";
 import { PipelineCard } from "@/components/pipeline-card";
-import { reorderBoardColumnAction } from "@/lib/actions-client";
 import type { ProgressAge } from "@/lib/job-age";
 
 export type BoardCard = { job: JobOverview; age: ProgressAge | null };

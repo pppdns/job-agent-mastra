@@ -1,10 +1,15 @@
 import { expect, type Page, test } from "@playwright/test";
 
 // A page from an older deploy: its server actions are gone (the server answers like Next does
-// for an unknown action id), or the server reports a newer deployment. The page must not crash;
-// it keeps what was typed and shows the update banner.
+// for an unknown action id), the server is restarting, or it reports a newer deployment. The
+// page must not crash; an editor keeps what was typed, and a deploy shows the update banner.
 
 const visible = (page: Page, selector: string) => page.locator(selector).filter({ visible: true });
+
+const banner = (page: Page) =>
+  page.getByRole("alert").filter({ hasText: "new version", visible: true });
+const notesAlert = (page: Page) =>
+  page.getByRole("region", { name: "Notes" }).filter({ visible: true }).getByRole("alert");
 
 async function openNewJob(page: Page, company: string) {
   await page.goto("/");
@@ -19,6 +24,7 @@ async function openNewJob(page: Page, company: string) {
   await page
     .getByRole("table", { name: "Jobs" })
     .getByRole("link", { name: /Yard Planner/ })
+    .filter({ visible: true })
     .first()
     .click();
   await expect(page).toHaveURL(/\/jobs\/[0-9a-f-]{36}$/);
@@ -39,12 +45,32 @@ test("a save after a deploy keeps the note and shows the update banner", async (
   );
   await page.getByRole("button", { name: "Save" }).filter({ visible: true }).click();
 
-  await expect(page.getByRole("alert").filter({ hasText: "new version" })).toContainText(
-    "Your last change wasn't saved",
-  );
+  await expect(banner(page)).toContainText("Your last change wasn't saved");
+  await expect(notesAlert(page)).toContainText("Couldn't save");
   await expect(note).toHaveValue("Recruiter call on Monday.");
   await expect(note).toBeEnabled();
   await expect(page.getByText("Application error")).toHaveCount(0);
+});
+
+test("a save while the server restarts keeps the note, without the banner", async ({ page }) => {
+  test.setTimeout(60_000);
+  await openNewJob(page, "Pebblebrook Freight");
+  await page.getByRole("button", { name: "Add a note" }).filter({ visible: true }).click();
+  const note = page.getByRole("textbox", { name: "Note" }).filter({ visible: true });
+  await note.fill("Hiring manager: Ana.");
+
+  // Fly's proxy answers with an error page while the machine restarts.
+  await page.route("**/*", (route) =>
+    route.request().method() === "POST" && route.request().headers()["next-action"]
+      ? route.fulfill({ status: 502, contentType: "text/html", body: "<h1>502</h1>" })
+      : route.fallback(),
+  );
+  await page.getByRole("button", { name: "Save" }).filter({ visible: true }).click();
+
+  await expect(notesAlert(page)).toContainText("Couldn't save");
+  await expect(note).toHaveValue("Hiring manager: Ana.");
+  await expect(note).toBeEnabled();
+  await expect(banner(page)).toHaveCount(0);
 });
 
 test("returning to a page from an older deploy shows the update banner", async ({ page }) => {
@@ -56,7 +82,5 @@ test("returning to a page from an older deploy shows the update banner", async (
     document.documentElement.dataset.dplId = "older-deploy";
     document.dispatchEvent(new Event("visibilitychange"));
   });
-  await expect(page.getByRole("alert").filter({ hasText: "new version" })).toContainText(
-    "is available",
-  );
+  await expect(banner(page)).toContainText("is available");
 });
