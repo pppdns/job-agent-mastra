@@ -10,11 +10,11 @@ import {
 import { cn } from "cn";
 import { PlusIcon, StarIcon, XIcon } from "lucide-react";
 import { useId, useOptimistic, useState, useTransition } from "react";
-import { setJobLabelsAction } from "@/app/actions";
 import { JobLabels } from "@/components/job-labels";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { setJobLabelsAction } from "@/lib/actions-client";
 
 /**
  * A job's labels with optimistic saving: each change is saved at once, and a second change before

@@ -3,6 +3,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  // The commit SHA in the Fly image (unset locally). An open page from an older deploy then
+  // hard-reloads on navigation instead of breaking, and AppUpdateBanner compares it with
+  // /api/version. See docs/deploy.md.
+  deploymentId: process.env.SENTRY_RELEASE || undefined,
   cacheComponents: true,
   partialPrefetching: true,
   agentRules: false,

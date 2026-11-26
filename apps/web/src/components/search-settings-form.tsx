@@ -3,10 +3,10 @@
 import { DISCOVERY_SOURCE_LABELS, DISCOVERY_SOURCES, type SearchSettings } from "@copilot/shared";
 import Link from "next/link";
 import { useActionState } from "react";
-import { type DiscoveryActionState, saveSearchSettingsAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { type DiscoveryActionState, saveSearchSettingsAction } from "@/lib/actions-client";
 
 function Field({
   label,

@@ -15,10 +15,10 @@ import {
 } from "@copilot/shared";
 import { PlusIcon, XIcon } from "lucide-react";
 import { type FormEvent, type ReactNode, useState, useTransition } from "react";
-import { editPreferencesAction } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { editPreferencesAction } from "@/lib/actions-client";
 import { cn } from "@/lib/utils";
 
 /** The color a level gets everywhere (chips use the same mapping). */

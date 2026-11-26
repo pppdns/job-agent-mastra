@@ -1,19 +1,17 @@
 "use client";
 
-import * as Sentry from "@sentry/nextjs";
-import NextError from "next/error";
-import { useEffect } from "react";
+import { ErrorFallback } from "@/components/error-fallback";
+import "./globals.css";
 
-/** Last-resort boundary: React render errors never reach Sentry's global handlers on their own. */
-export default function GlobalError({ error }: { error: Error & { digest?: string } }) {
-  useEffect(() => {
-    Sentry.captureException(error);
-  }, [error]);
-
+/**
+ * Last-resort boundary (an error in a root layout). React render errors never reach Sentry's
+ * global handlers on their own; ErrorFallback reports them.
+ */
+export default function GlobalError({ error }: { error: unknown }) {
   return (
     <html lang="en">
       <body>
-        <NextError statusCode={0} />
+        <ErrorFallback error={error} />
       </body>
     </html>
   );

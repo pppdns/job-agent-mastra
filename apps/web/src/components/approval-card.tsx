@@ -4,7 +4,6 @@ import type { ApprovalView, DecisionError, ProfileChangePayload } from "@copilot
 import { PROFILE_FACT_LABELS, renderPreferences } from "@copilot/shared";
 import { CheckIcon } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
-import { decideApprovalAction } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +14,7 @@ import {
   ItemFooter,
   ItemTitle,
 } from "@/components/ui/item";
+import { decideApprovalAction } from "@/lib/actions-client";
 
 const ERRORS: Record<DecisionError | "invalid", string> = {
   not_found: "This proposal no longer exists.",

@@ -11,7 +11,6 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type FormEvent, useRef, useState, useTransition } from "react";
-import { deleteChat, renameChat, setChatArchived } from "@/app/actions";
 import { RunMarkerBadge, useRunMarkers } from "@/components/thread-run-markers";
 import {
   AlertDialog,
@@ -37,6 +36,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { deleteChat, renameChat, setChatArchived } from "@/lib/actions-client";
 import { MAX_TITLE_CHARS } from "@/lib/chat-schema";
 
 export type ThreadListItem = { id: string; title: string; archived: boolean };

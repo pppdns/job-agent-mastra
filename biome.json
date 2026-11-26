@@ -38,5 +38,24 @@
     "parser": {
       "tailwindDirectives": true
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/web/src/components/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@/app/actions": "Import server actions from @/lib/actions-client (guarded against version skew after a deploy)."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

@@ -25,13 +25,13 @@ import {
   useSyncExternalStore,
   useTransition,
 } from "react";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   type DiscoveryActionState,
   startDiscoveryAction,
   stopDiscoveryAction,
-} from "@/app/actions";
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+} from "@/lib/actions-client";
 
 /**
  * A button's help on hover or focus: what it runs, whether a model is involved, what it costs.

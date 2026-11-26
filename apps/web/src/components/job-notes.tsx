@@ -3,7 +3,6 @@
 import { MAX_JOB_NOTES_CHARS } from "@copilot/shared";
 import { NotebookTextIcon, PencilIcon, PlusIcon } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { setJobNotesAction } from "@/app/actions";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { setJobNotesAction } from "@/lib/actions-client";
 
 /**
  * The user's free-text note on a job. Read-only until "Edit"; Save (or ⌘/Ctrl+Enter) writes it,
@@ -136,7 +136,9 @@ export function JobNotes({
               placeholder="Interview rounds, people, impressions, next steps…"
               aria-invalid={tooLong || undefined}
               className="max-h-[60vh] min-h-40"
-              disabled={pending}
+              // Not `disabled`: a save blocked by a new deploy stays pending, and the text must
+              // stay selectable so it can be copied before reloading.
+              readOnly={pending}
             />
             {conflict && (
               <p role="alert" className="text-sm text-destructive">

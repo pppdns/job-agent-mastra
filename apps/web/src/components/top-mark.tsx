@@ -3,9 +3,9 @@
 import { cn } from "cn";
 import { StarIcon } from "lucide-react";
 import { useOptimistic, useTransition } from "react";
-import { setJobTopAction } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { setJobTopAction } from "@/lib/actions-client";
 
 // The user's own "top choice" mark: a label beside the pipeline status, set only by hand.
 

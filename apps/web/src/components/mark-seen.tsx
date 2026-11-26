@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { markJobSeenAction } from "@/app/actions";
+import { markJobSeenAction } from "@/lib/actions-client";
 
 /**
  * Marks a discovered job as seen once it is actually shown (not during server render, which

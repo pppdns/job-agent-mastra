@@ -2,8 +2,8 @@
 
 import type { ListingScope } from "@copilot/db";
 import { useActionState, useState } from "react";
-import { type DiscoveryActionState, startListingCheckAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
+import { type DiscoveryActionState, startListingCheckAction } from "@/lib/actions-client";
 import { LISTING_SCOPE_LABELS } from "@/lib/listing-scopes";
 
 /** Requests are spaced 1.5 s apart on LinkedIn, 0.5 s elsewhere; most jobs have a LinkedIn link. */

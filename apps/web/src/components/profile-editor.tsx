@@ -3,9 +3,9 @@
 import { PROFILE_FACT_KINDS, PROFILE_FACT_LABELS, type ProfileFactKind } from "@copilot/shared";
 import { PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { type FormEvent, useState, useTransition } from "react";
-import { editProfileAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { editProfileAction } from "@/lib/actions-client";
 import { PROFILE_KIND_UI } from "@/lib/profile-kinds";
 import { cn } from "@/lib/utils";
 
