@@ -3,11 +3,14 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   canonicalLinkedInUrl,
+  cleanMarkdown,
   linkedInJobId,
+  MIN_PAGE_WORDS,
   matchesIdentity,
   parseGenericPage,
   parseLinkedInPage,
   parseStoredListing,
+  wordCount,
 } from "./listing";
 
 const fixture = (name: string) =>
@@ -103,6 +106,20 @@ describe("parseGenericPage and matchesIdentity", () => {
     const page = parseGenericPage(fixture("ats-other-company.md"));
     expect(page.completeness).toEqual({ complete: true });
     expect(matchesIdentity(page, expected)).toBe(false);
+  });
+
+  it("drops a job board's related-jobs sidebar, so a sidebar-only read is no listing", () => {
+    const sidebar = fixture("board-related-only.md");
+    // Long enough to pass as a listing if the sidebar were kept.
+    expect(wordCount(cleanMarkdown(sidebar))).toBeGreaterThanOrEqual(MIN_PAGE_WORDS);
+    expect(parseGenericPage(sidebar).completeness).toMatchObject({
+      complete: false,
+      reason: "no_listing",
+    });
+
+    const full = parseGenericPage(`${fixture("ats-complete.md")}\n\n${sidebar}`);
+    expect(full.completeness).toEqual({ complete: true });
+    expect(full.description).toBe(parseGenericPage(fixture("ats-complete.md")).description);
   });
 
   it("rejects a sign-in page as too short", () => {
