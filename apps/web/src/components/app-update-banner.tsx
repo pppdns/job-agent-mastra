@@ -4,12 +4,7 @@ import { RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
 import { useEffect } from "react";
 import type { VersionResponse } from "@/app/api/version/route";
 import { Button } from "@/components/ui/button";
-import {
-  isVersionSkewError,
-  markAppOutdated,
-  markAppStale,
-  useAppUpdateState,
-} from "@/lib/app-update";
+import { isVersionSkewError, markAppStale, useAppUpdateState } from "@/lib/app-update";
 
 const CHECK_EVERY_MS = 5 * 60_000;
 
@@ -29,19 +24,21 @@ async function checkVersion() {
 
 /**
  * Shown when this page is from an older deploy than the server's: before anything failed
- * ("stale", from the version check on return to the tab and every 5 min) or after a save or a
- * lazy chunk failed because of it ("failed", from `saveFailed` or the global listeners). The
+ * ("stale", from the version check on return to the tab and every 5 min, or a missing lazy
+ * chunk) or after a save failed because of it ("failed", from `saveFailed`). The
  * page stays as it is, so the user can copy unsaved text before reloading.
  */
 export function AppUpdateBanner() {
   const state = useAppUpdateState();
 
   useEffect(() => {
+    // A missing chunk means nothing went unsaved, so only "stale"; failed saves go through
+    // `saveFailed`.
     const onError = (event: ErrorEvent) => {
-      if (isVersionSkewError(event.error)) markAppOutdated();
+      if (isVersionSkewError(event.error)) markAppStale();
     };
     const onRejection = (event: PromiseRejectionEvent) => {
-      if (isVersionSkewError(event.reason)) markAppOutdated();
+      if (isVersionSkewError(event.reason)) markAppStale();
     };
     const onVisible = () => void checkVersion();
     window.addEventListener("error", onError);

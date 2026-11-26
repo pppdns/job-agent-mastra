@@ -54,17 +54,23 @@ export function useAppUpdateState(): AppUpdateState {
   return useSyncExternalStore(subscribe, getAppUpdateState, () => "current");
 }
 
-export const SAVE_FAILED_MESSAGE =
-  "Couldn't save. If the app was just updated, copy your text and reload.";
+export const SAVE_FAILED_SKEW_MESSAGE =
+  "Couldn't save: the app was just updated. Copy your text, then reload.";
+export const SAVE_FAILED_MESSAGE = "Couldn't save. Try again, or copy your text and reload.";
 
 /**
  * For editors that hold typed text: a save that threw (an action unknown after a deploy, the
  * server restarting, offline) must not reach an error boundary, which would drop the text. The
- * editor catches it, shows this message and stays open. Version skew also raises the banner;
- * anything else goes to Sentry.
+ * editor catches it, shows the returned message and stays open. Version skew also raises the
+ * banner; anything else goes to Sentry unless the server reported it already.
  */
 export function saveFailed(error: unknown): string {
-  if (isVersionSkewError(error)) markAppOutdated();
-  else Sentry.captureException(error);
+  if (isVersionSkewError(error)) {
+    markAppOutdated();
+    return SAVE_FAILED_SKEW_MESSAGE;
+  }
+  // An error thrown in the action carries a `digest`; the server already reported it.
+  const fromServer = error instanceof Error && "digest" in error;
+  if (!fromServer) Sentry.captureException(error);
   return SAVE_FAILED_MESSAGE;
 }

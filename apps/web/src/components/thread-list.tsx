@@ -37,6 +37,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { saveFailed } from "@/lib/app-update";
 import { MAX_TITLE_CHARS } from "@/lib/chat-schema";
 
 export type ThreadListItem = { id: string; title: string; archived: boolean };
@@ -88,7 +89,12 @@ export function ThreadList({ threads }: { threads: ThreadListItem[] }) {
                   onDone={() => setEditingId(null)}
                   onSubmit={(title) =>
                     startTransition(async () => {
-                      await renameChat(thread.id, title);
+                      try {
+                        await renameChat(thread.id, title);
+                      } catch (error) {
+                        // The old title stays; a deploy also raises the update banner.
+                        saveFailed(error);
+                      }
                       setEditingId(null);
                     })
                   }

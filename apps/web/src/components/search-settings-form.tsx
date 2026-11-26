@@ -2,7 +2,7 @@
 
 import { DISCOVERY_SOURCE_LABELS, DISCOVERY_SOURCES, type SearchSettings } from "@copilot/shared";
 import Link from "next/link";
-import { startTransition, useActionState } from "react";
+import { startTransition, useActionState, useEffect, useRef } from "react";
 import { type DiscoveryActionState, saveSearchSettingsAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -103,9 +103,16 @@ export function SearchSettingsForm({ settings }: { settings: SearchSettings }) {
     },
     null,
   );
+  // `onSubmit` skips React's form reset, so after a save reload the fields from the saved
+  // (normalized) settings; a failed save keeps the edits.
+  const form = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (state?.ok) form.current?.reset();
+  }, [state]);
   const { himalayas, linkedin, weworkremotely, remoteok, remotive, nodesk } = settings.sources;
   return (
     <form
+      ref={form}
       // Not `action={action}`: React resets an uncontrolled form after a form action, which
       // would drop the edits when the save failed.
       onSubmit={(event) => {

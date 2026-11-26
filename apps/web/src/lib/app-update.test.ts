@@ -7,6 +7,7 @@ import {
   markAppStale,
   resetAppUpdateState,
   SAVE_FAILED_MESSAGE,
+  SAVE_FAILED_SKEW_MESSAGE,
   saveFailed,
 } from "./app-update";
 
@@ -44,7 +45,7 @@ describe("isVersionSkewError", () => {
 describe("saveFailed", () => {
   it("raises the banner on version skew without reporting it", () => {
     expect(saveFailed(new UnrecognizedActionError("Server Action not found"))).toBe(
-      SAVE_FAILED_MESSAGE,
+      SAVE_FAILED_SKEW_MESSAGE,
     );
     expect(getAppUpdateState()).toBe("failed");
     expect(Sentry.captureException).not.toHaveBeenCalled();
@@ -55,6 +56,14 @@ describe("saveFailed", () => {
     expect(saveFailed(error)).toBe(SAVE_FAILED_MESSAGE);
     expect(getAppUpdateState()).toBe("current");
     expect(Sentry.captureException).toHaveBeenCalledWith(error);
+  });
+
+  it("doesn't report an error the server already reported", () => {
+    const error = Object.assign(new Error("An error occurred in the Server Components render."), {
+      digest: "123",
+    });
+    expect(saveFailed(error)).toBe(SAVE_FAILED_MESSAGE);
+    expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 
   it("keeps a failure over a later stale check", () => {
