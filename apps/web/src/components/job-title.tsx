@@ -6,6 +6,7 @@ import { type FormEvent, useOptimistic, useRef, useState, useTransition } from "
 import { setJobTitleAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { saveFailed } from "@/lib/app-update";
 
 /**
  * The job's title as the page heading, renamed in place: the pencil (or a double-click) edits it,
@@ -38,7 +39,8 @@ export function JobTitle({ jobId, title }: { jobId: string; title: string | null
       setShown(next);
       try {
         await setJobTitleAction(jobId, next);
-      } catch {
+      } catch (thrown) {
+        saveFailed(thrown);
         setError("Couldn't rename the job. Try again.");
       }
     });

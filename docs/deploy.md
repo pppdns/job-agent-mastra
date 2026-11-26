@@ -41,6 +41,7 @@ Discovery: `pnpm fly:secrets` also copies `APIFY_API_KEY`, `HIMALAYAS_API_KEY`, 
 
 - **Normal:** merge to `main`. [.github/workflows/deploy.yml](../.github/workflows/deploy.yml) runs `pnpm check`, then `flyctl deploy --remote-only` (built on Fly's builders). Expect a few seconds of downtime per deploy, since there's one machine.
 - **Manual:** "Run workflow" on the Deploy action. Agents never run `fly deploy` from a worktree: there is one machine, so a branch deploy replaces whatever `main` (or another session) just shipped. Only for an outage fix, and say so; then merge it right away.
+- **Open tabs:** a page loaded before a deploy still has the old build's server action ids and JS chunks. `deploymentId` (the commit SHA, `SENTRY_RELEASE`) makes Next hard-reload on navigation; text editors keep their text when a save fails, and the web app's `AppUpdateBanner` asks you to copy it and reload when the failure was that, or when `/api/version` reports a newer deploy ([apps/web/AGENTS.md](../apps/web/AGENTS.md)).
 - **Rollback:** `fly releases --image`, then `fly deploy --image <previous image>`.
 
 ## Sentry

@@ -15,6 +15,7 @@ import { JobLabels } from "@/components/job-labels";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { saveFailed } from "@/lib/app-update";
 
 /**
  * A job's labels with optimistic saving: each change is saved at once, and a second change before
@@ -27,7 +28,12 @@ export function useJobLabels(jobId: string, labels: readonly JobLabel[] | null) 
     start(async () => {
       const normalized = normalizeJobLabels(next);
       setCurrent(normalized);
-      await setJobLabelsAction(jobId, normalized);
+      try {
+        await setJobLabelsAction(jobId, normalized);
+      } catch (error) {
+        // The optimistic labels revert; a deploy also raises the update banner.
+        saveFailed(error);
+      }
     });
   return [current, save] as const;
 }

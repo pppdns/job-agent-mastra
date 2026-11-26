@@ -2,11 +2,12 @@
 
 import { DISCOVERY_SOURCE_LABELS, DISCOVERY_SOURCES, type SearchSettings } from "@copilot/shared";
 import Link from "next/link";
-import { useActionState } from "react";
+import { startTransition, useActionState, useEffect, useRef } from "react";
 import { type DiscoveryActionState, saveSearchSettingsAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { saveFailed } from "@/lib/app-update";
 
 function Field({
   label,
@@ -93,12 +94,35 @@ const ACTOR_BOARDS = [
 
 export function SearchSettingsForm({ settings }: { settings: SearchSettings }) {
   const [state, action, pending] = useActionState<DiscoveryActionState, FormData>(
-    saveSearchSettingsAction,
+    async (previous, formData) => {
+      try {
+        return await saveSearchSettingsAction(previous, formData);
+      } catch (error) {
+        return { ok: false, message: saveFailed(error) };
+      }
+    },
     null,
   );
+  // `onSubmit` skips React's form reset, so after a save reload the fields from the saved
+  // (normalized) settings; a failed save keeps the edits.
+  const form = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (state?.ok) form.current?.reset();
+  }, [state]);
   const { himalayas, linkedin, weworkremotely, remoteok, remotive, nodesk } = settings.sources;
   return (
-    <form action={action} aria-label="Search settings" className="flex flex-col gap-6">
+    <form
+      ref={form}
+      // Not `action={action}`: React resets an uncontrolled form after a form action, which
+      // would drop the edits when the save failed.
+      onSubmit={(event) => {
+        event.preventDefault();
+        const formData = new FormData(event.currentTarget);
+        startTransition(() => action(formData));
+      }}
+      aria-label="Search settings"
+      className="flex flex-col gap-6"
+    >
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">What to search for</h2>
         <ListField

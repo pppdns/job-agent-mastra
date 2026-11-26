@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { saveFailed } from "@/lib/app-update";
 
 /**
  * The user's free-text note on a job. Read-only until "Edit"; Save (or ⌘/Ctrl+Enter) writes it,
@@ -39,6 +40,7 @@ export function JobNotes({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [conflict, setConflict] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [pending, startTransition] = useTransition();
   const field = useRef<HTMLTextAreaElement>(null);
@@ -68,6 +70,7 @@ export function JobNotes({
     setEditing(false);
     setConfirmDiscard(false);
     setConflict(false);
+    setSaveError(null);
   };
 
   const cancel = () => (dirty ? setConfirmDiscard(true) : stopEditing());
@@ -75,10 +78,15 @@ export function JobNotes({
   const save = () => {
     if (pending || tooLong) return;
     if (!dirty) return stopEditing();
+    setSaveError(null);
     startTransition(async () => {
-      const result = await setJobNotesAction(jobId, draft, updatedAtMs);
-      if (result.status === "conflict") setConflict(true);
-      else stopEditing();
+      try {
+        const result = await setJobNotesAction(jobId, draft, updatedAtMs);
+        if (result.status === "conflict") setConflict(true);
+        else stopEditing();
+      } catch (error) {
+        setSaveError(saveFailed(error));
+      }
     });
   };
 
@@ -142,6 +150,11 @@ export function JobNotes({
               <p role="alert" className="text-sm text-destructive">
                 This note was changed elsewhere since you opened the page. Copy your text, then
                 reload to see the latest version.
+              </p>
+            )}
+            {saveError && (
+              <p role="alert" className="text-sm text-destructive">
+                {saveError}
               </p>
             )}
             {tooLong && (

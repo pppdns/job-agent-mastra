@@ -6,6 +6,7 @@ import { type FormEvent, useState, useTransition } from "react";
 import { editProfileAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { saveFailed } from "@/lib/app-update";
 import { PROFILE_KIND_UI } from "@/lib/profile-kinds";
 import { cn } from "@/lib/utils";
 
@@ -18,9 +19,13 @@ function useEdit(version: number) {
   const apply = (changes: unknown[], reason: string, done?: () => void) =>
     startTransition(async () => {
       setError(null);
-      const result = await editProfileAction({ changes, reason }, version);
-      if (result.error) setError(result.error);
-      else done?.();
+      try {
+        const result = await editProfileAction({ changes, reason }, version);
+        if (result.error) setError(result.error);
+        else done?.();
+      } catch (thrown) {
+        setError(saveFailed(thrown));
+      }
     });
   return { error, pending, apply };
 }
